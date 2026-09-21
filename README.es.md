@@ -131,6 +131,12 @@ Requisitos:
 Este repositorio es un fork personal. Cada mejora se añade aquí según entra, y el
 [sitio web](https://aurenox-global.github.io/Sketchware-Pro/es.html) se actualiza a la vez.
 
+### 2026-09-21 — un APK por arquitectura (ABI splits)
+
+- **ABI splits activados.** `assembleRelease` genera ahora un APK por arquitectura en lugar de uno universal,
+  así que el dispositivo deja de descargar los otros tres juegos de librerías nativas. Verificado: cada APK lleva
+  solo su propio `lib/<abi>/`, incluido el `aapt2` incluido, y sigue firmado con la clave privada.
+
 ### 2026-09-21 — keystore propia de release
 
 - **Las releases ya se firman con una clave real.** Se generó una keystore RSA de 4096 bits fuera del
@@ -160,6 +166,7 @@ Este repositorio es un fork personal. Cada mejora se añade aquí según entra, 
 | Credenciales de release fuera del código | hecho |
 | Historial git, repo público, primera release | hecho |
 | Documentación bilingüe y sitio web | hecho |
+| ABI splits (un APK por arquitectura) | hecho |
 | Keystore privada de release | hecho |
 | Reducción de código con R8 (bloqueada por el jar de `kotlinc`) | bloqueado |
 | Reducción de recursos (`res/raw/keep.xml`) | bloqueado |

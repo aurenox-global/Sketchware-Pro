@@ -44,7 +44,7 @@
       compila en el propio dispositivo y obtén un APK instalable — sin necesidad de ordenador.
     </p>
     <div class="btns">
-      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5" target="_blank" rel="noopener">⬇ Descargar APK (141 MB)</a>
+      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5" target="_blank" rel="noopener">⬇ Descargar APK</a>
       <a class="btn ghost" href="https://github.com/aurenox-global/Sketchware-Pro" target="_blank" rel="noopener">Ver el código en GitHub</a>
     </div>
 
@@ -142,6 +142,14 @@
           <li><strong>Builds más rápidas</strong> — activados <code>org.gradle.parallel</code> y <code>org.gradle.caching</code>.</li>
           <li><strong>Repositorio publicado y versionado</strong> — historial git, <code>.gitignore</code> auditado y primera release pública con el APK adjunto.</li>
         </ul>
+      </div>
+
+      <div class="item done">
+        <span class="when">2026-09-21 · tamaño</span>
+        <h3>Un APK por arquitectura <span class="pill ok">hecho</span></h3>
+        <p>ABI splits activados: <code>assembleRelease</code> genera un APK por arquitectura en lugar de uno
+        universal, así que el dispositivo deja de descargar los otros tres juegos de librerías nativas. Verificado:
+        cada APK lleva solo su propio <code>lib/&lt;abi&gt;/</code>, incluido el <code>aapt2</code> incluido.</p>
       </div>
 
       <div class="item done">
@@ -260,6 +268,7 @@
           <tr><td>Reducción de código con R8 (bloqueada por el jar de kotlinc)</td><td><span class="pill warn">bloqueado</span></td></tr>
           <tr><td>Reducción de recursos (<code>keep.xml</code>)</td><td><span class="pill warn">bloqueado</span></td></tr>
           <tr><td>Documentación bilingüe y este sitio</td><td><span class="pill ok">hecho</span></td></tr>
+          <tr><td>ABI splits (un APK por arquitectura)</td><td><span class="pill ok">hecho</span></td></tr>
           <tr><td>Traducciones, APIs deprecadas, cobertura de tests</td><td><span class="pill info">planificado</span></td></tr>
         </tbody>
       </table>
@@ -273,7 +282,7 @@
     <details class="faq"><summary>¿Puedo publicarlo en Google Play?</summary><p>No. Sketchware Pro es un mod de Sketchware y publicarlo — original o modificado — en cualquier tienda está expresamente prohibido.</p></details>
     <details class="faq"><summary>¿Necesita ordenador?</summary><p>No. Todo el IDE y el compilador funcionan en el teléfono. El ordenador solo hace falta para compilar este repositorio desde el código.</p></details>
     <details class="faq"><summary>¿Las apps que hago son mías?</summary><p>Sí. Sketchware Pro genera fuentes y recursos Android estándar, y los APK que compilas son tuyos. Lo que no es tuyo es el código de Sketchware Pro.</p></details>
-    <details class="faq"><summary>¿Por qué el APK pesa 141 MB?</summary><p>Incluye el compilador en el dispositivo, cuatro binarios <code>aapt2</code>, un jar de Android, archivos de librerías y el toolchain de Kotlin. La reducción de código y recursos aún no está activada — está en la hoja de ruta.</p></details>
+    <details class="faq"><summary>¿Por qué el APK pesa tanto?</summary><p>Incluye el compilador en el dispositivo, cuatro binarios <code>aapt2</code>, un jar de Android, archivos de librerías y el toolchain de Kotlin. Los ABI splits ya lo bajaron de 141 MB a unos 129 MB por dispositivo; la reducción de código y recursos sigue en la hoja de ruta.</p></details>
     <details class="faq"><summary>¿Por qué la release usa una test key?</summary><p>Porque este fork todavía no tiene una keystore privada. Sirve para sideload y pruebas, pero no para distribución real.</p></details>
   </section>
 
