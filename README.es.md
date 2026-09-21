@@ -134,6 +134,15 @@ Requisitos:
 Este repositorio es un fork personal. Cada mejora se añade aquí según entra, y el
 [sitio web](https://aurenox-global.github.io/Sketchware-Pro/es.html) se actualiza a la vez.
 
+### 2026-09-21 — reducción de código con R8 (builds de release)
+
+- **R8 activado en el build de release**, bajando cada APK de ~129 MB a ~106 MB. Hicieron falta tres cosas:
+  reempaquetar dos jars en tiempo de build (`kotlinc-for-sketchware` trae clases `dalvik/**` y `kxml2` trae
+  `org/xmlpull/**`, ambos ya los aporta Android), las reglas `-dontwarn` que R8 genera para referencias a clases
+  que no existen en Android, y desactivar la subida del mapping a Crashlytics (el build local usa un
+  `google-services.json` mock). La clave de firma original sigue intacta.
+- La reducción de recursos sigue pendiente: los 29 usos de `getIdentifier()` necesitan antes un `res/raw/keep.xml`.
+
 ### 2026-09-21 — un APK por arquitectura (ABI splits)
 
 - **ABI splits activados.** `assembleRelease` genera ahora un APK por arquitectura en lugar de uno universal,
@@ -175,7 +184,7 @@ Este repositorio es un fork personal. Cada mejora se añade aquí según entra, 
 | Documentación bilingüe y sitio web | hecho |
 | ABI splits (un APK por arquitectura) | hecho |
 | Firma de release: se mantiene la clave original (por decisión) | hecho |
-| Reducción de código con R8 (bloqueada por el jar de `kotlinc`) | bloqueado |
+| Reducción de código con R8 (builds de release) | hecho |
 | Reducción de recursos (`res/raw/keep.xml`) | bloqueado |
 | Traducciones, APIs deprecadas, cobertura de tests | planificado |
 

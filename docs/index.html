@@ -162,10 +162,13 @@
         <code>~/.android-keys/sketchware-pro/release.jks</code> for the day a real distribution identity is wanted.</p>
       </div>
 
-      <div class="item pending">
-        <span class="when">next · size</span>
-        <h3>R8 / code shrinking <span class="pill warn">blocked</span></h3>
-        <p><code>minifyEnabled</code> fails: the bundled <code>kotlinc-for-sketchware</code> jar ships <code>dalvik/**</code> classes that R8 refuses to treat as program classes. The jar has to be repackaged first.</p>
+      <div class="item done">
+        <span class="when">2026-09-21 · size</span>
+        <h3>R8 code shrinking <span class="pill ok">done</span></h3>
+        <p>R8 is enabled for release builds, cutting each APK from ~129 MB to ~106 MB. It needed two dependency jars
+        repackaged at build time (<code>kotlinc-for-sketchware</code> ships <code>dalvik/**</code>, <code>kxml2</code>
+        ships <code>org/xmlpull/**</code> — Android provides both), the <code>-dontwarn</code> rules R8 generates,
+        and disabling the Crashlytics mapping upload (local builds use a mock <code>google-services.json</code>).</p>
       </div>
 
       <div class="item pending">
@@ -267,7 +270,7 @@
           <tr><td>Release credentials out of the source tree</td><td><span class="pill ok">done</span></td></tr>
           <tr><td>Git history, public repo, first release</td><td><span class="pill ok">done</span></td></tr>
           <tr><td>Release signing keeps the original key (on purpose)</td><td><span class="pill ok">done</span></td></tr>
-          <tr><td>R8 code shrinking (blocked by the kotlinc jar)</td><td><span class="pill warn">blocked</span></td></tr>
+          <tr><td>R8 code shrinking (release builds)</td><td><span class="pill ok">done</span></td></tr>
           <tr><td>Resource shrinking (<code>keep.xml</code>)</td><td><span class="pill warn">blocked</span></td></tr>
           <tr><td>Bilingual documentation and this site</td><td><span class="pill ok">done</span></td></tr>
           <tr><td>ABI splits (one APK per architecture)</td><td><span class="pill ok">done</span></td></tr>

@@ -113,12 +113,9 @@ android {
 
     buildTypes {
         release {
-            // R8 revertido temporalmente: minifyReleaseWithR8 falla porque kotlinc-for-sketchware
-            // empaqueta dalvik/system/PathClassLoader.class como clase de programa y android.jar lo
-            // aporta como libreria ("library class dalvik.system.DelegateLastClassLoader extends
-            // program class dalvik.system.PathClassLoader"). Hay que quitar dalvik/** de ese jar
-            // antes de poder activar minifyEnabled.
-            minifyEnabled = false
+            // R8 activado: el jar kotlinc-for-sketchware se filtra en tiempo de build (sin dalvik/**)
+            // para que R8 no se atragante con las copias de clases de la plataforma.
+            minifyEnabled = true
             // shrinkResources se queda en false a proposito: hay 29 usos de getIdentifier() en el
             // editor de propiedades, y el shrink de recursos los borraria. Antes hay que crear
             // app/src/main/res/raw/keep.xml con los recursos referenciados por nombre.
@@ -183,8 +180,67 @@ android {
     }
 }
 
+// ---------------------------------------------------------------------------
+// R8: kotlinc-for-sketchware empaqueta copias de clases de la plataforma
+// (dalvik/system/PathClassLoader, DexClassLoader, BaseDexClassLoader, DexPathList).
+// R8 falla con "Library class dalvik.system.DelegateLastClassLoader extends
+// program class dalvik.system.PathClassLoader" porque android.jar aporta esas
+// mismas clases como libreria. Solucion: generar en build/ una copia del jar sin
+// dalvik/** y usar esa en lugar del artefacto original.
+// ---------------------------------------------------------------------------
+// El build local usa un google-services.json mock (tarea createMockGoogleServices), asi que la tarea
+// que sube el mapping de R8 a Crashlytics falla con HTTP 400 y no corresponde a un proyecto real.
+// Al activar R8 por primera vez esa tarea empieza a tener contenido que subir, asi que la desactivamos.
+tasks.matching { it.name.startsWith("uploadCrashlyticsMappingFile") }.configureEach {
+    enabled = false
+}
+
+// ---------------------------------------------------------------------------
+// R8 se atraganta con jars que reempaquetan clases que Android ya provee:
+//   - kotlinc-for-sketchware: dalvik/system/*.class (PathClassLoader, DexClassLoader...)
+//   - kxml2:                  org/xmlpull/v1/*.class (los aporta android.jar)
+// R8 falla con "Library class X extends/implements program class Y" porque android.jar
+// aporta esas mismas clases como libreria. Generamos en build/ una copia de cada jar
+// sin esos paquetes y sustituimos el artefacto original por la copia.
+// ---------------------------------------------------------------------------
+def platformDuplicateJars = [
+    [group: "com.github.waelchateur", module: "kotlinc-for-sketchware", version: "2.1.21_rc3", excludes: ["dalvik/**"]],
+    [group: "net.sf.kxml", module: "kxml2", version: "2.3.0", excludes: ["org/xmlpull/**"]],
+]
+
+def sanitizedJarFiles = files()
+
+platformDuplicateJars.eachWithIndex { spec, index ->
+    def cfgName = "platformDuplicateSrc${index}"
+    configurations.create(cfgName)
+    dependencies.add(cfgName, "${spec.group}:${spec.module}:${spec.version}")
+
+    def outName = "${spec.module}-sanitized.jar"
+    def taskName = "sanitize" + spec.module.split("-").collect { it.capitalize() }.join("")
+
+    tasks.register(taskName, Jar) {
+        archiveFileName = outName
+        destinationDirectory = layout.buildDirectory.dir("filtered-libs")
+        from({ zipTree(configurations.getByName(cfgName).singleFile) }) {
+            spec.excludes.each { pattern -> exclude pattern }
+        }
+        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    }
+
+    def jarFile = files(layout.buildDirectory.file("filtered-libs/${outName}"))
+    jarFile.builtBy(taskName)
+    sanitizedJarFiles.from(jarFile)
+
+    // El artefacto original se sustituye por el filtrado en las classpaths de la app.
+    configurations.matching { it.name.endsWith("CompileClasspath") || it.name.endsWith("RuntimeClasspath") }.all {
+        exclude group: spec.group, module: spec.module
+    }
+}
+
 dependencies {
     implementation fileTree(dir: "libs", include: ["*.jar", "*.aar"])
+
+    implementation sanitizedJarFiles
 
     implementation libs.bundles.ui
 

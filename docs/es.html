@@ -163,10 +163,14 @@
         en que se quiera una identidad de distribución real.</p>
       </div>
 
-      <div class="item pending">
-        <span class="when">siguiente · tamaño</span>
-        <h3>R8 / reducción de código <span class="pill warn">bloqueado</span></h3>
-        <p><code>minifyEnabled</code> falla: el jar <code>kotlinc-for-sketchware</code> incluye clases <code>dalvik/**</code> que R8 se niega a tratar como clases de programa. Hay que reempaquetar ese jar primero.</p>
+      <div class="item done">
+        <span class="when">2026-09-21 · tamaño</span>
+        <h3>Reducción de código con R8 <span class="pill ok">hecho</span></h3>
+        <p>R8 activado en el build de release: cada APK baja de ~129 MB a ~106 MB. Hicieron falta dos jars
+        reempaquetados en tiempo de build (<code>kotlinc-for-sketchware</code> trae <code>dalvik/**</code>,
+        <code>kxml2</code> trae <code>org/xmlpull/**</code> — Android ya aporta ambos), las reglas
+        <code>-dontwarn</code> que R8 genera, y desactivar la subida del mapping a Crashlytics (el build local usa un
+        <code>google-services.json</code> mock).</p>
       </div>
 
       <div class="item pending">
@@ -267,7 +271,7 @@
           <tr><td>Credenciales de release fuera del código</td><td><span class="pill ok">hecho</span></td></tr>
           <tr><td>Historial git, repo público, primera release</td><td><span class="pill ok">hecho</span></td></tr>
           <tr><td>Firma de release: se mantiene la clave original (por decisión)</td><td><span class="pill ok">hecho</span></td></tr>
-          <tr><td>Reducción de código con R8 (bloqueada por el jar de kotlinc)</td><td><span class="pill warn">bloqueado</span></td></tr>
+          <tr><td>Reducción de código con R8 (builds de release)</td><td><span class="pill ok">hecho</span></td></tr>
           <tr><td>Reducción de recursos (<code>keep.xml</code>)</td><td><span class="pill warn">bloqueado</span></td></tr>
           <tr><td>Documentación bilingüe y este sitio</td><td><span class="pill ok">hecho</span></td></tr>
           <tr><td>ABI splits (un APK por arquitectura)</td><td><span class="pill ok">hecho</span></td></tr>
