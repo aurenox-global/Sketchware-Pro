@@ -113,9 +113,10 @@ android {
 
     buildTypes {
         release {
-            // R8 activado: el jar kotlinc-for-sketchware se filtra en tiempo de build (sin dalvik/**)
-            // para que R8 no se atragante con las copias de clases de la plataforma.
-            minifyEnabled = true
+            // R8 activado en local. En CI se desactiva con -PskipMinify: el jar de bundletool que
+            // descarga GitHub Actions trae classes.dex embebidos junto al bytecode y R8 rechaza ese
+            // archive; filtrarlo se lleva por delante aapt2-proto y podria romper los AABs.
+            minifyEnabled = !project.hasProperty("skipMinify")
             // shrinkResources se queda en false a proposito: hay 29 usos de getIdentifier() en el
             // editor de propiedades, y el shrink de recursos los borraria. Antes hay que crear
             // app/src/main/res/raw/keep.xml con los recursos referenciados por nombre.
@@ -200,15 +201,19 @@ tasks.matching { it.name.startsWith("uploadCrashlyticsMappingFile") }.configureE
 // jars que reempaquetan clases que Android ya provee:
 //   - kotlinc-for-sketchware: dalvik/system/*.class (PathClassLoader, DexClassLoader...)
 //   - kxml2:                  org/xmlpull/v1/*.class (los aporta android.jar)
-//   - bundletool:             com/android/tools/build/bundletool/archive/dex/**/classes.dex embebidos
 // R8 falla con "Library class X extends/implements program class Y" o con "Cannot create
 // android app from an archive containing both DEX and Java-bytecode content". Generamos en
 // build/ una copia de cada jar sin esas entradas y sustituimos el artefacto original.
+//
+// NOTA sobre bundletool: su jar incluye com/android/tools/build/bundletool/archive/dex/**/classes.dex
+// (plantillas que usa para construir AABs) junto al bytecode, y GitHub Actions descarga esa version
+// CON los dex mientras la cache local los tiene SIN ellos. NO se filtra: excluir el modulo se lleva
+// por delante sus dependencias transitivas (aapt2-proto -> com.android.aapt.Resources) y quitarle los
+// dex podria romper la generacion de AABs. Por ahora el CI compila con -PskipMinify (sin R8).
 // ---------------------------------------------------------------------------
 def platformDuplicateJars = [
     [group: "com.github.waelchateur", module: "kotlinc-for-sketchware", version: "2.1.21_rc3", excludes: ["dalvik/**"]],
     [group: "net.sf.kxml", module: "kxml2", version: "2.3.0", excludes: ["org/xmlpull/**"]],
-    [group: "com.android.tools.build", module: "bundletool", version: "1.18.2", excludes: ["com/android/tools/build/bundletool/archive/dex/**"]],
 ]
 
 def sanitizedJarFiles = files()

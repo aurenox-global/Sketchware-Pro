@@ -69,7 +69,7 @@ jobs:
       - name: Build Release APK
         env:
           SKETCHUB_API_KEY: ${{ secrets.SKETCHUB_API_KEY }}
-        run: ./gradlew :app:assembleRelease --no-daemon --stacktrace
+        run: ./gradlew :app:assembleRelease --no-daemon --stacktrace -PskipMinify
 
       - name: Diagnose DEX + bytecode archives (temporal)
         if: always()
