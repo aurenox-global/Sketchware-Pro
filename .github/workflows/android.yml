@@ -66,40 +66,55 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
+      - name: Build Release APK
+        env:
+          SKETCHUB_API_KEY: ${{ secrets.SKETCHUB_API_KEY }}
+        run: ./gradlew :app:assembleRelease --no-daemon --stacktrace
+
       - name: Diagnose DEX + bytecode archives (temporal)
+        if: always()
         continue-on-error: true
+        timeout-minutes: 10
         run: |
           python3 - <<'PY'
           import glob, os, zipfile
           def is_dex(b):
               return b[:4] in (b'dex\n', b'dex\x00') or b[:3] == b'dey'
-          roots = ['app/libs', os.path.expanduser('~/.gradle/caches')]
+          roots = [
+              'app/libs',
+              'app/build/filtered-libs',
+              os.path.expanduser('~/.gradle/caches/modules-2'),
+              os.path.expanduser('~/.gradle/caches/transforms-4'),
+          ]
+          scanned = 0
           found = []
           for root in roots:
               for p in glob.glob(os.path.join(root, '**', '*'), recursive=True):
                   if not p.lower().endswith(('.jar', '.aar', '.zip')):
                       continue
                   try:
-                      z = zipfile.ZipFile(p)
-                      names = z.namelist()
-                      candidates = [n for n in names if 'dex' in os.path.basename(n).lower() and not n.endswith('/')]
-                      if len(candidates) > 1024:
-                          candidates = candidates[:1024]
-                      hits = [n for n in candidates if is_dex(z.read(n)[:4])]
+                      with zipfile.ZipFile(p) as z:
+                          infos = [i for i in z.infolist() if not i.is_dir()]
+                          has_class = any(i.filename.endswith('.class') for i in infos)
+                          hits = []
+                          for i in infos:
+                              if i.file_size < 4096:
+                                  continue
+                              with z.open(i) as fh:
+                                  if is_dex(fh.read(4)):
+                                      hits.append(i.filename)
+                              if len(hits) >= 5:
+                                  break
+                      scanned += 1
                       if hits:
-                          found.append((p, hits[:3], len(hits)))
+                          found.append((p, has_class, hits))
                   except Exception:
                       pass
-          if not found:
-              print('DIAG: ningun archive con contenido DEX')
-          for p, hits, n in found:
-              print('DIAG DEX+bytecode -> %s  (%d entradas, p.ej. %s)' % (p, n, hits))
+          print('DIAG: archives escaneados = %d' % scanned)
+          print('DIAG: archives con contenido DEX = %d' % len(found))
+          for p, has_class, hits in found[:20]:
+              print('DIAG DEX -> %s | bytecode=%s | %s' % (p, has_class, hits[:3]))
           PY
-
-      - name: Build Release APK
-        env:
-          SKETCHUB_API_KEY: ${{ secrets.SKETCHUB_API_KEY }}
-        run: ./gradlew :app:assembleRelease --no-daemon --stacktrace
 
       - name: Set short SHA
         id: set_sha
