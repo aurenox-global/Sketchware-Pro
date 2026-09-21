@@ -1,0 +1,112 @@
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="horizontal">
+
+        <com.google.android.material.navigationrail.NavigationRailView
+            android:id="@+id/palette"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:background="@android:color/transparent"
+            android:fitsSystemWindows="false"
+            app:itemPaddingBottom="28dp"
+            app:labelVisibilityMode="labeled"
+            app:menu="@menu/logic_palette" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/tv_import"
+                style="@style/Widget.Material3Expressive.Button.ElevatedButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="8dp"
+                android:layout_marginTop="8dp"
+                android:text="@string/logic_button_import_more_block"
+                android:textColor="?attr/colorOnSurface" />
+
+            <RelativeLayout
+                android:id="@+id/search_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_marginEnd="8dp"
+                android:layout_marginTop="6dp"
+                android:visibility="gone">
+
+                <EditText
+                    android:id="@+id/search_events"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_outline_edittext"
+                    android:drawableStart="@drawable/ic_mtrl_search"
+                    android:drawablePadding="8dp"
+                    android:hint="@string/logic_search_events"
+                    android:imeOptions="actionSearch"
+                    android:inputType="text"
+                    android:maxLines="1"
+                    android:paddingStart="10dp"
+                    android:paddingTop="10dp"
+                    android:paddingEnd="40dp"
+                    android:paddingBottom="10dp"
+                    android:textSize="14sp" />
+
+                <ImageView
+                    android:id="@+id/sort_menu"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:layout_alignParentEnd="true"
+                    android:layout_centerVertical="true"
+                    android:layout_marginEnd="4dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/logic_sort_menu"
+                    android:padding="6dp"
+                    android:src="@drawable/ic_mtrl_more_vertical" />
+            </RelativeLayout>
+
+            <TextView
+                android:id="@+id/tv_no_events"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:textAppearance="?attr/textAppearanceBodyMedium"
+                android:visibility="gone"
+                tools:text="No events to display" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/event_list"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                android:paddingTop="8dp"
+                android:paddingBottom="64dp"
+                android:scrollbars="vertical"
+                android:splitMotionEvents="false"
+                tools:itemCount="5"
+                tools:listitem="@layout/fr_logic_list_item" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentEnd="true"
+        android:layout_alignParentBottom="true"
+        android:layout_margin="16dp"
+        app:srcCompat="@drawable/ic_add_white_36dp"
+        tools:ignore="ContentDescription" />
+
+</RelativeLayout>
+
+

@@ -1,0 +1,1 @@
+[{"code":"%1$s.setText (%2$s);\n%1$s.setSingleLine(true);\n%1$s.setEllipsize(TextUtils.TruncateAt.MARQUEE);\n%1$s.setSelected(true);","color":"#A72A56","name":"نص متحرك (سكتشوير بالعربي)","typeName":"","palette":"28","type":" ","spec":"%m.textview  تحريكه تريد الذي النص %s   "}]

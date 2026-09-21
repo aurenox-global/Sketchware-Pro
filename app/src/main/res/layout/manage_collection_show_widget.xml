@@ -1,0 +1,55 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
+        style="@style/Widget.Material3Expressive.Toolbar.OnSurface"
+        android:layout_width="match_parent"
+        android:layout_height="?actionBarSize"
+        android:contentInsetStart="0dp"
+        app:contentInsetStart="0dp"
+        app:elevation="0dp"
+        app:layout_scrollFlags="scroll|enterAlways|snap"
+        app:title="@string/design_manager_widget_title_actionbar_title" />
+
+    <ScrollView
+        android:id="@+id/scroll_view"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <com.besome.sketch.editor.view.ViewPane
+            android:id="@+id/pane"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+    </ScrollView>
+
+    <LinearLayout
+        android:id="@+id/layout_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <com.besome.sketch.lib.ui.EasyDeleteEditText
+            android:id="@+id/ed_input"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="8dp"
+            android:layout_weight="1" />
+
+        <Button
+            android:id="@+id/save_button"
+            style="@style/Widget.Material3Expressive.Button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="8dp"
+            android:text="@string/common_word_save" />
+    </LinearLayout>
+</LinearLayout>

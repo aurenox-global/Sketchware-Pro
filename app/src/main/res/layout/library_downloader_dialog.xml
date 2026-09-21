@@ -1,0 +1,93 @@
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <com.google.android.material.bottomsheet.BottomSheetDragHandleView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+
+    <TextView
+        android:id="@+id/title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="20dp"
+        android:layout_marginStart="20dp"
+        android:text="Download a dependency"
+        android:textAppearance="?attr/textAppearanceTitleLarge" />
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/dependency_input_layout"
+        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="20dp"
+        android:layout_marginTop="16dp"
+        android:hint="Enter a dependency"
+        android:importantForAutofill="noExcludeDescendants"
+        app:placeholderText="@string/local_library_manager_dependency_example">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/dependency_input"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:imeOptions="actionDone"
+            android:singleLine="true" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <TextView
+        android:id="@+id/dependency_info"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="20dp"
+        android:layout_marginTop="16dp"
+        android:maxLines="2"
+        android:text="@string/local_library_manager_dependency_info"
+        android:textColor="?attr/colorOnSurface"
+        android:textAppearance="?attr/textAppearanceBodyMedium" />
+
+    <CheckBox
+        android:id="@+id/cb_skip_subdependencies"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="20dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="8dp"
+        android:paddingStart="8dp"
+        android:text="@string/local_library_manager_skip_downloading_dependencies" />
+
+    <com.google.android.material.progressindicator.LinearProgressIndicator
+        android:id="@+id/overall_progress"
+        style="@style/Widget.Material3Expressive.LinearProgressIndicator"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="20dp"
+        android:layout_marginTop="16dp"
+        android:indeterminate="true"
+        android:visibility="gone"
+        app:trackStopIndicatorSize="0dp" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/dependencies_recycler_view"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="8dp"
+        android:layout_marginTop="8dp"
+        android:maxHeight="200dp"
+        android:nestedScrollingEnabled="true"
+        android:visibility="gone"
+        app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
+
+    <Button
+        android:id="@+id/btn_download"
+        style="?attr/materialSplitButtonLeadingFilledStyle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_margin="16dp"
+        app:iconGravity="textStart"
+        android:text="@string/common_word_download"
+        app:icon="@drawable/ic_mtrl_download" />
+
+</LinearLayout>

@@ -1,0 +1,1148 @@
+package com.besome.sketch.editor.property;
+
+import android.animation.ValueAnimator;
+import android.annotation.SuppressLint;
+import android.content.Context;
+import android.content.DialogInterface;
+import android.text.Editable;
+import android.text.InputType;
+import android.text.TextWatcher;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.animation.DecelerateInterpolator;
+import android.widget.ArrayAdapter;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
+import android.widget.RelativeLayout;
+import android.widget.TextView;
+
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
+import androidx.recyclerview.widget.DiffUtil;
+import androidx.recyclerview.widget.DividerItemDecoration;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.ListAdapter;
+import androidx.recyclerview.widget.RecyclerView;
+
+import com.besome.sketch.beans.ProjectFileBean;
+import com.besome.sketch.beans.ViewBean;
+import com.google.android.material.bottomsheet.BottomSheetDialog;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.textfield.MaterialAutoCompleteTextView;
+import com.google.android.material.textfield.TextInputLayout;
+
+import org.xmlpull.v1.XmlPullParser;
+import org.xmlpull.v1.XmlPullParserException;
+import org.xmlpull.v1.XmlPullParserFactory;
+
+import java.io.IOException;
+import java.io.StringReader;
+import java.text.MessageFormat;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import a.a.a.Jx;
+import a.a.a.Kw;
+import a.a.a.OB;
+import a.a.a.SB;
+import a.a.a.jC;
+import a.a.a.lC;
+import a.a.a.mB;
+import a.a.a.uq;
+import a.a.a.wB;
+import a.a.a.yB;
+import mod.hey.studios.util.Helper;
+import pro.sketchware.R;
+import pro.sketchware.activities.resourceseditor.components.utils.StringsEditorManager;
+import pro.sketchware.databinding.PropertyInputItemBinding;
+import pro.sketchware.databinding.PropertyPopupHybridBinding;
+import pro.sketchware.databinding.PropertyPopupInputTextBinding;
+import pro.sketchware.databinding.PropertyPopupParentAttrBinding;
+import pro.sketchware.lib.base.BaseTextWatcher;
+import pro.sketchware.lib.highlighter.SyntaxScheme;
+import pro.sketchware.lib.validator.PropertyNameValidator;
+import pro.sketchware.utility.FileUtil;
+
+@SuppressLint("ViewConstructor")
+public class PropertyInputItem extends RelativeLayout implements View.OnClickListener {
+
+    private final String stringsStart = "@string/";
+    private final ArrayList<HashMap<String, Object>> stringsListMap = new ArrayList<>();
+    private Context context;
+    private String typeView = "";
+    private String key = "";
+    private String value = "";
+    private ImageView imgLeftIcon;
+    private int icon;
+    private TextView tvName;
+    private TextView tvValue;
+    private View propertyItem;
+    private View propertyMenuItem;
+    private String sc_id;
+    private ProjectFileBean projectFileBean;
+    private Kw valueChangeListener;
+    private List<String> keysList = new ArrayList<>();
+    private ViewBean bean;
+
+    public PropertyInputItem(Context context, boolean z) {
+        super(context);
+        initialize(context, z);
+    }
+
+    private void setIcon(ImageView imageView) {
+        switch (key) {
+            case "property_id" -> icon = R.drawable.ic_mtrl_id;
+            case "property_text" -> icon = R.drawable.ic_mtrl_text_select;
+            case "property_hint" -> icon = R.drawable.ic_mtrl_bulb;
+            case "property_weight", "property_weight_sum" -> icon = R.drawable.ic_mtrl_weight;
+            case "property_rotate" -> icon = R.drawable.ic_mtrl_rotate;
+            case "property_lines" -> icon = R.drawable.ic_mtrl_numbers;
+            case "property_progress" -> icon = R.drawable.ic_mtrl_prog_min;
+            case "property_max" -> icon = R.drawable.ic_mtrl_prog_max;
+            case "property_alpha" -> icon = R.drawable.ic_mtrl_opacity_full;
+            case "property_translation_x" -> icon = R.drawable.ic_mtrl_move_x;
+            case "property_translation_y" -> icon = R.drawable.ic_mtrl_move_y;
+            case "property_scale_y" -> icon = R.drawable.ic_mtrl_scale_y;
+            case "property_scale_x" -> icon = R.drawable.ic_mtrl_scale_x;
+            case "property_inject" -> icon = R.drawable.ic_mtrl_code;
+            case "property_convert" -> icon = R.drawable.ic_mtrl_switch;
+            case "property_text_size" -> icon = R.drawable.ic_mtrl_font;
+        }
+        imageView.setImageResource(icon);
+    }
+
+    public void setTypeView(String typeView) {
+        this.typeView = typeView;
+    }
+
+    public String getKey() {
+        return key;
+    }
+
+    public void setKey(String key) {
+        this.key = key;
+        int identifier = getResources().getIdentifier(key, "string", getContext().getPackageName());
+        if (identifier > 0) {
+            tvName.setText(Helper.getResString(identifier));
+            if (propertyMenuItem.getVisibility() == VISIBLE) {
+                setIcon(findViewById(R.id.img_icon));
+                ((TextView) findViewById(R.id.tv_title)).setText(Helper.getResString(identifier));
+                return;
+            }
+            setIcon(imgLeftIcon);
+        }
+    }
+
+    public String getValue() {
+        return value;
+    }
+
+    public void setValue(String value) {
+        this.value = value;
+        tvValue.setText(value);
+    }
+
+    public void setBean(ViewBean bean) {
+        this.bean = bean;
+    }
+
+    @Override
+    public void onClick(View v) {
+        if (!mB.a()) {
+            switch (key) {
+                case "property_id" -> showViewIdDialog();
+                case "property_text", "property_hint" -> showTextInputDialog(9999, false);
+                case "property_rotate" -> showHybridSliderDialog(
+                        Helper.getText(tvName),
+                        Float.parseFloat(value.isEmpty() ? "0" : value),
+                        -360f, 360f, 1f, true);
+                case "property_alpha" -> showHybridSliderDialog(
+                        Helper.getText(tvName),
+                        Float.parseFloat(value.isEmpty() ? "1" : value),
+                        0f, 1f, 0.1f, false);
+                case "property_translation_x", "property_translation_y" -> showHybridSliderDialog(
+                        Helper.getText(tvName),
+                        Float.parseFloat(value.isEmpty() ? "0" : value),
+                        -200f, 200f, 1f, true);
+                case "property_scale_x", "property_scale_y" -> {
+                    float currentVal = Float.parseFloat(value.isEmpty() ? "1" : value);
+                    float maxRange = Math.max(10f, currentVal * 1.2f);
+                    showHybridSliderDialog(
+                            Helper.getText(tvName),
+                            currentVal,
+                            0.1f, maxRange, 0.1f, false);
+                }
+
+                case "property_text_size" -> {
+                    float currentVal = Float.parseFloat(value.isEmpty() ? "14" : value);
+                    float maxRange = Math.max(100f, currentVal);
+                    float minRange = Math.min(10f, currentVal);
+                    showHybridSliderDialog(
+                            Helper.getText(tvName),
+                            currentVal,
+                            minRange, maxRange, 1f, true);
+                }
+                case "property_weight", "property_weight_sum" -> showHybridSliderDialog(
+                        Helper.getText(tvName),
+                        Float.parseFloat(value.isEmpty() ? "0" : value),
+                        0f, 10f, 1f, true);
+                case "property_lines" -> {
+                    float currentVal = Float.parseFloat(value.isEmpty() ? "0" : value);
+                    float maxRange = Math.max(20f, currentVal);
+                    float minRange = Math.min(0f, currentVal);
+                    showHybridSliderDialog(
+                            Helper.getText(tvName),
+                            currentVal,
+                            minRange, maxRange, 1f, true);
+                }
+                case "property_max" -> showHybridSliderDialog(
+                        Helper.getText(tvName),
+                        Float.parseFloat(value.isEmpty() ? "100" : value),
+                        1f, 1000f, 1f, true);
+                case "property_progress" -> {
+                    float maxValue = bean != null ? bean.max : 100f;
+                    showHybridSliderDialog(
+                            Helper.getText(tvName),
+                            Float.parseFloat(value.isEmpty() ? "0" : value),
+                            0f, maxValue, 1f, true);
+                }
+                case "property_divider_height" -> showHybridSliderDialog(
+                        Helper.getText(tvName),
+                        Float.parseFloat(value.isEmpty() ? "1" : value),
+                        0f, 50f, 1f, true);
+                case "property_convert" -> showAutoCompleteDialog();
+                case "property_inject" -> showInjectDialog();
+            }
+        }
+    }
+
+    private void showHybridSliderDialog(String propertyName, float currentValue, float minValue, float maxValue, float stepSize, boolean isInteger) {
+        MaterialAlertDialogBuilder dialog = new MaterialAlertDialogBuilder(getContext());
+        dialog.setTitle(propertyName);
+        dialog.setIcon(icon);
+
+        PropertyPopupHybridBinding binding = PropertyPopupHybridBinding.inflate(LayoutInflater.from(getContext()));
+
+        float validCurrentValue = Math.max(minValue, Math.min(maxValue, currentValue));
+
+        binding.slider.setValueFrom(minValue);
+        binding.slider.setValueTo(maxValue);
+        binding.slider.setStepSize(stepSize);
+
+        boolean isCenteredProperty = key.equals("property_translation_x") ||
+                key.equals("property_translation_y") ||
+                key.equals("property_rotate");
+
+        if (isCenteredProperty) {
+            binding.slider.setCentered(true);
+        }
+
+        binding.slider.setValue(minValue);
+
+        binding.edInput.setText(isInteger ? String.valueOf((int) validCurrentValue) : String.valueOf(validCurrentValue));
+        binding.tiInput.setHint(String.format(Helper.getResString(R.string.property_enter_value), propertyName));
+
+        updateValueDisplay(binding.tvCurrentValue, validCurrentValue, isInteger);
+
+        binding.slider.addOnChangeListener((s, value, fromUser) -> {
+            if (fromUser) {
+                float roundedSliderValue = Math.round(value * 10.0f) / 10.0f;
+                updateValueDisplay(binding.tvCurrentValue, roundedSliderValue, isInteger);
+                binding.edInput.setText(isInteger ? String.valueOf((int) roundedSliderValue) :
+                        String.format(Locale.US, "%.1f", roundedSliderValue));
+            }
+        });
+
+        binding.edInput.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                try {
+                    float inputValue = Float.parseFloat(s.toString());
+                    boolean isUnlimited = key.equals("property_translation_x") || key.equals("property_translation_y") ||
+                            key.equals("property_text_size") || key.equals("property_lines") ||
+                            key.equals("property_scale_x") || key.equals("property_scale_y");
+
+                    if (isUnlimited) {
+                        float minLimit = 0.0f;
+                        if (key.equals("property_translation_x") || key.equals("property_translation_y")) {
+                            minLimit = Float.NEGATIVE_INFINITY;
+                        } else if (key.equals("property_scale_x") || key.equals("property_scale_y")) {
+                            minLimit = 0.1f;
+                        }
+
+                        if (inputValue >= minLimit) {
+                            if (inputValue >= minValue && inputValue <= maxValue) {
+                                binding.slider.setValue(inputValue);
+                            }
+                            binding.tiInput.setError(null);
+                        } else {
+                            if (key.equals("property_scale_x") || key.equals("property_scale_y")) {
+                                binding.tiInput.setError("Value must be 0.1 or greater");
+                            } else {
+                                binding.tiInput.setError("Value must be 0 or greater");
+                            }
+                        }
+                    } else if (key.equals("property_progress") && bean != null) {
+                        float maxLimit = bean.max;
+                        if (inputValue >= 0 && inputValue <= maxLimit) {
+                            binding.slider.setValue(inputValue);
+                            binding.tiInput.setError(null);
+                        } else {
+                            binding.tiInput.setError(String.format("Value must be between 0 and %.0f", maxLimit));
+                        }
+                    } else {
+                        if (inputValue >= minValue && inputValue <= maxValue) {
+                            binding.slider.setValue(inputValue);
+                            binding.tiInput.setError(null);
+                        } else {
+                            binding.tiInput.setError(String.format("Value must be between %.1f and %.1f", minValue, maxValue));
+                        }
+                    }
+                } catch (NumberFormatException e) {
+                    binding.tiInput.setError("Invalid value");
+                }
+            }
+        });
+
+        dialog.setView(binding.getRoot());
+        dialog.setPositiveButton(Helper.getResString(R.string.common_word_save), (v, which) -> {
+            float finalValue;
+            try {
+                finalValue = Float.parseFloat(binding.edInput.getText().toString());
+            } catch (NumberFormatException e) {
+                finalValue = validCurrentValue;
+            }
+
+            if (binding.sliderSection.getVisibility() == View.VISIBLE) {
+                setValue(isInteger ? String.valueOf((int) finalValue) :
+                        String.format(Locale.US, "%.1f", Math.round(finalValue * 10.0f) / 10.0f));
+            } else {
+                setValue(isInteger ? String.valueOf((int) finalValue) :
+                        String.format(Locale.US, "%.2f", finalValue));
+            }
+
+            if (valueChangeListener != null) {
+                valueChangeListener.a(key, value);
+            }
+
+            v.dismiss();
+        });
+
+        dialog.setNegativeButton(Helper.getResString(R.string.common_word_reset), null);
+        dialog.setNeutralButton("Custom", null);
+
+        AlertDialog alertDialog = dialog.create();
+
+        alertDialog.setOnShowListener(dialogInterface -> {
+            float animationStartValue;
+            if (key.equals("property_translation_x") || key.equals("property_translation_y") || key.equals("property_rotate")) {
+                animationStartValue = 0f;
+            } else {
+                animationStartValue = minValue;
+            }
+
+            ValueAnimator sliderAnimator = ValueAnimator.ofFloat(animationStartValue, validCurrentValue);
+            sliderAnimator.setDuration(800);
+            sliderAnimator.setInterpolator(new DecelerateInterpolator());
+
+            sliderAnimator.addUpdateListener(animation -> {
+                float animatedValue = (float) animation.getAnimatedValue();
+                float validAnimatedValue = Math.round(animatedValue / stepSize) * stepSize;
+                validAnimatedValue = Math.max(minValue, Math.min(maxValue, validAnimatedValue));
+                binding.slider.setValue(validAnimatedValue);
+                updateValueDisplay(binding.tvCurrentValue, validAnimatedValue, isInteger);
+            });
+
+            sliderAnimator.start();
+
+            Button customButton = alertDialog.getButton(AlertDialog.BUTTON_NEUTRAL);
+            Button resetButton = alertDialog.getButton(AlertDialog.BUTTON_NEGATIVE);
+
+            customButton.setOnClickListener(v -> {
+                if (binding.sliderSection.getVisibility() == View.VISIBLE) {
+                    binding.sliderSection.setVisibility(View.GONE);
+                    binding.tiInput.setVisibility(View.VISIBLE);
+                    binding.edInput.requestFocus();
+                    customButton.setText("Slider");
+                } else {
+                    binding.sliderSection.setVisibility(View.VISIBLE);
+                    binding.tiInput.setVisibility(View.GONE);
+                    customButton.setText("Custom");
+                }
+            });
+
+            resetButton.setOnClickListener(v -> {
+                float defaultValue = getDefaultValue(key);
+
+                ValueAnimator resetAnimator = ValueAnimator.ofFloat(binding.slider.getValue(), defaultValue);
+                resetAnimator.setDuration(400);
+                resetAnimator.setInterpolator(new DecelerateInterpolator());
+
+                resetAnimator.addUpdateListener(animation -> {
+                    float animatedValue = (float) animation.getAnimatedValue();
+                    float validAnimatedValue = Math.round(animatedValue / stepSize) * stepSize;
+                    validAnimatedValue = Math.max(minValue, Math.min(maxValue, validAnimatedValue));
+                    binding.slider.setValue(validAnimatedValue);
+                    updateValueDisplay(binding.tvCurrentValue, validAnimatedValue, isInteger);
+                    binding.edInput.setText(isInteger ? String.valueOf((int) validAnimatedValue) :
+                            String.format(Locale.US, "%.1f", validAnimatedValue));
+                });
+
+                resetAnimator.start();
+                binding.tiInput.setError(null);
+            });
+        });
+
+        alertDialog.show();
+    }
+
+    private void updateValueDisplay(TextView textView, float value, boolean isInteger) {
+        if (key.equals("property_rotate")) {
+            textView.setText(Math.round(value) + "°");
+        } else if (key.equals("property_text_size")) {
+            textView.setText(Math.round(value) + "sp");
+        } else if (key.equals("property_divider_height")) {
+            textView.setText(Math.round(value) + "dp");
+        } else if (isInteger) {
+            textView.setText(String.valueOf(Math.round(value)));
+        } else {
+            textView.setText(String.format("%.2f", value));
+        }
+    }
+
+    private float getDefaultValue(String key) {
+        return switch (key) {
+            case "property_alpha", "property_scale_x", "property_scale_y" -> 1.0f;
+            case "property_text_size" -> 14.0f;
+            case "property_max" -> 100.0f;
+            default -> 0.0f;
+        };
+    }
+
+    public void setOnPropertyValueChangeListener(Kw onPropertyValueChangeListener) {
+        valueChangeListener = onPropertyValueChangeListener;
+    }
+
+    public void setOrientationItem(int orientationItem) {
+        if (orientationItem == 0) {
+            propertyItem.setVisibility(GONE);
+            propertyMenuItem.setVisibility(VISIBLE);
+            propertyItem.setOnClickListener(null);
+            propertyMenuItem.setOnClickListener(this);
+        } else {
+            propertyItem.setVisibility(VISIBLE);
+            propertyMenuItem.setVisibility(GONE);
+            propertyItem.setOnClickListener(this);
+            propertyMenuItem.setOnClickListener(null);
+        }
+    }
+
+    private void initialize(Context context, boolean z) {
+        this.context = context;
+        wB.a(context, this, R.layout.property_input_item);
+        tvName = findViewById(R.id.tv_name);
+        tvValue = findViewById(R.id.tv_value);
+        imgLeftIcon = findViewById(R.id.img_left_icon);
+        propertyItem = findViewById(R.id.property_item);
+        propertyMenuItem = findViewById(R.id.property_menu_item);
+//        if (z) {
+//            propertyMenuItem.setSoundEffectsEnabled(true);
+//            propertyMenuItem.setOnClickListener(this);
+//        }
+    }
+
+    private void showViewIdDialog() {
+        MaterialAlertDialogBuilder dialog = new MaterialAlertDialogBuilder(getContext());
+        dialog.setTitle(Helper.getText(tvName));
+        dialog.setIcon(icon);
+
+        PropertyPopupInputTextBinding binding = PropertyPopupInputTextBinding.inflate(LayoutInflater.from(getContext()));
+
+        binding.tiInput.setHint(String.format(Helper.getResString(R.string.property_enter_value), "widget ID"));
+
+        binding.edInput.setSingleLine();
+        PropertyNameValidator validator = new PropertyNameValidator(context, binding.tiInput, uq.b, uq.a(), jC.a(sc_id).a(projectFileBean), value);
+        validator.a(value);
+        dialog.setView(binding.getRoot());
+        dialog.setPositiveButton(Helper.getResString(R.string.common_word_save), (v, which) -> {
+            if (validator.b()) {
+                setValue(Helper.getText(binding.edInput));
+                if (valueChangeListener != null) valueChangeListener.a(key, value);
+                v.dismiss();
+            }
+        });
+        dialog.setNegativeButton(Helper.getResString(R.string.common_word_cancel), null);
+        dialog.show();
+    }
+
+    public void a(String projectId, ProjectFileBean projectFileBean) {
+        sc_id = projectId;
+        this.projectFileBean = projectFileBean;
+    }
+
+    private void showTextInputDialog(int maxValue, boolean isInject) {
+        MaterialAlertDialogBuilder dialog = new MaterialAlertDialogBuilder(getContext());
+        dialog.setTitle(Helper.getText(tvName));
+        dialog.setIcon(icon);
+
+        PropertyPopupInputTextBinding binding = PropertyPopupInputTextBinding.inflate(LayoutInflater.from(getContext()));
+
+        binding.tiInput.setHint(String.format(Helper.getResString(R.string.property_enter_value), Helper.getText(tvName)));
+
+        SB lengthValidator;
+
+        if (isInject) {
+            lengthValidator = new SB(context, binding.tiInput, 0, maxValue);
+            binding.tiAutoCompleteInput.setVisibility(View.GONE);
+            SyntaxScheme.setXMLHighlighter(binding.edInput);
+        } else {
+            loadStringsListMap();
+            setupTextWatcher(binding.tiAutoCompleteInput, binding.edTiAutoCompleteInput);
+
+            lengthValidator = new SB(context, binding.tiAutoCompleteInput, 0, maxValue);
+            binding.tiAutoCompleteInput.setVisibility(View.VISIBLE);
+            binding.tiInput.setVisibility(View.GONE);
+
+            dialog.setView(binding.getRoot());
+
+            setupAutoCompleteTextView(binding.edTiAutoCompleteInput);
+        }
+
+        lengthValidator.a(value);
+        dialog.setView(binding.getRoot());
+        dialog.setPositiveButton(Helper.getResString(R.string.common_word_save), (v, which) ->
+                handleSave(lengthValidator, binding.edInput, binding.edTiAutoCompleteInput, binding.tiAutoCompleteInput, isInject, v));
+        dialog.setNegativeButton(Helper.getResString(R.string.common_word_cancel), null);
+
+        AlertDialog alertDialog = dialog.create();
+
+        alertDialog.setOnShowListener(d -> {
+            if (!isInject) {
+                Button neutralButton = alertDialog.getButton(AlertDialog.BUTTON_NEUTRAL);
+                neutralButton.setVisibility(View.VISIBLE);
+                neutralButton.setText(Helper.getResString(R.string.strings_xml));
+                neutralButton.setOnClickListener(view -> {
+                    if (binding.edTiAutoCompleteInput.getText().toString().isEmpty()) {
+                        binding.edTiAutoCompleteInput.setText(stringsStart);
+                        binding.edTiAutoCompleteInput.setSelection(stringsStart.length());
+                    }
+                    binding.edTiAutoCompleteInput.requestFocus();
+                });
+            }
+        });
+        alertDialog.show();
+    }
+
+    private void setupAutoCompleteTextView(MaterialAutoCompleteTextView autoCompleteTextView) {
+        keysList = new ArrayList<>();
+        List<String> mergedList = new ArrayList<>();
+
+        for (HashMap<String, Object> map : stringsListMap) {
+            String keyValue = map.get("key").toString();
+            keysList.add(stringsStart + keyValue);
+            mergedList.add(stringsStart + keyValue + " ( " + map.get("text") + " )");
+        }
+
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(context, android.R.layout.simple_dropdown_item_1line, mergedList);
+        autoCompleteTextView.setAdapter(adapter);
+        autoCompleteTextView.setThreshold(1);
+        autoCompleteTextView.setOnItemClickListener((parent, view, position, id) -> {
+            String value = Helper.getText(autoCompleteTextView);
+            autoCompleteTextView.setText(value.substring(0, value.indexOf(" (")));
+            autoCompleteTextView.setSelection(autoCompleteTextView.getText().length());
+        });
+    }
+
+    private void handleSave(SB lengthValidator, EditText input,
+                            MaterialAutoCompleteTextView autoCompleteTextView, TextInputLayout textAutoCompleteInput,
+                            boolean isInject, DialogInterface dialog) {
+        if (lengthValidator.b() && textAutoCompleteInput.getError() == null) {
+            if (isInject) {
+                setValue(Helper.getText(input));
+            } else {
+                setValue(Helper.getText(autoCompleteTextView));
+            }
+            if (valueChangeListener != null) {
+                String inputText = Helper.getText(autoCompleteTextView);
+
+                if (inputText.equals(stringsStart)) {
+
+                    String errorMessage = MessageFormat.format(
+                            "Please select a String\n" +
+                                    "or remove \"{0}\" and add the value directly",
+                            stringsStart
+                    );
+                    textAutoCompleteInput.setError(errorMessage);
+                } else {
+                    valueChangeListener.a(key, value);
+                    dialog.dismiss();
+                }
+            }
+        }
+    }
+
+    private void loadStringsListMap() {
+        String filePath = FileUtil.getExternalStorageDir().concat("/.sketchware/data/").concat(sc_id.concat("/files/resource/values/strings.xml"));
+        StringsEditorManager stringsEditorManager = new StringsEditorManager();
+        stringsEditorManager.convertXmlStringsToListMap(FileUtil.readFileIfExist(filePath), stringsListMap);
+
+        if (!stringsEditorManager.isXmlStringsExist(stringsListMap, "app_name") &&
+                filePath != null) {
+            HashMap<String, Object> map = new HashMap<>();
+            map.put("key", "app_name");
+            map.put("text", yB.c(lC.b(sc_id), "my_app_name"));
+            stringsListMap.add(0, map);
+        }
+    }
+
+    public void setupTextWatcher(TextInputLayout textAutoCompleteInput, MaterialAutoCompleteTextView editText) {
+        editText.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                String text = s.toString().trim();
+                if (!text.startsWith(stringsStart) || text.equals(stringsStart)) {
+                    textAutoCompleteInput.setError(null);
+                    return;
+                }
+
+                boolean isExactMatch = keysList.contains(text);
+                textAutoCompleteInput.setError(isExactMatch ? null : "Not found in strings.xml");
+            }
+        });
+    }
+
+    private void showNumberDecimalInputDialog(int minValue, int maxValue) {
+        MaterialAlertDialogBuilder dialog = new MaterialAlertDialogBuilder(getContext());
+        dialog.setTitle(Helper.getText(tvName));
+        dialog.setIcon(icon);
+
+        PropertyPopupInputTextBinding binding = PropertyPopupInputTextBinding.inflate(LayoutInflater.from(getContext()));
+        binding.tiInput.setHint(String.format(Helper.getResString(R.string.property_enter_value), Helper.getText(tvName)));
+
+        binding.edInput.setInputType((minValue < 0)
+                ? InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_SIGNED | InputType.TYPE_NUMBER_FLAG_DECIMAL
+                : InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+
+        binding.edInput.setText(value);
+
+        OB validator = new OB(context, binding.tiInput, minValue, maxValue);
+
+        dialog.setView(binding.getRoot());
+        dialog.setPositiveButton(Helper.getResString(R.string.common_word_save), (v, which) -> {
+            if (validator.b()) {
+                setValue(Helper.getText(binding.edInput));
+                if (valueChangeListener != null) valueChangeListener.a(key, value);
+                v.dismiss();
+            }
+        });
+        dialog.setNegativeButton(Helper.getResString(R.string.common_word_cancel), null);
+        dialog.show();
+    }
+
+    private void showAutoCompleteDialog() {
+        MaterialAlertDialogBuilder dialog = new MaterialAlertDialogBuilder(getContext());
+        dialog.setTitle(Helper.getText(tvName));
+        dialog.setIcon(icon);
+
+        PropertyPopupInputTextBinding binding = PropertyPopupInputTextBinding.inflate(LayoutInflater.from(getContext()));
+        MaterialAutoCompleteTextView input = binding.edTiAutoCompleteInput;
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(getContext(), android.R.layout.simple_list_item_1, getPrioritizedSuggestions(typeView));
+        input.setText(value);
+        input.setAdapter(adapter);
+        binding.tiInput.setVisibility(View.GONE);
+        binding.tiAutoCompleteInput.setVisibility(View.VISIBLE);
+        SB lengthValidator = new SB(context, binding.tiInput, 0, 99);
+        lengthValidator.a(value);
+        dialog.setView(binding.getRoot());
+        dialog.setPositiveButton(Helper.getResString(R.string.common_word_save), (v, which) -> {
+            if (lengthValidator.b()) {
+                setValue(Helper.getText(input));
+                if (valueChangeListener != null) valueChangeListener.a(key, value);
+                v.dismiss();
+            }
+        });
+        dialog.setNegativeButton(Helper.getResString(R.string.common_word_cancel), null);
+        dialog.show();
+    }
+
+    public List<String> getPrioritizedSuggestions(String typeView) {
+        List<String> prioritizedSuggestions = new ArrayList<>();
+
+        switch (typeView) {
+            case "0":  // LinearLayout
+                prioritizedSuggestions.addAll(Arrays.asList(
+                        "LinearLayout", "FrameLayout", "RelativeLayout",
+                        "androidx.constraintlayout.widget.ConstraintLayout",
+                        "TableLayout", "GridLayout",
+                        "androidx.coordinatorlayout.widget.CoordinatorLayout",
+                        "Space"
+                ));
+                break;
+
+            case "2":  // HorizontalScrollView
+            case "12": // VerticalScrollView
+                prioritizedSuggestions.addAll(Arrays.asList(
+                        "HorizontalScrollView", "VerticalScrollView", "ScrollView",
+                        "androidx.core.widget.NestedScrollView"
+                ));
+                break;
+
+            case "9":  // ListView
+            case "25": // GridView
+            case "48": // RecyclerView
+                prioritizedSuggestions.addAll(Arrays.asList(
+                        "ListView", "GridView", "androidx.recyclerview.widget.RecyclerView",
+                        "ExpandableListView", "androidx.viewpager2.widget.ViewPager2"
+                ));
+                break;
+
+            case "3":  // Button
+            case "41": // MaterialButton
+                prioritizedSuggestions.addAll(Arrays.asList(
+                        "Button", "com.google.android.material.button.MaterialButton",
+                        "ImageButton", "ToggleButton", "CompoundButton",
+                        "androidx.appcompat.widget.AppCompatButton"
+                ));
+                break;
+
+            case "4":  // TextView
+            case "5":  // EditText
+            case "38": // TextInputLayout
+                prioritizedSuggestions.addAll(Arrays.asList(
+                        "TextView", "EditText",
+                        "com.google.android.material.textfield.TextInputLayout",
+                        "com.google.android.material.textfield.TextInputEditText",
+                        "AutoCompleteTextView",
+                        "androidx.appcompat.widget.AppCompatTextView",
+                        "androidx.appcompat.widget.AppCompatEditText"
+                ));
+                break;
+
+            case "21": // VideoView
+            case "7":  // WebView
+                prioritizedSuggestions.addAll(Arrays.asList(
+                        "VideoView", "android.webkit.WebView",
+                        "androidx.media.widget.VideoView",
+                        "android.webkit.WebViewClient", "android.webkit.WebChromeClient"
+                ));
+                break;
+
+            case "8":  // ProgressBar
+            case "14": // SeekBar
+                prioritizedSuggestions.addAll(Arrays.asList(
+                        "ProgressBar", "SeekBar",
+                        "HorizontalScrollBar", "VerticalSeekBar",
+                        "IndeterminateProgressBar"
+                ));
+                break;
+
+            case "11": // CheckBox
+            case "19": // RadioButton
+                prioritizedSuggestions.addAll(Arrays.asList(
+                        "CheckBox", "RadioButton",
+                        "androidx.appcompat.widget.AppCompatCheckBox",
+                        "androidx.appcompat.widget.AppCompatRadioButton"
+                ));
+                break;
+
+            case "30": // TabLayout
+            case "31": // ViewPager
+                prioritizedSuggestions.addAll(Arrays.asList(
+                        "com.google.android.material.tabs.TabLayout",
+                        "androidx.viewpager.widget.ViewPager",
+                        "androidx.viewpager2.widget.ViewPager2",
+                        "androidx.fragment.app.FragmentPagerAdapter",
+                        "androidx.fragment.app.FragmentStatePagerAdapter",
+                        "com.google.android.material.tabs.TabLayoutMediator"
+                ));
+                break;
+
+            case "32": // BottomNavigationView
+                prioritizedSuggestions.add("com.google.android.material.bottomnavigation.BottomNavigationView");
+                break;
+
+            case "36": // CardView
+                prioritizedSuggestions.addAll(Arrays.asList(
+                        "androidx.cardview.widget.CardView",
+                        "com.google.android.material.card.MaterialCardView"
+                ));
+                break;
+
+            case "39": // SwipeRefreshLayout
+                prioritizedSuggestions.addAll(Arrays.asList(
+                        "androidx.swiperefreshlayout.widget.SwipeRefreshLayout",
+                        "com.google.android.material.progressindicator.CircularProgressIndicator",
+                        "com.google.android.material.progressindicator.LinearProgressIndicator"
+                ));
+                break;
+        }
+
+        List<String> allSuggestions = new ArrayList<>(getFullSuggestions());
+
+        allSuggestions.removeAll(prioritizedSuggestions);
+
+        List<String> finalSuggestions = new ArrayList<>(prioritizedSuggestions);
+        finalSuggestions.addAll(allSuggestions);
+
+        return finalSuggestions;
+    }
+
+    public List<String> getFullSuggestions() {
+        return Arrays.asList(getResources().getStringArray(R.array.property_convert_options));
+    }
+
+    /**
+     * Populates additional attributes for specific view types.
+     * <p>
+     * You can add more attributes directly to this list instead of introducing
+     * another variable in the ViewBean class. Use the ViewBean#type field
+     * or getClassInfo methods to identify the type of view and add attributes accordingly.
+     * <p>
+     * Examples:
+     * <p>
+     * // Using ViewBean#type
+     * if (bean.type == ViewBean.VIEW_TYPE_WIDGET_TEXTVIEW) {
+     * attrs.add("android:text");
+     * }
+     * <p>
+     * // Using getClassInfo
+     * if (bean.getClassInfo().a("TextView")) {
+     * attrs.add("android:text");
+     * }
+     * if (bean.getClassInfo().b("LinearLayout")) {
+     * attrs.add("android:orientation");
+     * }
+     * <p>
+     * Notes for getClassInfo:
+     * - a(String): Similar to instanceof for view class names.
+     * - b(String): Represents the actual type of the view, I think?.
+     * Idk if there's a difference between ViewBean#type and this.
+     *
+     * @return A list of additional attributes for the specified view type.
+     */
+    private List<String> populateAttributes() {
+        List<String> attrs = new ArrayList<>();
+        attrs.add("android:elevation");
+        if (bean != null) {
+            var simpleName = getSimpleName(bean);
+            var classInfo = bean.getClassInfo();
+            if (classInfo.b("CardView")) {
+                attrs.add("app:cardBackgroundColor");
+                attrs.add("app:cardElevation");
+                attrs.add("app:cardCornerRadius");
+                attrs.add("app:cardUseCompatPadding");
+                if (simpleName.equals("MaterialCardView")) {
+                    attrs.add("app:strokeColor");
+                    attrs.add("app:strokeWidth");
+                }
+            }
+        }
+        // Add more attributes here based on the view type
+        return attrs;
+    }
+
+    private String getSimpleName(ViewBean bean) {
+        return Jx.WIDGET_NAME_PATTERN.matcher(bean.convert).replaceAll("");
+    }
+
+    private void showInjectDialog() {
+        BottomSheetDialog dialog = new BottomSheetDialog(getContext());
+        var binding = PropertyPopupParentAttrBinding.inflate(LayoutInflater.from(getContext()));
+        dialog.setContentView(binding.getRoot());
+        dialog.show();
+
+        binding.title.setText(Helper.getText(tvName));
+
+        var adapter = new AttributesAdapter();
+        adapter.setOnItemClickListener(
+                new AttributesAdapter.ItemClickListener() {
+                    @Override
+                    public void onItemClick(LinkedHashMap<String, String> attributes, String attr) {
+                        setAttributeValue(attr, attributes);
+                        dialog.dismiss();
+                    }
+
+                    @Override
+                    public void onItemLongClick(LinkedHashMap<String, String> attributes, String attr) {
+                        dialog.dismiss();
+                        var builder =
+                                new MaterialAlertDialogBuilder(getContext())
+                                        .setTitle("Delete")
+                                        .setMessage("Are you sure you want to delete " + attr + "?")
+                                        .setPositiveButton(
+                                                R.string.common_word_yes,
+                                                (d, w) -> {
+                                                    attributes.remove(attr);
+                                                    saveAttributes(attributes);
+                                                })
+                                        .setNegativeButton(R.string.common_word_no, null);
+                        var deleteDialog = builder.create();
+                        deleteDialog.setOnDismissListener(d -> showInjectDialog());
+                        deleteDialog.show();
+                    }
+                });
+        binding.recyclerView.setAdapter(adapter);
+        var dividerItemDecoration =
+                new DividerItemDecoration(
+                        binding.recyclerView.getContext(), LinearLayoutManager.VERTICAL);
+        binding.recyclerView.addItemDecoration(dividerItemDecoration);
+        var attributes = readAttributes();
+        adapter.setAttributes(attributes);
+        List<String> keys = new ArrayList<>(attributes.keySet());
+        adapter.submitList(keys);
+
+        binding.add.setOnClickListener(
+                v -> {
+                    addNewAttribute(attributes);
+                    dialog.dismiss();
+                });
+        binding.sourceCode.setVisibility(View.VISIBLE);
+        binding.sourceCode.setOnClickListener(
+                v -> {
+                    showTextInputDialog(9999, true);
+                    dialog.dismiss();
+                });
+    }
+
+    private void addNewAttribute(Map<String, String> attributes) {
+        var builder = new MaterialAlertDialogBuilder(getContext());
+        builder.setTitle("Add new attribute");
+
+        PropertyPopupInputTextBinding binding =
+                PropertyPopupInputTextBinding.inflate(LayoutInflater.from(getContext()));
+
+        var input = binding.edTiAutoCompleteInput;
+        binding.tiInput.setVisibility(View.GONE);
+        binding.tiAutoCompleteInput.setVisibility(View.VISIBLE);
+        binding.tiAutoCompleteInput.setHint("Enter new attribute");
+        input.setAdapter(
+                new ArrayAdapter<>(
+                        getContext(),
+                        android.R.layout.simple_list_item_1,
+                        populateAttributes().stream()
+                                .filter(attr -> !attributes.containsKey(attr))
+                                .collect(Collectors.toList())));
+
+        builder.setView(binding.getRoot());
+        builder.setPositiveButton(
+                R.string.common_word_next,
+                (d, w) -> {
+                    var inputValue = Helper.getText(input).trim();
+                    if (!inputValue.isEmpty()) {
+                        setAttributeValue(inputValue, attributes);
+                    } else {
+                        d.cancel();
+                    }
+                });
+        builder.setNegativeButton(R.string.common_word_cancel, (d, w) -> d.cancel());
+        var dialog = builder.create();
+        dialog.setOnCancelListener(d -> showInjectDialog());
+        dialog.setOnShowListener(
+                d -> {
+                    var positiveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+                    positiveButton.setEnabled(!Helper.getText(input).trim().isEmpty());
+
+                    input.addTextChangedListener(
+                            new BaseTextWatcher() {
+                                @Override
+                                public void onTextChanged(
+                                        CharSequence charSequence,
+                                        int start,
+                                        int before,
+                                        int after) {
+                                    positiveButton.setEnabled(
+                                            !Helper.getText(input).trim().isEmpty());
+                                }
+                            });
+                });
+        dialog.show();
+    }
+
+    private void setAttributeValue(String attr, Map<String, String> attributes) {
+        var builder = new MaterialAlertDialogBuilder(getContext());
+        builder.setTitle(attr);
+
+        PropertyPopupInputTextBinding binding =
+                PropertyPopupInputTextBinding.inflate(LayoutInflater.from(getContext()));
+
+        var input = binding.edInput;
+        if (attributes.containsKey(attr)) {
+            input.setText(attributes.get(attr));
+        }
+
+        binding.tiInput.setHint(
+                String.format(Helper.getResString(R.string.property_enter_value), attr));
+
+        builder.setView(binding.getRoot());
+        builder.setPositiveButton(
+                R.string.common_word_save,
+                (d, w) -> {
+                    var inputValue = Helper.getText(input).trim();
+                    if (!inputValue.isEmpty()) {
+                        attributes.put(attr, inputValue);
+                        saveAttributes(attributes);
+                    } else {
+                        d.cancel();
+                    }
+                });
+        builder.setNegativeButton(R.string.common_word_cancel, null);
+        var dialog = builder.create();
+        dialog.setOnShowListener(
+                d -> {
+                    var positiveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+                    positiveButton.setEnabled(!Helper.getText(input).trim().isEmpty());
+
+                    input.addTextChangedListener(
+                            new BaseTextWatcher() {
+                                @Override
+                                public void onTextChanged(
+                                        CharSequence charSequence,
+                                        int start,
+                                        int before,
+                                        int after) {
+                                    positiveButton.setEnabled(
+                                            !Helper.getText(input).trim().isEmpty());
+                                }
+                            });
+                });
+        dialog.show();
+        dialog.setOnDismissListener(d -> showInjectDialog());
+    }
+
+    private void saveAttributes(Map<String, String> attributes) {
+        String result =
+                attributes.entrySet().stream()
+                        .map(entry -> entry.getKey() + "=\"" + entry.getValue() + "\"")
+                        .collect(Collectors.joining("\n"));
+        setValue(result);
+        if (valueChangeListener != null) valueChangeListener.a(key, value);
+    }
+
+    private LinkedHashMap<String, String> readAttributes() {
+        LinkedHashMap<String, String> attributes = new LinkedHashMap<>();
+
+        try {
+            XmlPullParserFactory factory = XmlPullParserFactory.newInstance();
+            XmlPullParser parser = factory.newPullParser();
+            parser.setInput(new StringReader("<tag " + value + "></tag>"));
+
+            int eventType = parser.getEventType();
+            while (eventType != XmlPullParser.END_DOCUMENT) {
+                if (eventType == XmlPullParser.START_TAG) {
+                    for (int i = 0; i < parser.getAttributeCount(); i++) {
+                        attributes.put(parser.getAttributeName(i), parser.getAttributeValue(i));
+                    }
+                }
+                eventType = parser.next();
+            }
+        } catch (XmlPullParserException | IOException | RuntimeException ignored) {
+            android.util.Log.d("SketchwarePro", "PropertyInputItem: XmlPullParserException | IOException | RuntimeException ignored", ignored);
+        }
+
+        return attributes;
+    }
+
+    public static class AttributesAdapter extends ListAdapter<String, AttributesAdapter.ViewHolder> {
+
+        private static final DiffUtil.ItemCallback<String> DIFF_CALLBACK =
+                new DiffUtil.ItemCallback<>() {
+                    @Override
+                    public boolean areItemsTheSame(
+                            @NonNull String oldItem, @NonNull String newItem) {
+                        return oldItem.equals(newItem);
+                    }
+
+                    @Override
+                    public boolean areContentsTheSame(
+                            @NonNull String oldItem, @NonNull String newItem) {
+                        return true;
+                    }
+                };
+
+        public AttributesAdapter() {
+            super(DIFF_CALLBACK);
+        }
+
+        private LinkedHashMap<String, String> attributes;
+        private ItemClickListener listener;
+
+        public void setAttributes(LinkedHashMap<String, String> attributes) {
+            this.attributes = attributes;
+        }
+
+        public void setOnItemClickListener(ItemClickListener listener) {
+            this.listener = listener;
+        }
+
+        @NonNull
+        @Override
+        public ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
+            FrameLayout root = new FrameLayout(parent.getContext());
+            return new ViewHolder(root);
+        }
+
+        @Override
+        public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
+            holder.bind(getItem(position));
+        }
+
+        public class ViewHolder extends RecyclerView.ViewHolder {
+            private final PropertyInputItemBinding binding;
+
+            public ViewHolder(FrameLayout view) {
+                super(view);
+                binding =
+                        PropertyInputItemBinding.inflate(
+                                LayoutInflater.from(view.getContext()), view, true);
+            }
+
+            void bind(String attr) {
+                binding.tvName.setText(attr);
+                binding.tvValue.setText(attributes.get(attr));
+                binding.imgLeftIcon.setImageResource(R.drawable.ic_mtrl_code);
+                binding.getRoot().findViewById(R.id.property_menu_item).setVisibility(View.GONE);
+                itemView.setOnClickListener(
+                        view -> {
+                            if (listener != null) listener.onItemClick(attributes, attr);
+                        });
+                itemView.setOnLongClickListener(
+                        v -> {
+                            if (listener != null) listener.onItemLongClick(attributes, attr);
+                            return true;
+                        });
+            }
+        }
+
+        public interface ItemClickListener {
+
+            void onItemClick(LinkedHashMap<String, String> attributes, String item);
+
+            void onItemLongClick(LinkedHashMap<String, String> attributes, String item);
+        }
+    }
+}

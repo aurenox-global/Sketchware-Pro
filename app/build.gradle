@@ -1,0 +1,341 @@
+def secrets = System.getenv("GOOGLE_SERVICES_JSON")
+
+apply plugin: "com.android.application"
+apply plugin: "kotlin-android"
+apply plugin: "com.google.gms.google-services"
+apply plugin: "com.google.firebase.crashlytics"
+
+def aapt2BinaryByAbi = [
+  "arm64-v8a"  : "aapt2-arm64-v8a",
+  "armeabi-v7a": "aapt2-armeabi-v7a",
+  "x86"        : "aapt2-x86",
+  "x86_64"     : "aapt2-x86_64"
+]
+def generatedAapt2JniLibsDir = file("$buildDir/generated/aapt2-jniLibs")
+
+tasks.register("prepareAapt2NativeExecutables") {
+  inputs.files(aapt2BinaryByAbi.values().collect { file("src/main/assets/aapt/${it}") })
+  outputs.dir(generatedAapt2JniLibsDir)
+
+  doLast {
+    delete(generatedAapt2JniLibsDir)
+
+    aapt2BinaryByAbi.each { abi, assetName ->
+      def sourceFile = file("src/main/assets/aapt/${assetName}")
+      if (!sourceFile.exists()) {
+        throw new GradleException("Missing AAPT2 asset for ${abi}: ${sourceFile}")
+      }
+
+      def abiDirectory = new File(generatedAapt2JniLibsDir, abi)
+      abiDirectory.mkdirs()
+
+      copy {
+        from sourceFile
+        into abiDirectory
+        rename { "libaapt2_exec.so" }
+      }
+    }
+  }
+}
+
+android {
+    compileSdk = 36
+
+  sourceSets {
+    main {
+      jniLibs.srcDirs += [generatedAapt2JniLibsDir]
+    }
+  }
+
+    // Git hash opcional: no debe romper la build cuando se compila una copia sin repo .git (zip/CI sin historial).
+    def gitCommitHash = System.getenv("GIT_HASH")?.trim() ?: "unknown"
+    def shortCommitHash = System.getenv("GIT_SHORT_HASH")?.trim() ?: gitCommitHash
+    if (rootProject.file(".git").exists()) {
+        try {
+            def fullHead = "git rev-parse HEAD".execute([], rootProject.projectDir)
+            def shortHead = "git rev-parse --short HEAD".execute([], rootProject.projectDir)
+            fullHead.waitFor()
+            shortHead.waitFor()
+            if (fullHead.exitValue() == 0) gitCommitHash = fullHead.text.trim()
+            if (shortHead.exitValue() == 0) shortCommitHash = shortHead.text.trim()
+        } catch (Exception ignored) {
+            logger.lifecycle("Aviso: no se pudo leer el hash de git; se usa '${gitCommitHash}'")
+        }
+    }
+
+    defaultConfig {
+        applicationId = "pro.sketchware"
+        namespace = "pro.sketchware"
+      targetSdk = 35
+        minSdk = 26
+        versionCode = 151
+        versionName = "v7.0.5"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("String", "GIT_HASH", "\"${gitCommitHash}\"")
+        buildConfigField("String", "GIT_SHORT_HASH", "\"${shortCommitHash}\"")
+
+        // Sin la variable de entorno, antes quedaba el literal "null" dentro de BuildConfig.
+        def sketchubApiKey = System.getenv("SKETCHUB_API_KEY") ?: ""
+        buildConfigField("String", "SKETCHUB_API_KEY", "\"${sketchubApiKey}\"")
+    }
+
+    signingConfigs {
+        debug {
+            storeFile = file("../testkey.keystore")
+            storePassword = "testkey"
+            keyAlias = "testkey"
+            keyPassword = "testkey"
+        }
+        release {
+            // Credenciales fuera del repositorio: variables de entorno o ~/.gradle/gradle.properties.
+            def releaseStoreFile = System.getenv("RELEASE_STORE_FILE") ?: project.findProperty("RELEASE_STORE_FILE")
+            def releaseStorePassword = System.getenv("RELEASE_STORE_PASSWORD") ?: project.findProperty("RELEASE_STORE_PASSWORD")
+            def releaseKeyAlias = System.getenv("RELEASE_KEY_ALIAS") ?: project.findProperty("RELEASE_KEY_ALIAS")
+            def releaseKeyPassword = System.getenv("RELEASE_KEY_PASSWORD") ?: project.findProperty("RELEASE_KEY_PASSWORD")
+
+            def hasReleaseCredentials = [releaseStoreFile, releaseStorePassword, releaseKeyAlias, releaseKeyPassword].every { it != null && !it.toString().isEmpty() }
+            if (hasReleaseCredentials) {
+                storeFile = file(releaseStoreFile)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            } else {
+                logger.lifecycle("AVISO: no hay credenciales de release (RELEASE_STORE_FILE/RELEASE_STORE_PASSWORD/RELEASE_KEY_ALIAS/RELEASE_KEY_PASSWORD).")
+                logger.lifecycle("AVISO: se firma con ../testkey.keystore, cuyo password es publico. NO publiques esa APK.")
+                storeFile = file("../testkey.keystore")
+                storePassword = "testkey"
+                keyAlias = "testkey"
+                keyPassword = "testkey"
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            // R8 revertido temporalmente: minifyReleaseWithR8 falla porque kotlinc-for-sketchware
+            // empaqueta dalvik/system/PathClassLoader.class como clase de programa y android.jar lo
+            // aporta como libreria ("library class dalvik.system.DelegateLastClassLoader extends
+            // program class dalvik.system.PathClassLoader"). Hay que quitar dalvik/** de ese jar
+            // antes de poder activar minifyEnabled.
+            minifyEnabled = false
+            // shrinkResources se queda en false a proposito: hay 29 usos de getIdentifier() en el
+            // editor de propiedades, y el shrink de recursos los borraria. Antes hay que crear
+            // app/src/main/res/raw/keep.xml con los recursos referenciados por nombre.
+            shrinkResources = false
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.release
+        }
+        debug {
+            minifyEnabled = false
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.debug
+        }
+    }
+
+    packagingOptions {
+      jniLibs.useLegacyPackaging = true
+        resources.excludes += "license/*"
+        resources.excludes += "META-INF/DEPENDENCIES"
+        resources.pickFirsts += "api_database/*"
+    }
+
+    compileOptions {
+        coreLibraryDesugaringEnabled = true
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    androidResources {
+        additionalParameters.addAll("--stable-ids", "${rootDir}/public-stable-ids.txt")
+    }
+
+    buildFeatures {
+        viewBinding = true
+        buildConfig = true
+    }
+
+    lint {
+      baseline = file("lint-baseline.xml")
+      checkDependencies = true
+    }
+
+    configurations.implementation {
+        exclude group: 'javax.inject', module: 'javax.inject'
+        exclude group: "org.jetbrains.kotlin", module: "kotlin-scripting-compiler-embeddable"
+        exclude group: "org.jetbrains.kotlin", module: "kotlin-scripting-common"
+        exclude group: "org.jetbrains.kotlin", module: "kotlin-scripting-jvm"
+        exclude group: "org.jetbrains.kotlin", module: "kotlin-script-runtime"
+    }
+}
+
+dependencies {
+    implementation fileTree(dir: "libs", include: ["*.jar", "*.aar"])
+
+    implementation libs.bundles.ui
+
+    implementation libs.bundles.image
+
+    implementation platform(libs.sora.editor)
+    implementation libs.bundles.editor.and.lang
+
+    implementation libs.bundles.coil
+
+    implementation libs.bundles.bundletool
+    implementation(libs.sdklib) {
+        exclude group: "com.intellij", module: "annotations"
+    }
+
+    implementation libs.bundles.shrinker
+    implementation libs.zipalign.java
+
+    implementation libs.gson
+    implementation libs.scpkix.jdk15on
+
+    implementation libs.markwon
+
+    implementation libs.bundles.networking
+
+    implementation libs.ecj
+    implementation libs.stax.api
+
+    implementation libs.bundles.kotlin.compiler
+    compileOnly libs.kotlin.compiler
+
+    implementation libs.dependencyresolver
+    implementation libs.filepicker
+
+    implementation libs.libsu
+    implementation libs.insetter
+    implementation libs.androidx.security.crypto
+
+    implementation(libs.javaparser.symbol.solver) {
+        exclude group: "com.google.guava", module: "guava"
+    }
+
+    implementation platform(libs.firebase.bom)
+    implementation libs.bundles.firebase
+
+    testImplementation libs.junit4
+    androidTestImplementation libs.androidxTestCore
+    androidTestImplementation libs.androidxTestExtJunit
+    androidTestImplementation libs.androidxTestRunner
+    androidTestImplementation libs.androidxTestRules
+    androidTestImplementation libs.androidxTestEspressoCore
+
+    coreLibraryDesugaring libs.desugar.jdk.libs.nio
+}
+
+tasks.register('createMockGoogleServices') {
+    doLast {
+        if (secrets != null) {
+            new File("$projectDir/google-services.json").text = secrets
+            return
+        }
+        def mockFile = file("src/debug/google-services.json")
+        if (!mockFile.exists()) {
+            mockFile.parentFile.mkdirs()
+            def mockContent = """{
+  "project_info": {
+    "project_number": "123456789000",
+    "firebase_url": "https://mock-project-default-rtdb.firebaseio.com",
+    "project_id": "mock-project",
+    "storage_bucket": "mock-project.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:123456789000:android:mockappid123456",
+        "android_client_info": {
+          "package_name": "${android.defaultConfig.applicationId}"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "mock_AIzaSyBQJCUXVKUjD38-u5pWkqMtesIfFvxAcvs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}"""
+            mockFile.text = mockContent
+        }
+    }
+}
+
+preBuild.dependsOn createMockGoogleServices
+preBuild.dependsOn prepareAapt2NativeExecutables
+
+def dependencySnapshotConfigurations = [
+    "debugCompileClasspath",
+    "debugRuntimeClasspath",
+    "releaseRuntimeClasspath"
+]
+
+def buildDependencySnapshotText = {
+  def lines = []
+
+  dependencySnapshotConfigurations.each { configurationName ->
+    def configuration = configurations.findByName(configurationName)
+    if (configuration == null || !configuration.canBeResolved) {
+      return
+    }
+
+    def dependencies = configuration.resolvedConfiguration.resolvedArtifacts.collect { artifact ->
+      def module = artifact.moduleVersion.id
+      "${module.group}:${artifact.name}:${module.version}"
+    }.unique().sort()
+
+    lines << "[${configurationName}]"
+    lines.addAll(dependencies)
+    lines << ""
+  }
+
+  return lines.join(System.lineSeparator())
+}
+
+tasks.register('writeDependencySnapshot') {
+  group = 'verification'
+  description = 'Write resolved dependency snapshot lock file used for CI checks.'
+
+  doLast {
+    def snapshotFile = rootProject.file("docs/dependency-snapshot.lock")
+    snapshotFile.parentFile.mkdirs()
+
+    def snapshotText = buildDependencySnapshotText()
+    snapshotFile.setText(snapshotText + System.lineSeparator(), 'UTF-8')
+    println("Wrote dependency snapshot to ${snapshotFile}")
+  }
+}
+
+tasks.register('verifyDependencySnapshot') {
+  group = 'verification'
+  description = 'Fail if dependency snapshot lock file is outdated.'
+
+  doLast {
+    def snapshotFile = rootProject.file("docs/dependency-snapshot.lock")
+    if (!snapshotFile.exists()) {
+      throw new GradleException("Missing dependency snapshot file at ${snapshotFile}. Run :app:writeDependencySnapshot first.")
+    }
+
+    def expectedText = snapshotFile.getText('UTF-8').replace("\r\n", "\n")
+    def currentText = (buildDependencySnapshotText() + System.lineSeparator()).replace("\r\n", "\n")
+
+    if (expectedText != currentText) {
+      throw new GradleException("Dependency snapshot is outdated. Run ./gradlew :app:writeDependencySnapshot --no-daemon and commit docs/dependency-snapshot.lock")
+    }
+
+    println("Dependency snapshot is up to date.")
+  }
+}

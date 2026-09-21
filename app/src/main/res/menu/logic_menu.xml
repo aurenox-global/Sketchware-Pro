@@ -1,0 +1,50 @@
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        android:id="@+id/menu_logic_showsource"
+        android:icon="@drawable/ic_mtrl_code"
+        android:orderInCategory="100"
+        android:title="Show Source Code"
+        app:showAsAction="always" />
+
+    <item
+        android:id="@+id/menu_logic_undo"
+        android:icon="@drawable/ic_mtrl_undo"
+        android:orderInCategory="100"
+        android:title="Undo"
+        app:showAsAction="always" />
+
+    <item
+        android:id="@+id/menu_logic_redo"
+        android:icon="@drawable/ic_mtrl_redo"
+        android:orderInCategory="100"
+        android:title="Redo"
+        app:showAsAction="always" />
+
+    <item
+        android:id="@+id/menu_block_helper"
+        android:icon="@drawable/ic_mtrl_bookmark"
+        android:orderInCategory="100"
+        android:title="Blocks collection"
+        app:showAsAction="always" />
+
+    <item
+        android:id="@+id/menu_logic_kmp_target"
+        android:orderInCategory="110"
+        android:title="KMP target"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/menu_logic_kmp_preview"
+        android:orderInCategory="111"
+        android:title="KMP preview"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/menu_logic_kmp_inspector"
+        android:orderInCategory="112"
+        android:title="KMP compatibility inspector"
+        app:showAsAction="never" />
+
+</menu>

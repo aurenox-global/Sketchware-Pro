@@ -1,0 +1,56 @@
+name: KMP Smoke Gate
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/kmp-smoke.yml'
+      - 'app/src/main/java/pro/sketchware/kmp/**'
+      - 'app/src/test/java/pro/sketchware/kmp/**'
+      - 'scripts/check_kmp_smoke_workflow.sh'
+      - 'docs/kmp_sample_app/**'
+      - 'docs/kmp_developer_docs.md'
+      - 'gradle/**'
+      - 'build.gradle'
+      - 'gradle.properties'
+      - 'gradlew'
+      - 'gradlew.bat'
+      - 'settings.gradle'
+  push:
+    branches-ignore:
+      - 'wip/**'
+    paths:
+      - '.github/workflows/kmp-smoke.yml'
+      - 'app/src/main/java/pro/sketchware/kmp/**'
+      - 'app/src/test/java/pro/sketchware/kmp/**'
+      - 'scripts/check_kmp_smoke_workflow.sh'
+      - 'docs/kmp_sample_app/**'
+      - 'docs/kmp_developer_docs.md'
+      - 'gradle/**'
+      - 'build.gradle'
+      - 'gradle.properties'
+      - 'gradlew'
+      - 'gradlew.bat'
+      - 'settings.gradle'
+  workflow_dispatch:
+
+jobs:
+  kmp-smoke:
+    name: KMP Smoke (Android + Desktop)
+    runs-on: ${{ vars.IS_USING_HOSTED_RUNNERS == 'true' && 'self-hosted' || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: 17
+          distribution: temurin
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: KMP unit tests
+        run: ./gradlew :app:testDebugUnitTest --tests "pro.sketchware.kmp.*" --no-daemon
+
+      - name: KMP smoke workflow (scaffold + compile + package)
+        run: bash ./scripts/check_kmp_smoke_workflow.sh

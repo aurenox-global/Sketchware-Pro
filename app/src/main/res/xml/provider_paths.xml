@@ -1,0 +1,8 @@
+<paths>
+    <external-path
+        name="sketchware_data"
+        path=".sketchware/" />
+    <external-path
+        name="sketchware_backups"
+        path=".sketchware/backups/" />
+</paths>

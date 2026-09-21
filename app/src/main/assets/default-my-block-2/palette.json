@@ -1,0 +1,1282 @@
+[
+  {
+    "color": "#FF4CAF50",
+    "name": "Quran"
+  },
+  {
+    "color": "#FF1565C0",
+    "name": "Facebook ads"
+  },
+  {
+    "color": "#FF00B0FF",
+    "name": "DynamicLink"
+  },
+  {
+    "color": "#FF2196F3",
+    "name": "Pro Tools"
+  },
+  {
+    "color": "#FF8E24AA",
+    "name": "When Blocks"
+  },
+  {
+    "color": "#FFD32F2F",
+    "name": "Crazy Blocks"
+  },
+  {
+    "color": "#FF039BE5",
+    "name": "Background"
+  },
+  {
+    "color": "#FF388E3C",
+    "name": "Share"
+  },
+  {
+    "color": "#FFFFA000",
+    "name": "File"
+  },
+  {
+    "color": "#FFD84315",
+    "name": "MapVariable"
+  },
+  {
+    "color": "#FFD81B60",
+    "name": "Design Basics"
+  },
+  {
+    "color": "#FF03A9F4",
+    "name": "If Family V2"
+  },
+  {
+    "color": "#FFD81B60",
+    "name": "Action Bar"
+  },
+  {
+    "color": "#FF388E3C",
+    "name": "AudioManager"
+  },
+  {
+    "color": "#FF03A9F4",
+    "name": "WebView"
+  },
+  {
+    "color": "#FFC2185B",
+    "name": "PDF (ArabWare)"
+  },
+  {
+    "color": "#FF2196F3",
+    "name": "Encrypt-Decrypt"
+  },
+  {
+    "color": "#FF388E3C",
+    "name": "QR Generator"
+  },
+  {
+    "color": "#FF00ACC1",
+    "name": "LuckyWheel"
+  },
+  {
+    "color": "#FFC62828",
+    "name": "Game blocks"
+  },
+  {
+    "color": "#FF00ACC1",
+    "name": "textview"
+  },
+  {
+    "color": "#FFD81B60",
+    "name": "Mentions"
+  },
+  {
+    "color": "#FF42A5F5",
+    "name": "highlight text"
+  },
+  {
+    "color": "#FFEF6C00",
+    "name": "LottieAnimation"
+  },
+  {
+    "color": "#FF64DD17",
+    "name": "Assets"
+  },
+  {
+    "color": "#FFE53935",
+    "name": "DropAnim"
+  },
+  {
+    "color": "#FF1976D2",
+    "name": "Intent Filter"
+  },
+  {
+    "color": "#FF03A9F4",
+    "name": "EasyLazy"
+  },
+  {
+    "color": "#FF00ACC1",
+    "name": "SuperUser"
+  },
+  {
+    "color": "#FFEF6C00",
+    "name": "ShareApp"
+  },
+  {
+    "color": "#FF00897B",
+    "name": "ZebraText"
+  },
+  {
+    "color": "#FF039BE5",
+    "name": "Quiz Game"
+  },
+  {
+    "color": "#FF9CCC65",
+    "name": "Downloader"
+  },
+  {
+    "color": "#FF3F51B5",
+    "name": "scroll event"
+  },
+  {
+    "color": "#FF9C27B0",
+    "name": "SharedPref"
+  },
+  {
+    "color": "#FF0097A7",
+    "name": "MediaPlayer"
+  },
+  {
+    "color": "#FF039BE5",
+    "name": "Drawer"
+  },
+  {
+    "color": "#FF8E24AA",
+    "name": "MoreBlock"
+  },
+  {
+    "color": "#FF1E88E5",
+    "name": "CircleProgress"
+  },
+  {
+    "color": "#FFC62828",
+    "name": "Listview"
+  },
+  {
+    "color": "#FF6A1B9A",
+    "name": "Dialog"
+  },
+  {
+    "color": "#FF00BCD4",
+    "name": "Custom Dialog"
+  },
+  {
+    "color": "#FF00BFA5",
+    "name": "Flat Dialog"
+  },
+  {
+    "color": "#FF128198",
+    "name": "Dialog Frag"
+  },
+  {
+    "color": "#FFE53935",
+    "name": "CustomError"
+  },
+  {
+    "color": "#FF388E3C",
+    "name": "CustomPopUp"
+  },
+  {
+    "color": "#FFF57C00",
+    "name": "CustomToast"
+  },
+  {
+    "color": "#FF0288D1",
+    "name": "CustomUpdatiy"
+  },
+  {
+    "color": "#FF43A047",
+    "name": "CustomLinear"
+  },
+  {
+    "color": "#FFD32F2F",
+    "name": "CustomXYZ"
+  },
+  {
+    "color": "#FF4CAF50",
+    "name": "Recorder"
+  },
+  {
+    "color": "#FF1E88E5",
+    "name": "Phone Info"
+  },
+  {
+    "color": "#FF388E3C",
+    "name": "Battery"
+  },
+  {
+    "color": "#FF0097A7",
+    "name": "Menu"
+  },
+  {
+    "color": "#FFF57C00",
+    "name": "TimePicker"
+  },
+  {
+    "color": "#FF039BE5",
+    "name": "BottomSheet"
+  },
+  {
+    "color": "#FF00ACC1",
+    "name": "ObjectAnimator"
+  },
+  {
+    "color": "#FF0097A7",
+    "name": "Zip-Unzip"
+  },
+  {
+    "color": "#FF00BCD4",
+    "name": "Encryped Zip"
+  },
+  {
+    "color": "#FF00C853",
+    "name": "Notifications"
+  },
+  {
+    "color": "#FF29B6F6",
+    "name": "Windows •••"
+  },
+  {
+    "color": "#FFE53935",
+    "name": "Instagram"
+  },
+  {
+    "color": "#FF1565C0",
+    "name": "Time Of Day"
+  },
+  {
+    "color": "#FF039BE5",
+    "name": "sketchware"
+  },
+  {
+    "color": "#FFFFA000",
+    "name": "Hive Progress"
+  },
+  {
+    "color": "#FF43A047",
+    "name": "Operator"
+  },
+  {
+    "color": "#FF0097A7",
+    "name": "FloatWindowFix"
+  },
+  {
+    "color": "#FFFFAB00",
+    "name": "TastyToast"
+  },
+  {
+    "color": "#FF00ACC1",
+    "name": "BottomNavi..."
+  },
+  {
+    "color": "#FF558B2F",
+    "name": "CircleImage..."
+  },
+  {
+    "color": "#FF4FC3F7",
+    "name": "wallpapers"
+  },
+  {
+    "color": "#FF00BCD4",
+    "name": "Progress Dialog"
+  },
+  {
+    "color": "#FF4DD0E1",
+    "name": "Progress Dialog 2"
+  },
+  {
+    "color": "#FF6A1B9A",
+    "name": "Library Blocks"
+  },
+  {
+    "color": "#FF00BCD4",
+    "name": "Slide Root"
+  },
+  {
+    "color": "#FF0288D1",
+    "name": "RecyclerView"
+  },
+  {
+    "color": "#FF5E35B1",
+    "name": "File 2"
+  },
+  {
+    "color": "#FF03A9F4",
+    "name": "Cursor"
+  },
+  {
+    "color": "#FF1976D2",
+    "name": "FirebaseAuth"
+  },
+  {
+    "color": "#FFFF9800",
+    "name": "GridView"
+  },
+  {
+    "color": "#FF0277BD",
+    "name": "LinkedTreeMap"
+  },
+  {
+    "color": "#FF283593",
+    "name": "FCM"
+  },
+  {
+    "color": "#FF6A1B9A",
+    "name": "OneSignal"
+  },
+  {
+    "color": "#FF3F51B5",
+    "name": "InAppPurchase"
+  },
+  {
+    "color": "#FF009688",
+    "name": "StartApp"
+  },
+  {
+    "color": "#FFFF1744",
+    "name": "YoutubePlayer"
+  },
+  {
+    "color": "#FFFFEB3B",
+    "name": "DialogKHUD"
+  },
+  {
+    "color": "#FFFF9800",
+    "name": "GoogleSign"
+  },
+  {
+    "color": "#FF9C27B0",
+    "name": "Back4ppBlock"
+  },
+  {
+    "color": "#FFCE93D8",
+    "name": "TapJoyAds"
+  },
+  {
+    "color": "#FFEF6C00",
+    "name": "MobFoxSDK"
+  },
+  {
+    "color": "#808200",
+    "name": "FloatingWindo"
+  },
+  {
+    "color": "#FF42A5F5",
+    "name": "MaterialRipple"
+  },
+  {
+    "color": "#FF4FC3F7",
+    "name": "Text Path"
+  },
+  {
+    "color": "#FF78909C",
+    "name": "New Progress"
+  },
+  {
+    "color": "#FFA1887F",
+    "name": "drag and drop"
+  },
+  {
+    "color": "#FF80CBC4",
+    "name": "cfa"
+  },
+  {
+    "color": "#FF5E35B1",
+    "name": "Google Signin type"
+  },
+  {
+    "color": "#FFF06292",
+    "name": "WhatsApp Api"
+  },
+  {
+    "color": "#FFF44336",
+    "name": "Country code"
+  },
+  {
+    "color": "#FF5C6BC0",
+    "name": "Page Viewer"
+  },
+  {
+    "color": "#FFBBDEFB",
+    "name": "Intent"
+  },
+  {
+    "color": "#FF00BCD4",
+    "name": "Payment method"
+  },
+  {
+    "color": "#FF26A69A",
+    "name": "Fb Messanger Api"
+  },
+  {
+    "color": "#FFF9A825",
+    "name": "FutureSAnimation"
+  },
+  {
+    "color": "#583358",
+    "name": "Circle ImageView Block"
+  },
+  {
+    "color": "#FF80DEEA",
+    "name": "BitLyShortener"
+  },
+  {
+    "color": "#FF8C9EFF",
+    "name": "FancyButton"
+  },
+  {
+    "color": "#FFEF6C00",
+    "name": "Newphromic"
+  },
+  {
+    "color": "#FF00695C",
+    "name": "GlideSlider"
+  },
+  {
+    "color": "#FF6200EA",
+    "name": "NestedScroll"
+  },
+  {
+    "color": "#FF0091EA",
+    "name": "TapTarget"
+  },
+  {
+    "color": "#FF8E24AA",
+    "name": "PopupMenu"
+  },
+  {
+    "color": "#FFC0CA33",
+    "name": "ASCII"
+  },
+  {
+    "color": "#FF4DD0E1",
+    "name": "Scratch View"
+  },
+  {
+    "color": "#FF1976D2",
+    "name": "DX LOADING"
+  },
+  {
+    "color": "#FF6A1B9A",
+    "name": "Tap Layout"
+  },
+  {
+    "color": "#FFE91E63",
+    "name": "Insta Story"
+  },
+  {
+    "color": "#FFFBC02D",
+    "name": "Rating Bar"
+  },
+  {
+    "color": "#FF03A9F4",
+    "name": "spinner"
+  },
+  {
+    "color": "#FF9E9E9E",
+    "name": "IOS Dialog"
+  },
+  {
+    "color": "#FFE53935",
+    "name": "Animation"
+  },
+  {
+    "color": "#FF5E35B1",
+    "name": "Card View"
+  },
+  {
+    "color": "#FF29B6F6",
+    "name": "pattern lock"
+  },
+  {
+    "color": "#FFD81B60",
+    "name": "SwipeRefresh"
+  },
+  {
+    "color": "#FF388E3C",
+    "name": "success view"
+  },
+  {
+    "color": "#FFBDBDBD",
+    "name": "Unity Ads"
+  },
+  {
+    "color": "#FF00ACC1",
+    "name": "XML"
+  },
+  {
+    "color": "#FF9575CD",
+    "name": "ToolTib View"
+  },
+  {
+    "color": "#FF689F38",
+    "name": "pop view"
+  },
+  {
+    "color": "#FF0288D1",
+    "name": "wave refresh"
+  },
+  {
+    "color": "#FF616161",
+    "name": "camera view"
+  },
+  {
+    "color": "#FFF9A825",
+    "name": "Jsoup Blocks"
+  },
+  {
+    "color": "#2196F3",
+    "name": "fragments sk pro"
+  },
+  {
+    "color": "#FFD32F2F",
+    "name": "Admob Native ads"
+  },
+  {
+    "color": "#FF3949AB",
+    "name": "YoYo"
+  },
+  {
+    "color": "#FFF57C00",
+    "name": "Alert Notification"
+  },
+  {
+    "color": "#2196F3",
+    "name": "Base 64"
+  },
+  {
+    "color": "#FF3F51B5",
+    "name": "Image to Text"
+  },
+  {
+    "color": "#FF039BE5",
+    "name": "IndoSW"
+  },
+  {
+    "color": "#FFD81B60",
+    "name": "RingProgressBar"
+  },
+  {
+    "color": "#FF388E3C",
+    "name": "Sanin Toast"
+  },
+  {
+    "color": "#FF0288D1",
+    "name": "JavaMail"
+  },
+  {
+    "color": "#FF00838F",
+    "name": "ExpandableList"
+  },
+  {
+    "color": "#FF43A047",
+    "name": "VideoView"
+  },
+  {
+    "color": "#FF0277BD",
+    "name": "TelegramProg"
+  },
+  {
+    "color": "#FFFFA2D5",
+    "name": "Picasso"
+  },
+  {
+    "color": "#FFBB86FC",
+    "name": "Tools"
+  },
+  {
+    "color": "#5399BB",
+    "name": "Co-ToolBar"
+  },
+  {
+    "color": "#FF2E7D32",
+    "name": "InAppBilling"
+  },
+  {
+    "color": "#FF0097A7",
+    "name": "InAppUpdate"
+  },
+  {
+    "color": "#FF7B1FA2",
+    "name": "MaterialText"
+  },
+  {
+    "color": "#FF039BE5",
+    "name": "GlideSlider"
+  },
+  {
+    "color": "#FF7CB342",
+    "name": "Animation"
+  },
+  {
+    "color": "#FF5E35B1",
+    "name": "Threads"
+  },
+  {
+    "color": "#FFD81B60",
+    "name": "PropertyEditor"
+  },
+  {
+    "color": "#FF1E88E5",
+    "name": "LuckSpinner"
+  },
+  {
+    "color": "#FFE53935",
+    "name": "Tablayout sk pro"
+  },
+  {
+    "color": "#FF9575CD",
+    "name": "fragments sk pro"
+  },
+  {
+    "color": "#FFD32F2F",
+    "name": "Shell"
+  },
+  {
+    "color": "#FF039BE5",
+    "name": "FaceBookPoster"
+  },
+  {
+    "color": "#FF43A047",
+    "name": "ScreenRecorder"
+  },
+  {
+    "color": "#FF2196F3",
+    "name": "Scientific Pro"
+  },
+  {
+    "color": "#FF673AB7",
+    "name": "Appinfo"
+  },
+  {
+    "color": "#FFF44336",
+    "name": "application"
+  },
+  {
+    "color": "#FF2196F3",
+    "name": "ButtomsheetV1"
+  },
+  {
+    "color": "#FF2196F3",
+    "name": "ButtomsheetV2"
+  },
+  {
+    "color": "#FFFFC107",
+    "name": "Copy"
+  },
+  {
+    "color": "#FF673AB7",
+    "name": "copy from assets"
+  },
+  {
+    "color": "#FF673AB7",
+    "name": "dialog 1"
+  },
+  {
+    "color": "#FFE91E63",
+    "name": "dialog material"
+  },
+  {
+    "color": "#FFFFEB3B",
+    "name": "Fancy toast"
+  },
+  {
+    "color": "#FF673AB7",
+    "name": "list to image"
+  },
+  {
+    "color": "#FFFFC107",
+    "name": "gold"
+  },
+  {
+    "color": "#FF2196F3",
+    "name": "GetContactList"
+  },
+  {
+    "color": "#FF00BCD4",
+    "name": "loadingview"
+  },
+  {
+    "color": "#FF9C27B0",
+    "name": "mon"
+  },
+  {
+    "color": "#FF9C27B0",
+    "name": "new tools"
+  },
+  {
+    "color": "#FF8BC34A",
+    "name": "open any settings"
+  },
+  {
+    "color": "#FF3F51B5",
+    "name": "sci"
+  },
+  {
+    "color": "#FF673AB7",
+    "name": "Search all"
+  },
+  {
+    "color": "#FF2196F3",
+    "name": "sketchware pro"
+  },
+  {
+    "color": "#FFE91E63",
+    "name": "shellV1"
+  },
+  {
+    "color": "#FF4CAF50",
+    "name": "speak search"
+  },
+  {
+    "color": "#FF9C27B0",
+    "name": "toast"
+  },
+  {
+    "color": "#FFFF5722",
+    "name": "YTVIEW"
+  },
+  {
+    "color": "#FF9E9E9E",
+    "name": "shortcut"
+  },
+  {
+    "color": "#FF673AB7",
+    "name": "open source"
+  },
+  {
+    "color": "#FFA1887F",
+    "name": "Highlight"
+  },
+  {
+    "color": "#FF9C27B0",
+    "name": "edit string"
+  },
+  {
+    "color": "#FF000000",
+    "name": "PDF Assets"
+  },
+  {
+    "color": "#FF3F51B5",
+    "name": "Assets Blocks"
+  },
+  {
+    "color": "#FF2196F3",
+    "name": "if codec"
+  },
+  {
+    "color": "#FF2196F3",
+    "name": "Material Button"
+  },
+  {
+    "color": "#FF4CAF50",
+    "name": "pkg_app"
+  },
+  {
+    "color": "#FF673AB7",
+    "name": "Spannable Tool"
+  },
+  {
+    "color": "#FF9E9E9E",
+    "name": "Toolbar Menu"
+  },
+  {
+    "color": "#FF9C27B0",
+    "name": "Drawer Recyclerview"
+  },
+  {
+    "color": "#FF673AB7",
+    "name": "AsyncTask"
+  },
+  {
+    "color": "#FF009688",
+    "name": "CustomFB"
+  },
+  {
+    "color": "#FF2196F3",
+    "name": "Age Calculator"
+  },
+  {
+    "color": "#FF9C27B0",
+    "name": "Customize Spinner V1"
+  },
+  {
+    "color": "#FF2196F3",
+    "name": "Customize Spinner V2"
+  },
+  {
+    "color": "#FF3F51B5",
+    "name": "Dot loading"
+  },
+  {
+    "color": "#FF2196F3",
+    "name": "AXExpannable"
+  },
+  {
+    "color": "#FFF44336",
+    "name": "+100"
+  },
+  {
+    "color": "#FF673AB7",
+    "name": "check is install"
+  },
+  {
+    "color": "#FF2196F3",
+    "name": "Text"
+  },
+  {
+    "color": "#FF4CAF50",
+    "name": "Notification"
+  },
+  {
+    "color": "#FF009688",
+    "name": "custom snake bar"
+  },
+  {
+    "color": "#FF3F51B5",
+    "name": "customnotific"
+  },
+  {
+    "color": "#FF2196F3",
+    "name": "customnotific2"
+  },
+  {
+    "color": "#FFFFEB3B",
+    "name": "custom toast"
+  },
+  {
+    "color": "#FFE91E63",
+    "name": "slide activity"
+  },
+  {
+    "color": "#FF004FFF",
+    "name": "Neomorphic"
+  },
+  {
+    "color": "#FFF44336",
+    "name": "install default"
+  },
+  {
+    "color": "#FF2FDF84",
+    "name": "EncryptData"
+  },
+  {
+    "color": "#FFF44336",
+    "name": "base64"
+  },
+  {
+    "color": "#FF673AB7",
+    "name": "neomorphic V2"
+  },
+  {
+    "color": "#FF03A9F4",
+    "name": "Assets list"
+  },
+  {
+    "color": "#FFE91E63",
+    "name": "FuncyButton"
+  },
+  {
+    "color": "#FF000000",
+    "name": "matriX"
+  },
+  {
+    "color": "#FFE91E63",
+    "name": "Auto Update"
+  },
+  {
+    "color": "#FF00BCD4",
+    "name": "Auto Typer text"
+  },
+  {
+    "color": "#FF2196F3",
+    "name": "Textinputlayout"
+  },
+  {
+    "color": "#FF9C27B0",
+    "name": "Coding Blocks"
+  },
+  {
+    "color": "#FFF44336",
+    "name": "permission"
+  },
+  {
+    "color": "#FFF44336",
+    "name": "Tab Target"
+  },
+  {
+    "color": "#FF2196F3",
+    "name": "Stepper"
+  },
+  {
+    "color": "#FF004FFF",
+    "name": "local library"
+  },
+  {
+    "color": "#FF2196F3",
+    "name": "JSON ( tear bro )"
+  },
+  {
+    "color": "#FFF44336",
+    "name": "swb "
+  },
+  {
+    "color": "#FF2196F3",
+    "name": "J2S"
+  },
+  {
+    "color": "#FF2196F3",
+    "name": "Translate"
+  },
+  {
+    "color": "#FF3F51B5",
+    "name": "Search listmap"
+  },
+  {
+    "color": "#FFF44336",
+    "name": "report"
+  },
+  {
+    "color": "#FF000000",
+    "name": "Root"
+  },
+  {
+    "color": "#FF004FFF",
+    "name": "Animate"
+  },
+  {
+    "color": "#FF004FFF",
+    "name": "java 2 smali"
+  },
+  {
+    "color": "#FF004FFF",
+    "name": "OverScroll"
+  },
+  {
+    "color": "#FFF44336",
+    "name": "l"
+  },
+  {
+    "color": "#FFF44336",
+    "name": "codera"
+  },
+  {
+    "color": "#FFF44336",
+    "name": "number pick"
+  },
+  {
+    "color": "#FFF44336",
+    "name": "screen on"
+  },
+  {
+    "color": "#FFF44336",
+    "name": "toast"
+  },
+  {
+    "color": "#FF004FFF",
+    "name": "SCP Tools"
+  },
+  {
+    "color": "#FF2196F3",
+    "name": "Enc"
+  },
+  {
+    "color": "#FF4CAF50",
+    "name": "change app icon"
+  },
+  {
+    "color": "#FFF44336",
+    "name": "Encrypt"
+  },
+  {
+    "color": "#FF000000",
+    "name": "share app apk"
+  },
+  {
+    "color": "#FF9C27B0",
+    "name": "protect"
+  },
+  {
+    "color": "#FFF44336",
+    "name": "dia1"
+  },
+  {
+    "color": "#FFE91E63",
+    "name": "dia2"
+  },
+  {
+    "color": "#FFF44336",
+    "name": "scf"
+  },
+  {
+    "color": "#FF4CAF50",
+    "name": "green"
+  },
+  {
+    "color": "#FFFF0000",
+    "name": "Terminal"
+  },
+  {
+    "color": "#FFB71C1C",
+    "name": "SMS 2 List"
+  },
+  {
+    "color": "#FF000000",
+    "name": "System Dialog"
+  },
+  {
+    "color": "#FFF44336",
+    "name": "Spanable string"
+  },
+  {
+    "color": "#FF004FFF",
+    "name": "ime"
+  },
+  {
+    "color": "#FFF44336",
+    "name": "dialog error"
+  },
+  {
+    "color": "#FF8BC34A",
+    "name": "get last and start"
+  },
+  {
+    "color": "#FF9C27B0",
+    "name": "legion"
+  },
+  {
+    "color": "#FFFF5722",
+    "name": "Zip4J"
+  },
+  {
+    "color": "#FF9C27B0",
+    "name": "public"
+  },
+  {
+    "color": "#FFF44336",
+    "name": "Net"
+  },
+  {
+    "color": "#FFFF5722",
+    "name": "Translation Activity"
+  },
+  {
+    "color": "#FF4CAF50",
+    "name": "URL EN DE"
+  },
+  {
+    "color": "#FF171717",
+    "name": "Check Codes"
+  },
+  {
+    "color": "#FF004FFF",
+    "name": "Apk Tool"
+  },
+  {
+    "color": "#FFF44336",
+    "name": "Custom File pick"
+  },
+  {
+    "color": "#FF9C27B0",
+    "name": "Custom File pickV2"
+  },
+  {
+    "color": "#FF004FFF",
+    "name": "PopUp"
+  },
+  {
+    "color": "#FF9C27B0",
+    "name": "StringFog"
+  },
+  {
+    "color": "#FF673AB7",
+    "name": "copy with prog"
+  },
+  {
+    "color": "#FF9C27B0",
+    "name": "Smali2Color2Smali"
+  },
+  {
+    "color": "#FF9C27B0",
+    "name": "Yos Enc"
+  },
+  {
+    "color": "#FFF44336",
+    "name": "Text Anim"
+  },
+  {
+    "color": "#FF3F51B5",
+    "name": "CreatingLibrary"
+  },
+  {
+    "color": "#FFF44336",
+    "name": "EncodeUtils_blocks"
+  },
+  {
+    "color": "#FF673AB7",
+    "name": "GlowNeonButton"
+  },
+  {
+    "color": "#FF4CAF50",
+    "name": "ListBWActivities"
+  },
+  {
+    "color": "#FF9C27B0",
+    "name": "MyLoadingButton"
+  },
+  {
+    "color": "#FF9C27B0",
+    "name": "RandomUtils"
+  },
+  {
+    "color": "#FF3F51B5",
+    "name": "ImageUtils"
+  },
+  {
+    "color": "#FF795548",
+    "name": "SpicialProgress"
+  },
+  {
+    "color": "#FF2196F3",
+    "name": "GIF"
+  },
+  {
+    "color": "#FF00BCD4",
+    "name": "CircleMenu"
+  },
+  {
+    "color": "#FFFF9800",
+    "name": "SlideView"
+  },
+  {
+    "color": "#FF2196F3",
+    "name": "Custom Dialog"
+  },
+  {
+    "color": "#FF000000",
+    "name": "Assets"
+  },
+  {
+    "color": "#FF673AB7",
+    "name": "Encode ISO-8859-1"
+  },
+  {
+    "color": "#E0E0E0E0",
+    "name": "Neumorphism"
+  },
+  {
+    "color": "#E0E0E0E0",
+    "name": "NeumorphismV2"
+  },
+  {
+    "color": "#FF4CAF50",
+    "name": "Library tools"
+  },
+  {
+    "color": "#FFFF9800",
+    "name": "StringBuilder"
+  },
+  {
+    "color": "#FF9C27B0",
+    "name": "SCP Coder"
+  },
+  {
+    "color": "#FF3F51B5",
+    "name": "Laysar Blocks"
+  },
+  {
+    "color": "#FFFF9800",
+    "name": "Items Alt"
+  },
+  {
+    "color": "#FF9C27B0",
+    "name": "Line in Text"
+  },
+  {
+    "color": "#FF673AB7",
+    "name": "Apk Signer"
+  },
+  {
+    "color": "#FF3F51B5",
+    "name": "Permissions"
+  },
+  {
+    "color": "#FF004FFF",
+    "name": "Encryption Tools"
+  },
+  {
+    "color": "#FF009688",
+    "name": "FilePickerDialog"
+  },
+  {
+    "color": "#FF795548",
+    "name": "Apk Protector"
+  },
+  {
+    "color": "#FF7986CB",
+    "name": "MaterialAlertDialogBuilder"
+  },
+  {
+    "color": "#FF673AB7",
+    "name": "Apk Full Info"
+  },
+  {
+    "color": "#FFF44336",
+    "name": "EditTextActionListener"
+  },
+  {
+    "color": "#FF4CAF50",
+    "name": "App Designer"
+  },
+  {
+    "color": "#FFFF5722",
+    "name": "Dex Size"
+  },
+  {
+    "color": "#FFFF5722",
+    "name": "onTouchEvent"
+  },
+  {
+    "color": "#FF9C27B0",
+    "name": "Check Files"
+  },
+  {
+    "color": "#FF2196F3",
+    "name": "New ToolTip"
+  },
+  {
+    "color": "#AB47BC",
+    "name": "Finger print"
+  },
+  {
+    "color": "#FF6200EA",
+    "name": "Image Holder"
+  },
+  {
+    "color": "#E91E63",
+    "name": "Mention Tags"
+  },
+  {
+    "color": "#673AB7",
+    "name": "NumberPicker"
+  },
+  {
+    "color": "#FFE91E63",
+    "name": "DynamicColors Editor"
+  },
+  {
+    "color": "#FFFF5722",
+    "name": "Phone rotate state"
+  },
+  {
+    "color": "#F44336",
+    "name": "Custom Dialog Java11"
+  }
+]

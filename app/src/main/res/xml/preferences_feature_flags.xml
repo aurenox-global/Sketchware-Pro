@@ -1,0 +1,229 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto">
+    <SwitchPreferenceCompat
+        app:iconSpaceReserved="false"
+        app:key="CODE_VIEWER_EDIT_AND_SAVE"
+        app:summary="Enable edit and save actions in Code Viewer."
+        app:title="Code Viewer Edit and Save" />
+
+    <SwitchPreferenceCompat
+        app:iconSpaceReserved="false"
+        app:key="EDITOR_LSP_ABSTRACTION"
+        app:summary="Enable LSP client abstraction and diagnostics stream lifecycle in editor activities."
+        app:title="Editor LSP Abstraction" />
+
+    <SwitchPreferenceCompat
+        app:iconSpaceReserved="false"
+        app:key="COMMAND_PALETTE_REGISTRY"
+        app:summary="Enable command palette provider registry and typed command model foundation."
+        app:title="Command Palette Registry" />
+
+    <SwitchPreferenceCompat
+        app:iconSpaceReserved="false"
+        app:key="STARTUP_PROFILING_THRESHOLDS"
+        app:summary="Enable startup profiling and regression threshold tracking."
+        app:title="Startup Profiling and Thresholds" />
+
+    <SwitchPreferenceCompat
+        app:iconSpaceReserved="false"
+        app:key="ACCESSIBILITY_CHECKS_REPORTING"
+        app:summary="Enable accessibility checks and issue reporting for screen snapshots."
+        app:title="Accessibility Checks and Reporting" />
+
+    <SwitchPreferenceCompat
+        app:iconSpaceReserved="false"
+        app:key="KPI_DASHBOARD_RELEASE_GATES"
+        app:summary="Enable KPI dashboard aggregation and release gate evaluation."
+        app:title="KPI Dashboard and Release Gates" />
+
+    <SwitchPreferenceCompat
+        app:iconSpaceReserved="false"
+        app:key="KMP_EXPERIMENTAL_ENABLE"
+        app:summary="Enable Kotlin Multiplatform project model, hierarchy validation, and serializer foundations."
+        app:title="KMP Experimental Enable" />
+
+    <SwitchPreferenceCompat
+        app:iconSpaceReserved="false"
+        app:key="LOCAL_AI_MULTI_ACTIVITY_GENERATION"
+        app:summary="Enable Local AI generation of multiple editable activities from screens."
+        app:title="Local AI Multi-Activity Generation" />
+
+    <SwitchPreferenceCompat
+        app:iconSpaceReserved="false"
+        app:key="LOCAL_AI_EVENT_CODE_GUIDE"
+        app:summary="Enable per-activity Event code guidance in generated AI guides."
+        app:title="Local AI Event Code Guide" />
+
+    <PreferenceCategory
+        app:iconSpaceReserved="false"
+        app:title="Build Metrics">
+
+        <Preference
+            app:iconSpaceReserved="false"
+            app:key="build_metrics_summary"
+            app:summary="No data"
+            app:title="Summary" />
+
+        <Preference
+            app:iconSpaceReserved="false"
+            app:key="build_metrics_last"
+            app:summary="No data"
+            app:title="Last Build" />
+
+        <Preference
+            app:iconSpaceReserved="false"
+            app:key="build_metrics_stages"
+            app:summary="No data"
+            app:title="Last Build Stages" />
+
+        <Preference
+            app:iconSpaceReserved="false"
+            app:key="build_metrics_reset"
+            app:summary="Clear all stored build metrics"
+            app:title="Reset Metrics" />
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        app:iconSpaceReserved="false"
+        app:title="Editor Metrics">
+
+        <Preference
+            app:iconSpaceReserved="false"
+            app:key="editor_metrics_summary"
+            app:summary="No data"
+            app:title="Summary" />
+
+        <Preference
+            app:iconSpaceReserved="false"
+            app:key="editor_metrics_lsp"
+            app:summary="No data"
+            app:title="LSP Latency (P50/P95)" />
+
+        <Preference
+            app:iconSpaceReserved="false"
+            app:key="editor_metrics_diagnostics"
+            app:summary="No data"
+            app:title="Diagnostics Latency (P50/P95)" />
+
+        <Preference
+            app:iconSpaceReserved="false"
+            app:key="editor_metrics_reset"
+            app:summary="Clear all stored editor latency metrics"
+            app:title="Reset Metrics" />
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        app:iconSpaceReserved="false"
+        app:title="KMP Build Metrics">
+
+        <Preference
+            app:iconSpaceReserved="false"
+            app:key="kmp_build_metrics_summary"
+            app:summary="No data"
+            app:title="Summary" />
+
+        <Preference
+            app:iconSpaceReserved="false"
+            app:key="kmp_build_metrics_trend"
+            app:summary="No data"
+            app:title="Trend (P50/P95)" />
+
+        <Preference
+            app:iconSpaceReserved="false"
+            app:key="kmp_build_metrics_stages"
+            app:summary="No data"
+            app:title="Last Target Stages" />
+
+        <Preference
+            app:iconSpaceReserved="false"
+            app:key="kmp_build_metrics_reset"
+            app:summary="Clear all stored KMP build telemetry"
+            app:title="Reset Metrics" />
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        app:iconSpaceReserved="false"
+        app:title="KMP Developer Docs">
+
+        <Preference
+            app:iconSpaceReserved="false"
+            app:key="kmp_developer_docs_entry"
+            app:summary="Open KMP guide and sample build instructions"
+            app:title="Open KMP Developer Docs" />
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        app:iconSpaceReserved="false"
+        app:title="Startup Metrics">
+
+        <Preference
+            app:iconSpaceReserved="false"
+            app:key="startup_metrics_summary"
+            app:summary="No data"
+            app:title="Summary" />
+
+        <Preference
+            app:iconSpaceReserved="false"
+            app:key="startup_metrics_last"
+            app:summary="No data"
+            app:title="Last Startup" />
+
+        <Preference
+            app:iconSpaceReserved="false"
+            app:key="startup_metrics_threshold"
+            app:summary="No data"
+            app:title="Thresholds and Regressions" />
+
+        <Preference
+            app:iconSpaceReserved="false"
+            app:key="startup_metrics_reset"
+            app:summary="Clear all stored startup profiling metrics"
+            app:title="Reset Metrics" />
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        app:iconSpaceReserved="false"
+        app:title="Accessibility Metrics">
+
+        <Preference
+            app:iconSpaceReserved="false"
+            app:key="accessibility_metrics_summary"
+            app:summary="No data"
+            app:title="Summary" />
+
+        <Preference
+            app:iconSpaceReserved="false"
+            app:key="accessibility_metrics_last"
+            app:summary="No data"
+            app:title="Last Report" />
+
+        <Preference
+            app:iconSpaceReserved="false"
+            app:key="accessibility_metrics_reset"
+            app:summary="Clear all stored accessibility reports"
+            app:title="Reset Metrics" />
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        app:iconSpaceReserved="false"
+        app:title="KPI Dashboard">
+
+        <Preference
+            app:iconSpaceReserved="false"
+            app:key="kpi_dashboard_summary"
+            app:summary="No data"
+            app:title="KPI Summary" />
+
+        <Preference
+            app:iconSpaceReserved="false"
+            app:key="kpi_release_gates"
+            app:summary="No data"
+            app:title="Release Gates" />
+
+        <Preference
+            app:iconSpaceReserved="false"
+            app:key="kpi_dashboard_reset"
+            app:summary="Clear all metrics used by KPI dashboard"
+            app:title="Reset All KPI Metrics" />
+    </PreferenceCategory>
+</PreferenceScreen>
