@@ -433,8 +433,10 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
                         if (view instanceof android.widget.TextView textView) {
                             boolean bold = pair.second.contains("bold");
                             boolean italic = pair.second.contains("italic");
-                            textView.setTypeface(android.graphics.Typeface.DEFAULT,
-                                    (bold ? android.graphics.Typeface.BOLD : 0) | (italic ? android.graphics.Typeface.ITALIC : 0));
+                            int textStyle = android.graphics.Typeface.NORMAL;
+                            if (bold) textStyle |= android.graphics.Typeface.BOLD;
+                            if (italic) textStyle |= android.graphics.Typeface.ITALIC;
+                            textView.setTypeface(android.graphics.Typeface.DEFAULT, textStyle);
                         }
                         break;
                     }
