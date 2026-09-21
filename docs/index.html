@@ -144,10 +144,13 @@
         </ul>
       </div>
 
-      <div class="item pending">
-        <span class="when">next · signing</span>
-        <h3>Real release keystore <span class="pill warn">pending</span></h3>
-        <p>Releases are still signed with the public AOSP test key, so anyone could sign an update with the same identity. A private keystore is needed before publishing anything serious.</p>
+      <div class="item done">
+        <span class="when">2026-09-21 · signing</span>
+        <h3>Private release keystore <span class="pill ok">done</span></h3>
+        <p>Releases are signed with a real 4096-bit RSA key generated outside the repository
+        (<code>~/.android-keys/sketchware-pro/release.jks</code>), with credentials read from
+        <code>~/.gradle/gradle.properties</code>. Verified with <code>apksigner</code>: signer
+        <code>CN=Andres Mag, OU=Sketchware Pro, O=aurenox-global</code> — no longer the public AOSP test key.</p>
       </div>
 
       <div class="item pending">
@@ -254,7 +257,7 @@
           <tr><td>Build without git, API key default, silent catches</td><td><span class="pill ok">done</span></td></tr>
           <tr><td>Release credentials out of the source tree</td><td><span class="pill ok">done</span></td></tr>
           <tr><td>Git history, public repo, first release</td><td><span class="pill ok">done</span></td></tr>
-          <tr><td>Private release keystore</td><td><span class="pill warn">pending</span></td></tr>
+          <tr><td>Private release keystore</td><td><span class="pill ok">done</span></td></tr>
           <tr><td>R8 code shrinking (blocked by the kotlinc jar)</td><td><span class="pill warn">blocked</span></td></tr>
           <tr><td>Resource shrinking (<code>keep.xml</code>)</td><td><span class="pill warn">blocked</span></td></tr>
           <tr><td>Bilingual documentation and this site</td><td><span class="pill ok">done</span></td></tr>

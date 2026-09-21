@@ -131,6 +131,13 @@ Requirements:
 This repository is a personal fork. Every improvement is added here as it lands, and the
 [website](https://aurenox-global.github.io/Sketchware-Pro/) is updated at the same time.
 
+### 2026-09-21 — private release keystore
+
+- **Releases are signed with a real key now.** A 4096-bit RSA keystore was generated outside the repository
+  (`~/.android-keys/sketchware-pro/release.jks`) and its credentials are read from `~/.gradle/gradle.properties`,
+  never from the source tree. Verified with `apksigner`: the APK is signed by
+  `CN=Andres Mag, OU=Sketchware Pro, O=aurenox-global` (SHA-256 `02120913…`), no longer by the public AOSP test key.
+
 ### 2026-09-21 — first versioned build (v7.0.5)
 
 - **Build no longer needs a git repo.** `git rev-parse` used to run during configuration and corrupted
@@ -154,7 +161,7 @@ This repository is a personal fork. Every improvement is added here as it lands,
 | Release credentials out of the source tree | done |
 | Git history, public repo, first release | done |
 | Bilingual documentation and website | done |
-| Private release keystore | pending |
+| Private release keystore | done |
 | R8 code shrinking (blocked by the `kotlinc` jar) | blocked |
 | Resource shrinking (`res/raw/keep.xml`) | blocked |
 | Translations, deprecated APIs, test coverage | planned |
