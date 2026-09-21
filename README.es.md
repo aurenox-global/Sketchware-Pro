@@ -70,13 +70,16 @@ Todo lo que haces es Android de verdad: fuentes Java reales, recursos reales y A
 
 No hay versión en tiendas — el APK lo instalas tú.
 
-1. Descarga el APK desde la [página de releases](https://github.com/aurenox-global/Sketchware-Pro/releases).
+1. Descarga el APK que corresponda a tu dispositivo desde la [página de releases](https://github.com/aurenox-global/Sketchware-Pro/releases):
+   - `app-arm64-v8a-release.apk` — prácticamente todos los móviles modernos (recomendado)
+   - `app-armeabi-v7a-release.apk` — dispositivos antiguos de 32 bits
+   - `app-x86_64-release.apk` / `app-x86-release.apk` — emuladores
 2. Permite instalar desde orígenes desconocidos para tu navegador o gestor de archivos.
-3. Abre el APK e instala. Si ya tenías Sketchware Pro con otra firma, desinstálalo antes.
-4. Opcional, por ADB (además conserva tus datos cuando la firma coincide):
+3. Abre el APK e instala. La clave de firma no cambia, así que se instala encima de versiones anteriores.
+4. Opcional, por ADB (además conserva tus datos):
 
 ```bash
-adb install -r app-release.apk
+adb install -r app-arm64-v8a-release.apk
 ```
 
 **Requisitos:** Android 8.0 (API 26) o superior. Se recomienda un dispositivo ARM64.
@@ -135,7 +138,9 @@ Este repositorio es un fork personal. Cada mejora se añade aquí según entra, 
 
 - **ABI splits activados.** `assembleRelease` genera ahora un APK por arquitectura en lugar de uno universal,
   así que el dispositivo deja de descargar los otros tres juegos de librerías nativas. Verificado: cada APK lleva
-  solo su propio `lib/<abi>/`, incluido el `aapt2` incluido, y sigue firmado con la clave privada.
+  solo su propio `lib/<abi>/`, incluido el `aapt2` incluido.
+- **Publicado como [v7.0.5.1](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.1)**, firmado con
+  la clave original para que se instale encima de versiones anteriores.
 
 ### 2026-09-21 — firma: se mantiene la clave original
 

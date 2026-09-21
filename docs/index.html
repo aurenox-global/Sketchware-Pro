@@ -44,7 +44,7 @@
       compile on the device and get an installable APK — no computer required.
     </p>
     <div class="btns">
-      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5" target="_blank" rel="noopener">⬇ Download APK</a>
+      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.1" target="_blank" rel="noopener">⬇ Download APK</a>
       <a class="btn ghost" href="https://github.com/aurenox-global/Sketchware-Pro" target="_blank" rel="noopener">View source on GitHub</a>
     </div>
 
@@ -149,7 +149,8 @@
         <h3>One APK per architecture <span class="pill ok">done</span></h3>
         <p>ABI splits enabled: <code>assembleRelease</code> produces one APK per architecture instead of a single
         universal one, so a device no longer downloads the other three sets of native libraries. Verified: each APK
-        carries only its own <code>lib/&lt;abi&gt;/</code>, including the bundled <code>aapt2</code>.</p>
+        carries only its own <code>lib/&lt;abi&gt;/</code>, including the bundled <code>aapt2</code>. Published as
+        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.1">v7.0.5.1</a>, signed with the original key.</p>
       </div>
 
       <div class="item done">
@@ -192,12 +193,12 @@
     <h2><span class="hash">#</span>Install</h2>
     <p class="sub">There is no store version. You install the APK yourself.</p>
     <ol class="steps">
-      <li><strong>Download the APK</strong> from the <a href="https://github.com/aurenox-global/Sketchware-Pro/releases" target="_blank" rel="noopener">releases page</a>.</li>
+      <li><strong>Download the right APK</strong> from the <a href="https://github.com/aurenox-global/Sketchware-Pro/releases" target="_blank" rel="noopener">releases page</a>: <code>app-arm64-v8a-release.apk</code> for almost every modern phone, <code>app-armeabi-v7a-release.apk</code> for old 32-bit devices, <code>x86_64</code>/<code>x86</code> for emulators.</li>
       <li><strong>Allow installation from unknown sources</strong> for your browser or file manager (Android will ask you when you open the file).</li>
-      <li><strong>Open the APK and install.</strong> If you already had Sketchware Pro installed with a different signature, uninstall it first.</li>
-      <li><strong>Optional:</strong> install over ADB, which also keeps your data when the signature matches.</li>
+      <li><strong>Open the APK and install.</strong> The signing key is unchanged, so it installs over previous builds.</li>
+      <li><strong>Optional:</strong> install over ADB, which also keeps your data.</li>
     </ol>
-<pre class="code">adb install -r app-release.apk</pre>
+<pre class="code">adb install -r app-arm64-v8a-release.apk</pre>
     <div class="note">
       <strong>Requirements:</strong> Android 8.0 (API 26) or newer. An ARM64 device is recommended — the bundled
       compiler and toolchain work best there.

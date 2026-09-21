@@ -70,13 +70,16 @@ Everything you build is plain Android: real Java sources, real resources, real A
 
 There is no store version — you install the APK yourself.
 
-1. Download the APK from the [releases page](https://github.com/aurenox-global/Sketchware-Pro/releases).
+1. Download the right APK from the [releases page](https://github.com/aurenox-global/Sketchware-Pro/releases):
+   - `app-arm64-v8a-release.apk` — almost every modern phone (recommended)
+   - `app-armeabi-v7a-release.apk` — old 32-bit devices
+   - `app-x86_64-release.apk` / `app-x86-release.apk` — emulators
 2. Allow installation from unknown sources for your browser or file manager.
-3. Open the APK and install it. If you already had Sketchware Pro with a different signature, uninstall it first.
-4. Optional, over ADB (also keeps your data when the signature matches):
+3. Open the APK and install it. The signing key is unchanged, so it installs over previous builds.
+4. Optional, over ADB (also keeps your data):
 
 ```bash
-adb install -r app-release.apk
+adb install -r app-arm64-v8a-release.apk
 ```
 
 **Requirements:** Android 8.0 (API 26) or newer. An ARM64 device is recommended.
@@ -135,7 +138,9 @@ This repository is a personal fork. Every improvement is added here as it lands,
 
 - **ABI splits enabled.** `assembleRelease` now produces one APK per architecture instead of a single universal
   one, so a device stops downloading the other three sets of native libraries. Verified: every split APK carries
-  only its own `lib/<abi>/`, including the bundled `aapt2`, and the APK is still signed with the private key.
+  only its own `lib/<abi>/`, including the bundled `aapt2`.
+- **Published as [v7.0.5.1](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.1)**, signed with
+  the original key so it installs over previous builds.
 
 ### 2026-09-21 — signing: the original key stays
 

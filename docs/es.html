@@ -44,7 +44,7 @@
       compila en el propio dispositivo y obtén un APK instalable — sin necesidad de ordenador.
     </p>
     <div class="btns">
-      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5" target="_blank" rel="noopener">⬇ Descargar APK</a>
+      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.1" target="_blank" rel="noopener">⬇ Descargar APK</a>
       <a class="btn ghost" href="https://github.com/aurenox-global/Sketchware-Pro" target="_blank" rel="noopener">Ver el código en GitHub</a>
     </div>
 
@@ -149,7 +149,8 @@
         <h3>Un APK por arquitectura <span class="pill ok">hecho</span></h3>
         <p>ABI splits activados: <code>assembleRelease</code> genera un APK por arquitectura en lugar de uno
         universal, así que el dispositivo deja de descargar los otros tres juegos de librerías nativas. Verificado:
-        cada APK lleva solo su propio <code>lib/&lt;abi&gt;/</code>, incluido el <code>aapt2</code> incluido.</p>
+        cada APK lleva solo su propio <code>lib/&lt;abi&gt;/</code>, incluido el <code>aapt2</code> incluido. Publicado como
+        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.1">v7.0.5.1</a>, firmado con la clave original.</p>
       </div>
 
       <div class="item done">
@@ -193,12 +194,12 @@
     <h2><span class="hash">#</span>Instalar</h2>
     <p class="sub">No hay versión en tiendas. El APK lo instalas tú.</p>
     <ol class="steps">
-      <li><strong>Descarga el APK</strong> desde la <a href="https://github.com/aurenox-global/Sketchware-Pro/releases" target="_blank" rel="noopener">página de releases</a>.</li>
+      <li><strong>Descarga el APK que corresponda</strong> desde la <a href="https://github.com/aurenox-global/Sketchware-Pro/releases" target="_blank" rel="noopener">página de releases</a>: <code>app-arm64-v8a-release.apk</code> para casi todos los móviles modernos, <code>app-armeabi-v7a-release.apk</code> para dispositivos antiguos de 32 bits, <code>x86_64</code>/<code>x86</code> para emuladores.</li>
       <li><strong>Permite instalar desde orígenes desconocidos</strong> para tu navegador o gestor de archivos (Android te lo pedirá al abrir el archivo).</li>
-      <li><strong>Abre el APK e instala.</strong> Si ya tenías Sketchware Pro con otra firma, desinstálalo antes.</li>
-      <li><strong>Opcional:</strong> instala por ADB, que además conserva tus datos cuando la firma coincide.</li>
+      <li><strong>Abre el APK e instala.</strong> La clave de firma no cambia, así que se instala encima de versiones anteriores.</li>
+      <li><strong>Opcional:</strong> instala por ADB, que además conserva tus datos.</li>
     </ol>
-<pre class="code">adb install -r app-release.apk</pre>
+<pre class="code">adb install -r app-arm64-v8a-release.apk</pre>
     <div class="note">
       <strong>Requisitos:</strong> Android 8.0 (API 26) o superior. Se recomienda un dispositivo ARM64 — el compilador
       y el toolchain incluidos funcionan mejor ahí.
