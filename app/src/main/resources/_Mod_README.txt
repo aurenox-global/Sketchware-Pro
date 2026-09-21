@@ -36,7 +36,7 @@ Please use it on your own discretion and buy the Sketchware Premium subscription
 We love Sketchware very much, and we are grateful to Sketchware's developers for making such an amazing app,
 but unfortunately, we haven't received updates for a long time.
 That's why we decided to keep Sketchware alive by making this mod, plus we don't demand any money - It's completely free :)
-Also, starting with version 6.4.0 of the Mod, we've made some source code open source! You can check it out at https://github.com/Sketchware-Pro/Sketchware-Pro/,
+Also, starting with version 6.4.0 of the Mod, we've made some source code open source! You can check it out at https://github.com/aurenox-global/Sketchware-Pro,
 and if you want to contribute, go fork it and open a pull request! We'd love to see new amazing features getting added to Sketchware Pro :D
 
 ★ The change log can be found in the mod's Main Drawer.
