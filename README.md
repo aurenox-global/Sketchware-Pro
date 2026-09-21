@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.5.2-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.5.3-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -134,6 +134,14 @@ Requirements:
 This repository is a personal fork. Every improvement is added here as it lands, and the
 [website](https://aurenox-global.github.io/Sketchware-Pro/) is updated at the same time.
 
+### 2026-09-21 — the app's GitHub links point to this fork
+
+- **In-app GitHub links now redirect here** instead of upstream: the repository link, the releases link and the
+  commits API that feeds the "changes" screen all point to `aurenox-global/Sketchware-Pro`, so the update notice
+  checks this fork's releases. `_Mod_README.txt` mentions the fork too.
+- Verified inside the built APK: `resources.arsc` carries the three new URLs. Version bumped to **v7.0.5.3**
+  (versionCode 153) and published as [v7.0.5.3](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.3).
+
 ### 2026-09-21 — CI green, and why R8 only failed there
 
 - **Android CI and Verification Baseline now pass.** The last blocker was subtle: the `bundletool` jar that
@@ -211,6 +219,7 @@ This repository is a personal fork. Every improvement is added here as it lands,
 | Bilingual documentation and website | done |
 | Repository complete: restored the source packages hidden by `.gitignore` | done |
 | CI green: Android CI + Verification Baseline | done |
+| In-app GitHub links point to this fork | done |
 | R8 running in CI (blocked by the `bundletool` jar) | blocked |
 | ABI splits (one APK per architecture) | done |
 | Release signing keeps the original key (on purpose) | done |

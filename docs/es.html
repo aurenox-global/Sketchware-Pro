@@ -37,14 +37,14 @@
 
   <!-- ============================================================ hero -->
   <section class="hero" style="border-top:none">
-    <div class="tag">● v7.0.5.2 · versionCode 152 · source-available</div>
+    <div class="tag">● v7.0.5.3 · versionCode 153 · source-available</div>
     <h1>Crea apps Android reales<br><span class="accent">desde tu móvil.</span></h1>
     <p class="lead">
       Sketchware Pro es un IDE de Android que funciona sobre Android: arrastra bloques, escribe Java o Kotlin,
       compila en el propio dispositivo y obtén un APK instalable — sin necesidad de ordenador.
     </p>
     <div class="btns">
-      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.2" target="_blank" rel="noopener">⬇ Descargar APK</a>
+      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.3" target="_blank" rel="noopener">⬇ Descargar APK</a>
       <a class="btn ghost" href="https://github.com/aurenox-global/Sketchware-Pro" target="_blank" rel="noopener">Ver el código en GitHub</a>
     </div>
 
@@ -161,6 +161,15 @@
         Verificado con <code>apksigner</code>: los cuatro APK por arquitectura llevan esa huella. La keystore
         privada de 4096 bits queda guardada en <code>~/.android-keys/sketchware-pro/release.jks</code> para el día
         en que se quiera una identidad de distribución real.</p>
+      </div>
+
+      <div class="item done">
+        <span class="when">2026-09-21 · app</span>
+        <h3>Los enlaces de GitHub de la app apuntan aquí <span class="pill ok">hecho</span></h3>
+        <p>Los enlaces del repositorio, de releases y de commits dentro de la app abren ahora
+        <code>aurenox-global/Sketchware-Pro</code> en vez del upstream, así que el aviso de actualizaciones consulta
+        las releases de este fork. Verificado dentro del APK compilado (<code>resources.arsc</code>).
+        Versión <strong>v7.0.5.3</strong>.</p>
       </div>
 
       <div class="item done">
@@ -297,6 +306,7 @@
           <tr><td>Documentación bilingüe y este sitio</td><td><span class="pill ok">hecho</span></td></tr>
           <tr><td>Repositorio completo: recuperados los paquetes ocultos por <code>.gitignore</code></td><td><span class="pill ok">hecho</span></td></tr>
           <tr><td>CI en verde: Android CI + Verification Baseline</td><td><span class="pill ok">hecho</span></td></tr>
+          <tr><td>Los enlaces de GitHub de la app apuntan a este fork</td><td><span class="pill ok">hecho</span></td></tr>
           <tr><td>R8 funcionando en CI (bloqueado por el jar de <code>bundletool</code>)</td><td><span class="pill warn">bloqueado</span></td></tr>
           <tr><td>ABI splits (un APK por arquitectura)</td><td><span class="pill ok">hecho</span></td></tr>
           <tr><td>Traducciones, APIs deprecadas, cobertura de tests</td><td><span class="pill info">planificado</span></td></tr>

@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.5.2-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.5.3-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -134,6 +134,15 @@ Requisitos:
 Este repositorio es un fork personal. Cada mejora se añade aquí según entra, y el
 [sitio web](https://aurenox-global.github.io/Sketchware-Pro/es.html) se actualiza a la vez.
 
+### 2026-09-21 — los enlaces de GitHub de la app apuntan a este fork
+
+- **Los enlaces de GitHub dentro de la app redirigen ahora aquí** en vez de al upstream: el enlace del
+  repositorio, el de releases y la API de commits que alimenta la pantalla de cambios apuntan a
+  `aurenox-global/Sketchware-Pro`, así que el aviso de actualizaciones consulta las releases de este fork.
+  `_Mod_README.txt` también menciona el fork.
+- Verificado dentro del APK compilado: `resources.arsc` lleva las tres URLs nuevas. Versión subida a
+  **v7.0.5.3** (versionCode 153) y publicada como [v7.0.5.3](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.3).
+
 ### 2026-09-21 — CI en verde, y por qué R8 solo fallaba allí
 
 - **Android CI y Verification Baseline ya pasan.** El último bloqueo era sutil: el jar de `bundletool` que
@@ -209,6 +218,7 @@ Este repositorio es un fork personal. Cada mejora se añade aquí según entra, 
 | Documentación bilingüe y sitio web | hecho |
 | Repositorio completo: recuperados los paquetes ocultos por `.gitignore` | hecho |
 | CI en verde: Android CI + Verification Baseline | hecho |
+| Los enlaces de GitHub de la app apuntan a este fork | hecho |
 | R8 funcionando en CI (bloqueado por el jar de `bundletool`) | bloqueado |
 | ABI splits (un APK por arquitectura) | hecho |
 | Firma de release: se mantiene la clave original (por decisión) | hecho |
