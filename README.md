@@ -1,83 +1,205 @@
 <p align="center">
-  <img src="assets/Sketchware-Pro.png" style="width: 30%;" />
+  <img src="assets/Sketchware-Pro.png" width="220" alt="Sketchware Pro">
 </p>
 
-# Sketchware Pro
-[![GitHub contributors](https://img.shields.io/github/contributors/Sketchware-Pro/Sketchware-Pro)](https://github.com/Sketchware-Pro/Sketchware-Pro/graphs/contributors)
-[![GitHub last commit](https://img.shields.io/github/last-commit/Sketchware-Pro/Sketchware-Pro)](https://github.com/Sketchware-Pro/Sketchware-Pro/commits/)
-[![Discord server stats](https://img.shields.io/discord/790686719753846785)](http://discord.gg/kq39yhT4rX)
-[![Total downloads](https://img.shields.io/github/downloads/Sketchware-Pro/Sketchware-Pro/total)](https://github.com/Sketchware-Pro/Sketchware-Pro/releases)
-[![Repository Size](https://img.shields.io/github/repo-size/Sketchware-Pro/Sketchware-Pro)](https://github.com/Sketchware-Pro/Sketchware-Pro)
+<h1 align="center">Sketchware Pro</h1>
 
-Welcome to Sketchware Pro! Here you'll find the source code of many classes in Sketchware Pro and, most importantly, the place to contribute to Sketchware Pro.
+<p align="center">
+  <b>Build real Android apps from your phone.</b><br>
+  <a href="README.es.md">🇪🇸 Leer en español</a> ·
+  <a href="https://aurenox-global.github.io/Sketchware-Pro/">Website</a> ·
+  <a href="https://github.com/aurenox-global/Sketchware-Pro/releases">Download</a>
+</p>
 
-## Building the App
-To build the app, you must use Gradle. It's highly recommended to use Android Studio for the best experience.
+<p align="center">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.5-008dcd">
+  <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
+  <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
+  <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
+  <img alt="platform" src="https://img.shields.io/badge/platform-Android-1d7a73">
+</p>
 
-### Source Code Map
+---
 
-| Class           | Role                                        |
-| --------------- | ------------------------------------------- |
-| `a.a.a.ProjectBuilder`      | Helper for compiling an entire project       |
-| `a.a.a.Ix`      | Responsible for generating AndroidManifest.xml |
-| `a.a.a.Jx`      | Generates source code of activities          |
-| `a.a.a.Lx`      | Generates source code of components, such as listeners, etc. |
-| `a.a.a.Ox`      | Responsible for generating XML files of layouts |
-| `a.a.a.qq`      | Registry of built-in libraries' dependencies |
-| `a.a.a.tq`      | Responsible for the compiling dialog's quizzes |
-| `a.a.a.yq`      | Organizes Sketchware projects' file paths    |
+Sketchware Pro is an Android IDE that runs on Android itself. Drag visual blocks, write Java or Kotlin,
+compile on the device and get an installable APK — no computer required.
+
+Sketchware was an app that let you build Android apps visually, right on your phone. Development stopped
+years ago. **Sketchware Pro** is a community mod that keeps it alive, fixes what was broken and adds what
+the original never had.
+
+> 🔗 **Full documentation, in English and Spanish, lives here:**
+> **https://aurenox-global.github.io/Sketchware-Pro/**
+
+## Contents
+
+- [What it does](#what-it-does)
+- [Features](#features)
+- [Install](#install)
+- [Build from source](#build-from-source)
+- [Source code map](#source-code-map)
+- [Changes in this fork](#changes-in-this-fork)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [Legal notice](#legal-notice)
+
+## What it does
+
+| | |
+|---|---|
+| **Visual layout editor** | Drag widgets, edit properties, preview, generate the XML |
+| **Blocks / logic editor** | Events, conditions, loops, variables, functions, searchable block palette |
+| **Code editor** | Syntax highlighting, autocomplete, file tree of the generated sources |
+| **Java & Kotlin** | Kotlin compilation supported through the bundled `kotlinc` toolchain |
+| **Resource editor** | Images, colors, fonts, sounds and strings without leaving the app |
+| **Library manager** | Firebase, Material Components, Glide, Retrofit and many more |
+| **On-device compiler** | Builds the APK on the phone, with a bundled `aapt2` per architecture |
+| **Custom blocks** | Create your own blocks and share them with the community |
+
+Everything you build is plain Android: real Java sources, real resources, real APKs that belong to you.
+
+## Features
+
+- **Blocks that produce real code.** Nothing is locked in a proprietary format — you can read, edit and export it.
+- **A complete IDE on the device.** Layout, logic, resources, manifest, signing and compilation all run locally.
+- **Project catalogue.** Start from a template, a blank project or a shared `.swb` file. Everything lives in your storage.
+- **Community-driven.** Free, no subscription, no ads and no telemetry of its own.
+- **Built-in debugging.** Logcat, error reports and, in recent versions, real debugging work in progress.
+
+## Install
+
+There is no store version — you install the APK yourself.
+
+1. Download the APK from the [releases page](https://github.com/aurenox-global/Sketchware-Pro/releases).
+2. Allow installation from unknown sources for your browser or file manager.
+3. Open the APK and install it. If you already had Sketchware Pro with a different signature, uninstall it first.
+4. Optional, over ADB (also keeps your data when the signature matches):
+
+```bash
+adb install -r app-release.apk
+```
+
+**Requirements:** Android 8.0 (API 26) or newer. An ARM64 device is recommended.
+
+## Build from source
+
+Requirements:
+
+- **JDK 17** — `java -version` should report 17.x.
+- **Android SDK** — platform 36 and build-tools 35; point `local.properties` at it (`sdk.dir=/path/to/android-sdk`).
+- **Google Services** — `app/google-services.json` is optional. The helper scripts create a temporary placeholder from `app/src/debug/google-services.json` when needed.
+
+```bash
+# debug build
+./gradlew :app:assembleDebug
+
+# signed release build
+./gradlew :app:assembleRelease
+
+# or use the helper scripts
+./compile_project.command
+./compile_release.command
+```
+
+> [!WARNING]
+> If `RELEASE_STORE_FILE`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS` and `RELEASE_KEY_PASSWORD` are not set
+> (environment or `~/.gradle/gradle.properties`), the build falls back to the bundled `testkey.keystore` — a
+> **public** AOSP test key. That APK is fine for local testing, but anyone could sign an update that Android
+> would accept as yours. Never publish an APK signed with it.
+
+## Source code map
+
+| Class | Role |
+| ---------------------------- | ----------------------------------------------------------- |
+| `a.a.a.ProjectBuilder` | Helper for compiling an entire project |
+| `a.a.a.Ix` | Generates `AndroidManifest.xml` |
+| `a.a.a.Jx` | Generates the source code of activities |
+| `a.a.a.Lx` | Generates component code: listeners, helpers, etc. |
+| `a.a.a.Ox` | Generates layout XML files |
+| `a.a.a.qq` | Registry of built-in library dependencies |
+| `a.a.a.tq` | Compile-dialog steps |
+| `a.a.a.yq` | Project file paths |
+| `pro.sketchware.*` | Where new features should go, respecting the existing layout |
+| `mod.*` | Most community additions live here |
 
 > [!TIP]
-> You can also check the `mod` package, which contains the majority of contributors' changes.
+> New features that don't require touching other packages belong in `pro.sketchware`, keeping the existing
+> directory and file structure. Prefer Java over Kotlin unless Kotlin is genuinely necessary.
+
+## Changes in this fork
+
+This repository is a personal fork. Every improvement is added here as it lands, and the
+[website](https://aurenox-global.github.io/Sketchware-Pro/) is updated at the same time.
+
+### 2026-09-21 — first versioned build (v7.0.5)
+
+- **Build no longer needs a git repo.** `git rev-parse` used to run during configuration and corrupted
+  `BuildConfig.GIT_HASH`. It now reads `GIT_HASH` / `GIT_SHORT_HASH` from the environment and only uses git
+  when `.git` exists.
+- **`SKETCHUB_API_KEY` default.** Without the environment variable, `BuildConfig` contained the literal
+  `"null"`. It is now an empty string.
+- **Release signing moved out of the source tree.** Credentials come from `RELEASE_STORE_*` / `RELEASE_KEY_*`
+  (environment or `~/.gradle/gradle.properties`), with an explicit warning when they are missing.
+- **64 empty `catch` blocks annotated.** 44 files were swallowing exceptions silently; they now log through
+  `Log.d("SketchwarePro", …)`.
+- **Faster builds.** `org.gradle.parallel` and `org.gradle.caching` enabled.
+- **Repository published and versioned.** Git history, audited `.gitignore`, public repo and a first release
+  with the APK attached.
+
+## Roadmap
+
+| Item | State |
+| ------------------------------------------------ | ----------- |
+| Build without git, API key default, silent catches | done |
+| Release credentials out of the source tree | done |
+| Git history, public repo, first release | done |
+| Bilingual documentation and website | done |
+| Private release keystore | pending |
+| R8 code shrinking (blocked by the `kotlinc` jar) | blocked |
+| Resource shrinking (`res/raw/keep.xml`) | blocked |
+| Translations, deprecated APIs, test coverage | planned |
+
+Known blockers, in detail:
+
+- **R8** — `minifyReleaseWithR8` fails because `kotlinc-for-sketchware` ships `dalvik/**` classes that R8
+  refuses to treat as program classes. The jar has to be repackaged first.
+- **Resource shrinking** — there are 29 `getIdentifier()` call sites, so unused-looking resources would be
+  stripped. A `res/raw/keep.xml` has to be written first.
+- **`nonTransitiveRClass=true`** — breaks compilation: `mod/jbk/util/OldResourceIdMapper.java` references
+  `R.drawable.abc_*` from appcompat, which only exists with transitive R classes.
+- **Translations** — 2,239 strings and not a single `values-<language>` folder.
+- **Deprecated APIs** — `getColor()` ×126, `onActivityResult` ×63, `startActivityForResult` ×47,
+  `getExternalStorageDirectory` ×43.
+- **Lint debt** — a 24,169-line baseline that only detects drift, never shrinks.
 
 ## Contributing
 
-If you'd like to contribute to Sketchware Pro, follow these steps:
-
 1. Fork this repository.
-2. Make changes in your forked repository.
-3. Test out those changes.
-4. Create a pull request in this repository.
-5. Your pull request will be reviewed by the repository members and merged if accepted.
+2. Make your changes.
+3. Test them.
+4. Open a pull request.
 
-We welcome contributions of any size, whether they are major features or bug fixes, but please note that all contributions will be thoroughly reviewed.
+Commit messages use a type prefix: `feat:`, `fix:`, `style:`, `refactor:`, `test:`, `docs:`, `chore:` —
+for example `fix: Fix crash during launch on certain phones`.
 
-### Commit Message
+## Legal notice
 
-When you make changes to one or more files, you need to commit those changes with a commit message. Here are some guidelines:
+**Sketchware Pro is not open source.** It is *source-available*: you can read the code and submit changes,
+but you do not own it. Part of the code may infringe Sketchware's copyright.
 
-- Keep the commit message short and detailed.
-- Use one of these commit types as a prefix:
-  - `feat:` for a feature, possibly improving something already existing.
-  - `fix:` for a fix, such as a bug fix.
-  - `style:` for features and updates related to styling.
-  - `refactor:` for refactoring a specific section of the codebase.
-  - `test:` for everything related to testing.
-  - `docs:` for everything related to documentation.
-  - `chore:` for code maintenance (you can also use emojis to represent commit types).
+It is a community mod made to keep Sketchware alive by the community, for the community, with no harmful
+intent toward the original developers. **Publishing Sketchware Pro, unmodified or modified, on Google Play
+or any other app store is not permitted.** Use it at your own discretion.
 
-Examples:
-- `feat: Speed up compiling with new technique`
-- `fix: Fix crash during launch on certain phones`
-- `refactor: Reformat code in File.java`
+Two modules, `kotlinc` and `build-logic`, come from [CodeAssist](https://github.com/tyron12233/CodeAssist)
+and are licensed under GPL-3.0.
 
-> [!IMPORTANT]
-> If you want to add new features that don't require editing other packages other than `pro.sketchware`, make your changes in `pro.sketchware` package, and respect the directories and files structure and names. Also, even though the project compiles just fine with Kotlin classes that you might add, try to make your changes or additions in Java, not Kotlin unless it is more than necessary.
+## Credits
 
-## Thanks for Contributing
+- Upstream project: [Sketchware-Pro/Sketchware-Pro](https://github.com/Sketchware-Pro/Sketchware-Pro)
+- Community: [Discord](http://discord.gg/kq39yhT4rX)
+- Original Sketchware by its developers, who made all of this possible
 
-Thank you for contributing to Sketchware Pro! Your contributions help keep Sketchware Pro alive. Each accepted contribution will be noted down in the "About Team" activity. We'll use your GitHub name and profile picture initially, but they can be changed, of course.
+---
 
-## Discord
-
-Want to chat with us, discuss changes, or just hang out? We have a Discord server just for that.
-
-[![Join our Discord server!](https://invidget.switchblade.xyz/kq39yhT4rX)](http://discord.gg/kq39yhT4rX)
-
-## Disclaimer
-
-This mod was not created for any harmful purposes, such as harming Sketchware; quite the opposite, actually. It was made to keep Sketchware alive by the community for the community. Please use it at your own discretion and consider becoming a Patreon backer to support the developers. Unfortunately, other ways to support them are not working anymore, so Patreon is the only available option currently. You can find their Patreon page [here](https://www.patreon.com/sketchware).
-
-We do NOT permit publishing Sketchware Pro as it is, or with modifications, on Play Store or on any other app store. Keep in mind that this project is still a mod. Unauthorized modding of apps is considered illegal and we discourage such behavior.
-
-We love Sketchware very much and are grateful to Sketchware's developers for creating such an amazing app. However, we haven't received updates for a long time. That's why we decided to keep Sketchware alive by creating this mod, and it's completely free. We don't demand any money :)
+<sub>Documentation maintained in English and Spanish. Last updated: 2026-09-21.</sub>
