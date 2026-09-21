@@ -66,6 +66,36 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
+      - name: Diagnose DEX + bytecode archives (temporal)
+        continue-on-error: true
+        run: |
+          python3 - <<'PY'
+          import glob, os, zipfile
+          def is_dex(b):
+              return b[:4] in (b'dex\n', b'dex\x00') or b[:3] == b'dey'
+          roots = ['app/libs', os.path.expanduser('~/.gradle/caches')]
+          found = []
+          for root in roots:
+              for p in glob.glob(os.path.join(root, '**', '*'), recursive=True):
+                  if not p.lower().endswith(('.jar', '.aar', '.zip')):
+                      continue
+                  try:
+                      z = zipfile.ZipFile(p)
+                      names = z.namelist()
+                      candidates = [n for n in names if 'dex' in os.path.basename(n).lower() and not n.endswith('/')]
+                      if len(candidates) > 1024:
+                          candidates = candidates[:1024]
+                      hits = [n for n in candidates if is_dex(z.read(n)[:4])]
+                      if hits:
+                          found.append((p, hits[:3], len(hits)))
+                  except Exception:
+                      pass
+          if not found:
+              print('DIAG: ningun archive con contenido DEX')
+          for p, hits, n in found:
+              print('DIAG DEX+bytecode -> %s  (%d entradas, p.ej. %s)' % (p, n, hits))
+          PY
+
       - name: Build Release APK
         env:
           SKETCHUB_API_KEY: ${{ secrets.SKETCHUB_API_KEY }}
