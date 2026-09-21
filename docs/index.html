@@ -37,7 +37,7 @@
 
   <!-- ============================================================ hero -->
   <section class="hero" style="border-top:none">
-    <div class="tag">● v7.0.5 · versionCode 151 · source-available</div>
+    <div class="tag">● v7.0.5.2 · versionCode 152 · source-available</div>
     <h1>Build real Android apps<br><span class="accent">from your phone.</span></h1>
     <p class="lead">
       Sketchware Pro is an Android IDE that runs on Android itself: drag blocks, write Java or Kotlin,
@@ -163,6 +163,17 @@
       </div>
 
       <div class="item done">
+        <span class="when">2026-09-21 · repo fix</span>
+        <h3>The repository was incomplete <span class="pill ok">done</span></h3>
+        <p>A <code>.gitignore</code> bug: the pattern <code>build/</code> matched <em>any</em> directory named
+        <code>build</code> at any depth, so three real source packages — <code>mod/hey/studios/build/</code>,
+        <code>mod/jbk/build/</code> and <code>mod/pranav/build/</code> — were never committed. Eight files were
+        missing from the public repo, which is why every CI run failed to compile and why a fresh clone could not
+        build. Rules are now scoped with explicit exceptions. CI also builds without secrets now (mock
+        <code>google-services.json</code> + the committed public testkey), and the workflow handles ABI splits.</p>
+      </div>
+
+      <div class="item done">
         <span class="when">2026-09-21 · size</span>
         <h3>R8 code shrinking <span class="pill ok">done</span></h3>
         <p>R8 is enabled for release builds, cutting each APK from ~129 MB to ~106 MB. It needed two dependency jars
@@ -273,6 +284,7 @@
           <tr><td>R8 code shrinking (release builds)</td><td><span class="pill ok">done</span></td></tr>
           <tr><td>Resource shrinking (<code>keep.xml</code>)</td><td><span class="pill warn">blocked</span></td></tr>
           <tr><td>Bilingual documentation and this site</td><td><span class="pill ok">done</span></td></tr>
+          <tr><td>Repository complete: restored the packages hidden by <code>.gitignore</code></td><td><span class="pill ok">done</span></td></tr>
           <tr><td>ABI splits (one APK per architecture)</td><td><span class="pill ok">done</span></td></tr>
           <tr><td>Translations, deprecated APIs, test coverage</td><td><span class="pill info">planned</span></td></tr>
         </tbody>

@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.5-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.5.2-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -134,6 +134,19 @@ Requirements:
 This repository is a personal fork. Every improvement is added here as it lands, and the
 [website](https://aurenox-global.github.io/Sketchware-Pro/) is updated at the same time.
 
+### 2026-09-21 — the repository was incomplete (and CI could not compile)
+
+- **Found and fixed a `.gitignore` bug with real consequences.** The pattern `build/` matched *any* directory
+  named `build` at any depth, so three real source packages — `mod/hey/studios/build/`, `mod/jbk/build/` and
+  `mod/pranav/build/` — were never committed: 8 Java/Kotlin files were missing from the public repository.
+  That is why every CI run failed to compile and why a fresh clone could not build at all. Ignore rules are
+  now scoped, with explicit exceptions for those packages.
+- **CI can build without secrets:** `createMockGoogleServices` now also creates `app/google-services.json`
+  (the release variant needs it), and the public AOSP `testkey.keystore` is whitelisted in `.gitignore` and
+  committed, so CI signs with the same key as local builds.
+- **Workflow updated for ABI splits:** the artifact rename step and the Telegram upload path.
+- `docs/dependency-snapshot.lock` regenerated. Version bumped to **v7.0.5.2** (versionCode 152).
+
 ### 2026-09-21 — R8 code shrinking (release builds)
 
 - **R8 is enabled for release builds**, cutting each APK from ~129 MB down to ~106 MB. Three things were needed:
@@ -183,6 +196,7 @@ This repository is a personal fork. Every improvement is added here as it lands,
 | Release credentials out of the source tree | done |
 | Git history, public repo, first release | done |
 | Bilingual documentation and website | done |
+| Repository complete: restored the source packages hidden by `.gitignore` | done |
 | ABI splits (one APK per architecture) | done |
 | Release signing keeps the original key (on purpose) | done |
 | R8 code shrinking (release builds) | done |

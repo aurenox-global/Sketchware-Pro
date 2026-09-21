@@ -47,6 +47,7 @@ androidx.recyclerview:recyclerview:1.4.0
 androidx.resourceinspection:resourceinspection-annotation:1.0.1
 androidx.savedstate:savedstate-ktx:1.2.1
 androidx.savedstate:savedstate:1.2.1
+androidx.security:security-crypto:1.1.0-alpha06
 androidx.slidingpanelayout:slidingpanelayout:1.2.0
 androidx.swiperefreshlayout:swiperefreshlayout:1.1.0
 androidx.tracing:tracing:1.2.0
@@ -72,7 +73,6 @@ com.github.bumptech.glide:glide:5.0.4
 com.github.javaparser:javaparser-core:3.25.3
 com.github.javaparser:javaparser-symbol-solver-core:3.25.3
 com.github.topjohnwu.libsu:core:5.0.4
-com.github.waelchateur:kotlinc-for-sketchware:2.1.21_rc3
 com.google.android.flexbox:flexbox:3.0.0
 com.google.android.gms:play-services-ads-identifier:18.0.0
 com.google.android.gms:play-services-base:18.5.0
@@ -207,6 +207,7 @@ androidx.recyclerview:recyclerview:1.4.0
 androidx.resourceinspection:resourceinspection-annotation:1.0.1
 androidx.savedstate:savedstate-ktx:1.2.1
 androidx.savedstate:savedstate:1.2.1
+androidx.security:security-crypto:1.1.0-alpha06
 androidx.slidingpanelayout:slidingpanelayout:1.2.0
 androidx.startup:startup-runtime:1.2.0
 androidx.swiperefreshlayout:swiperefreshlayout:1.1.0
@@ -246,7 +247,6 @@ com.github.bumptech.glide:glide:5.0.4
 com.github.javaparser:javaparser-core:3.25.3
 com.github.javaparser:javaparser-symbol-solver-core:3.25.3
 com.github.topjohnwu.libsu:core:5.0.4
-com.github.waelchateur:kotlinc-for-sketchware:2.1.21_rc3
 com.google.android.datatransport:transport-api:3.2.0
 com.google.android.datatransport:transport-backend-cct:3.3.0
 com.google.android.datatransport:transport-runtime:3.3.0
@@ -267,6 +267,7 @@ com.google.android.material:material:1.14.0-alpha05
 com.google.auto.value:auto-value-annotations:1.6.2
 com.google.code.findbugs:jsr305:3.0.2
 com.google.code.gson:gson:2.13.1
+com.google.crypto.tink:tink-android:1.8.0
 com.google.dagger:dagger:2.28.3
 com.google.errorprone:error_prone_annotations:2.38.0
 com.google.firebase:firebase-analytics:23.0.0
@@ -311,7 +312,6 @@ io.github.Rosemoe.sora-editor:language-textmate:0.23.5
 io.github.itsaky:nb-javac-android:17.0.0.3
 io.noties.markwon:core:4.6.2
 javax.xml.stream:stax-api:1.0-2
-net.sf.kxml:kxml2:2.3.0
 org.apache.commons:commons-compress:1.8.1
 org.apache.httpcomponents:httpclient:4.1.1
 org.apache.httpcomponents:httpcore:4.1
@@ -406,6 +406,7 @@ androidx.recyclerview:recyclerview:1.4.0
 androidx.resourceinspection:resourceinspection-annotation:1.0.1
 androidx.savedstate:savedstate-ktx:1.2.1
 androidx.savedstate:savedstate:1.2.1
+androidx.security:security-crypto:1.1.0-alpha06
 androidx.slidingpanelayout:slidingpanelayout:1.2.0
 androidx.startup:startup-runtime:1.2.0
 androidx.swiperefreshlayout:swiperefreshlayout:1.1.0
@@ -445,7 +446,6 @@ com.github.bumptech.glide:glide:5.0.4
 com.github.javaparser:javaparser-core:3.25.3
 com.github.javaparser:javaparser-symbol-solver-core:3.25.3
 com.github.topjohnwu.libsu:core:5.0.4
-com.github.waelchateur:kotlinc-for-sketchware:2.1.21_rc3
 com.google.android.datatransport:transport-api:3.2.0
 com.google.android.datatransport:transport-backend-cct:3.3.0
 com.google.android.datatransport:transport-runtime:3.3.0
@@ -466,6 +466,7 @@ com.google.android.material:material:1.14.0-alpha05
 com.google.auto.value:auto-value-annotations:1.6.2
 com.google.code.findbugs:jsr305:3.0.2
 com.google.code.gson:gson:2.13.1
+com.google.crypto.tink:tink-android:1.8.0
 com.google.dagger:dagger:2.28.3
 com.google.errorprone:error_prone_annotations:2.38.0
 com.google.firebase:firebase-analytics:23.0.0
@@ -510,7 +511,6 @@ io.github.Rosemoe.sora-editor:language-textmate:0.23.5
 io.github.itsaky:nb-javac-android:17.0.0.3
 io.noties.markwon:core:4.6.2
 javax.xml.stream:stax-api:1.0-2
-net.sf.kxml:kxml2:2.3.0
 org.apache.commons:commons-compress:1.8.1
 org.apache.httpcomponents:httpclient:4.1.1
 org.apache.httpcomponents:httpcore:4.1

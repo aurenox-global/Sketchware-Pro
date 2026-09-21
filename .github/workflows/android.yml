@@ -75,16 +75,20 @@ jobs:
         id: set_sha
         run: echo "short_sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
 
-      - name: Rename APK with commit hash
+      - name: Rename APKs with commit hash
         run: |
-          mv app/build/outputs/apk/release/app-release.apk \
-             app/build/outputs/apk/release/app-release-${{ steps.set_sha.outputs.short_sha }}.apk
+          cd app/build/outputs/apk/release
+          for f in app-*-release.apk; do
+            [ -e "$f" ] || continue
+            mv "$f" "${f%-release.apk}-release-${{ steps.set_sha.outputs.short_sha }}.apk"
+          done
+          ls -l
 
-      - name: Upload Release APK
+      - name: Upload Release APKs
         uses: actions/upload-artifact@v4
         with:
           name: apk-release-${{ steps.set_sha.outputs.short_sha }}
-          path: app/build/outputs/apk/release/app-release-${{ steps.set_sha.outputs.short_sha }}.apk
+          path: app/build/outputs/apk/release/app-*-release-${{ steps.set_sha.outputs.short_sha }}.apk
 
   aggregateAndSend:
     name: Send APKs to Telegram
@@ -127,7 +131,7 @@ jobs:
           BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TOPIC_ID: ${{ secrets.TELEGRAM_TOPIC_ID }}
-          APK_PATH: ./downloaded-artifact/app-release-${{ needs.build.outputs.short_sha }}.apk
+          APK_PATH: ./downloaded-artifact/app-arm64-v8a-release-${{ needs.build.outputs.short_sha }}.apk
         run: |
           python ./.github/workflows/deploy_artifacts.py
         continue-on-error: true

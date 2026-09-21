@@ -68,8 +68,8 @@ android {
         namespace = "pro.sketchware"
       targetSdk = 35
         minSdk = 26
-        versionCode = 151
-        versionName = "v7.0.5"
+        versionCode = 152
+        versionName = "v7.0.5.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "GIT_HASH", "\"${gitCommitHash}\"")
@@ -336,6 +336,12 @@ tasks.register('createMockGoogleServices') {
   "configuration_version": "1"
 }"""
             mockFile.text = mockContent
+        }
+        // El plugin de google-services lee app/google-services.json en la variante release.
+        // En CI ese fichero no existe (esta fuera del repo), asi que lo creamos desde el mock.
+        def appServicesFile = file("google-services.json")
+        if (!appServicesFile.exists()) {
+            appServicesFile.text = mockFile.text
         }
     }
 }

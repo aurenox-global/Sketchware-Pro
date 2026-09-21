@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.5-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.5.2-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -134,6 +134,19 @@ Requisitos:
 Este repositorio es un fork personal. Cada mejora se añade aquí según entra, y el
 [sitio web](https://aurenox-global.github.io/Sketchware-Pro/es.html) se actualiza a la vez.
 
+### 2026-09-21 — el repositorio estaba incompleto (y por eso el CI no compilaba)
+
+- **Encontrado y arreglado un fallo del `.gitignore` con consecuencias reales.** El patrón `build/`
+  coincidía con *cualquier* carpeta llamada `build` a cualquier profundidad, así que tres paquetes de código
+  fuente reales — `mod/hey/studios/build/`, `mod/jbk/build/` y `mod/pranav/build/` — nunca se subieron:
+  faltaban 8 ficheros Java/Kotlin del repositorio público. Por eso fallaba la compilación en CI y por eso
+  un clon limpio no podía compilar. Las reglas de ignore están ahora acotadas, con excepciones explícitas.
+- **El CI puede compilar sin secretos:** `createMockGoogleServices` ahora crea también `app/google-services.json`
+  (la variante release lo necesita), y la testkey pública de AOSP queda exceptuada en `.gitignore` y subida al
+  repo, para que el CI firme con la misma clave que el build local.
+- **Workflow actualizado para los ABI splits:** el paso de renombrado y la ruta del APK para Telegram.
+- `docs/dependency-snapshot.lock` regenerado. Versión subida a **v7.0.5.2** (versionCode 152).
+
 ### 2026-09-21 — reducción de código con R8 (builds de release)
 
 - **R8 activado en el build de release**, bajando cada APK de ~129 MB a ~106 MB. Hicieron falta tres cosas:
@@ -182,6 +195,7 @@ Este repositorio es un fork personal. Cada mejora se añade aquí según entra, 
 | Credenciales de release fuera del código | hecho |
 | Historial git, repo público, primera release | hecho |
 | Documentación bilingüe y sitio web | hecho |
+| Repositorio completo: recuperados los paquetes ocultos por `.gitignore` | hecho |
 | ABI splits (un APK por arquitectura) | hecho |
 | Firma de release: se mantiene la clave original (por decisión) | hecho |
 | Reducción de código con R8 (builds de release) | hecho |

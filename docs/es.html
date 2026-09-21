@@ -37,7 +37,7 @@
 
   <!-- ============================================================ hero -->
   <section class="hero" style="border-top:none">
-    <div class="tag">● v7.0.5 · versionCode 151 · source-available</div>
+    <div class="tag">● v7.0.5.2 · versionCode 152 · source-available</div>
     <h1>Crea apps Android reales<br><span class="accent">desde tu móvil.</span></h1>
     <p class="lead">
       Sketchware Pro es un IDE de Android que funciona sobre Android: arrastra bloques, escribe Java o Kotlin,
@@ -164,6 +164,17 @@
       </div>
 
       <div class="item done">
+        <span class="when">2026-09-21 · repo fix</span>
+        <h3>El repositorio estaba incompleto <span class="pill ok">hecho</span></h3>
+        <p>Un fallo del <code>.gitignore</code>: el patrón <code>build/</code> coincidía con <em>cualquier</em>
+        carpeta llamada <code>build</code> a cualquier profundidad, así que tres paquetes de código fuente reales —
+        <code>mod/hey/studios/build/</code>, <code>mod/jbk/build/</code> y <code>mod/pranav/build/</code> — nunca se
+        subieron. Faltaban ocho ficheros del repo público, y por eso el CI no compilaba y un clon limpio tampoco
+        podía compilar. Las reglas están ahora acotadas con excepciones explícitas. Además el CI ya compila sin
+        secretos (<code>google-services.json</code> mock + la testkey pública subida) y el workflow soporta los ABI splits.</p>
+      </div>
+
+      <div class="item done">
         <span class="when">2026-09-21 · tamaño</span>
         <h3>Reducción de código con R8 <span class="pill ok">hecho</span></h3>
         <p>R8 activado en el build de release: cada APK baja de ~129 MB a ~106 MB. Hicieron falta dos jars
@@ -274,6 +285,7 @@
           <tr><td>Reducción de código con R8 (builds de release)</td><td><span class="pill ok">hecho</span></td></tr>
           <tr><td>Reducción de recursos (<code>keep.xml</code>)</td><td><span class="pill warn">bloqueado</span></td></tr>
           <tr><td>Documentación bilingüe y este sitio</td><td><span class="pill ok">hecho</span></td></tr>
+          <tr><td>Repositorio completo: recuperados los paquetes ocultos por <code>.gitignore</code></td><td><span class="pill ok">hecho</span></td></tr>
           <tr><td>ABI splits (un APK por arquitectura)</td><td><span class="pill ok">hecho</span></td></tr>
           <tr><td>Traducciones, APIs deprecadas, cobertura de tests</td><td><span class="pill info">planificado</span></td></tr>
         </tbody>
