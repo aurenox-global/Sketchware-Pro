@@ -196,23 +196,28 @@ tasks.matching { it.name.startsWith("uploadCrashlyticsMappingFile") }.configureE
 }
 
 // ---------------------------------------------------------------------------
-// R8 se atraganta con jars que reempaquetan clases que Android ya provee:
+// R8 se atraganta con archives que mezclan contenido DEX y bytecode Java, y tambien con
+// jars que reempaquetan clases que Android ya provee:
 //   - kotlinc-for-sketchware: dalvik/system/*.class (PathClassLoader, DexClassLoader...)
 //   - kxml2:                  org/xmlpull/v1/*.class (los aporta android.jar)
-// R8 falla con "Library class X extends/implements program class Y" porque android.jar
-// aporta esas mismas clases como libreria. Generamos en build/ una copia de cada jar
-// sin esos paquetes y sustituimos el artefacto original por la copia.
+//   - bundletool:             com/android/tools/build/bundletool/archive/dex/**/classes.dex embebidos
+// R8 falla con "Library class X extends/implements program class Y" o con "Cannot create
+// android app from an archive containing both DEX and Java-bytecode content". Generamos en
+// build/ una copia de cada jar sin esas entradas y sustituimos el artefacto original.
 // ---------------------------------------------------------------------------
 def platformDuplicateJars = [
     [group: "com.github.waelchateur", module: "kotlinc-for-sketchware", version: "2.1.21_rc3", excludes: ["dalvik/**"]],
     [group: "net.sf.kxml", module: "kxml2", version: "2.3.0", excludes: ["org/xmlpull/**"]],
+    [group: "com.android.tools.build", module: "bundletool", version: "1.18.2", excludes: ["com/android/tools/build/bundletool/archive/dex/**"]],
 ]
 
 def sanitizedJarFiles = files()
 
 platformDuplicateJars.eachWithIndex { spec, index ->
     def cfgName = "platformDuplicateSrc${index}"
-    configurations.create(cfgName)
+    def dupCfg = configurations.create(cfgName)
+    // No transitiva: queremos solo el jar de este modulo (bundletool arrastra protobuf y otros).
+    dupCfg.transitive = false
     dependencies.add(cfgName, "${spec.group}:${spec.module}:${spec.version}")
 
     def outName = "${spec.module}-sanitized.jar"
