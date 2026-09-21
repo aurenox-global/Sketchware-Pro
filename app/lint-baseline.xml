@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<issues format="6" by="lint 8.12.0" type="baseline" client="gradle" dependencies="false" name="AGP (8.12.0)" variant="all" version="8.12.0">
+<issues format="6" by="lint 8.12.0" type="baseline" client="gradle" dependencies="true" name="AGP (8.12.0)" variant="all" version="8.12.0">
 
     <issue
         id="MissingSuperCall"
@@ -18,118 +18,8 @@
         errorLine1="    public void onBackPressed() {"
         errorLine2="                ~~~~~~~~~~~~~">
         <location
-            file="src/main/java/mod/hilal/saif/activities/tools/BlocksManagerDetailsActivity.java"
-            line="156"
-            column="17"/>
-    </issue>
-
-    <issue
-        id="MissingSuperCall"
-        message="Overriding method should call `super.onBackPressed`"
-        errorLine1="    public void onBackPressed() {"
-        errorLine2="                ~~~~~~~~~~~~~">
-        <location
             file="src/main/java/pro/sketchware/activities/editor/view/CodeViewerActivity.java"
-            line="213"
-            column="17"/>
-    </issue>
-
-    <issue
-        id="MissingSuperCall"
-        message="Overriding method should call `super.onBackPressed`"
-        errorLine1="    public void onBackPressed() {"
-        errorLine2="                ~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/besome/sketch/design/DesignActivity.java"
-            line="403"
-            column="17"/>
-    </issue>
-
-    <issue
-        id="MissingSuperCall"
-        message="Overriding method should call `super.onBackPressed`"
-        errorLine1="    public void onBackPressed() {"
-        errorLine2="                ~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/besome/sketch/editor/manage/library/firebase/FirebaseActivity.java"
-            line="143"
-            column="17"/>
-    </issue>
-
-    <issue
-        id="MissingSuperCall"
-        message="Overriding method should call `super.onBackPressed`"
-        errorLine1="    public void onBackPressed() {"
-        errorLine2="                ~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/besome/sketch/editor/LogicEditorActivity.java"
-            line="1871"
-            column="17"/>
-    </issue>
-
-    <issue
-        id="MissingSuperCall"
-        message="Overriding method should call `super.onBackPressed`"
-        errorLine1="    public void onBackPressed() {"
-        errorLine2="                ~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/besome/sketch/editor/manage/font/ManageFontActivity.java"
-            line="33"
-            column="17"/>
-    </issue>
-
-    <issue
-        id="MissingSuperCall"
-        message="Overriding method should call `super.onBackPressed`"
-        errorLine1="    public void onBackPressed() {"
-        errorLine2="                ~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/besome/sketch/editor/manage/image/ManageImageActivity.java"
-            line="60"
-            column="17"/>
-    </issue>
-
-    <issue
-        id="MissingSuperCall"
-        message="Overriding method should call `super.onBackPressed`"
-        errorLine1="    public void onBackPressed() {"
-        errorLine2="                ~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/besome/sketch/editor/manage/library/ManageLibraryActivity.java"
-            line="249"
-            column="17"/>
-    </issue>
-
-    <issue
-        id="MissingSuperCall"
-        message="Overriding method should call `super.onBackPressed`"
-        errorLine1="    public void onBackPressed() {"
-        errorLine2="                ~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/besome/sketch/editor/manage/sound/ManageSoundActivity.java"
-            line="42"
-            column="17"/>
-    </issue>
-
-    <issue
-        id="MissingSuperCall"
-        message="Overriding method should call `super.onBackPressed`"
-        errorLine1="    public void onBackPressed() {"
-        errorLine2="                ~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/besome/sketch/editor/manage/view/ManageViewActivity.java"
-            line="216"
-            column="17"/>
-    </issue>
-
-    <issue
-        id="MissingSuperCall"
-        message="Overriding method should call `super.onBackPressed`"
-        errorLine1="    public void onBackPressed() {"
-        errorLine2="                ~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/besome/sketch/editor/PropertyActivity.java"
-            line="150"
+            line="214"
             column="17"/>
     </issue>
 
@@ -921,7 +811,7 @@
         errorLine2="                                          ~~~~~~~~~~~">
         <location
             file="src/main/java/dev/aldi/sayuti/editor/manage/ManageLocalLibraryActivity.java"
-            line="564"
+            line="576"
             column="43"/>
     </issue>
 
@@ -932,7 +822,7 @@
         errorLine2="                                                                       ~~~~~~~~~~~">
         <location
             file="src/main/java/dev/aldi/sayuti/editor/manage/ManageLocalLibraryActivity.java"
-            line="564"
+            line="576"
             column="72"/>
     </issue>
 
@@ -1009,7 +899,7 @@
         errorLine2="                                                                   ~~~~~~~~~~~">
         <location
             file="src/main/java/com/besome/sketch/projects/MyProjectSettingActivity.java"
-            line="182"
+            line="183"
             column="68"/>
     </issue>
 
@@ -1372,7 +1262,7 @@
         errorLine2="                                     ~~~~~~~~~~~">
         <location
             file="src/main/java/pro/sketchware/widgets/WidgetsCreatorManager.java"
-            line="557"
+            line="559"
             column="38"/>
     </issue>
 
@@ -1553,51 +1443,25 @@
     </issue>
 
     <issue
-        id="IntentReset"
-        message="Calling `setType` after setting URI in `Intent` constructor will clear the data: Call `setDataAndType` instead?"
-        errorLine1="            intent.setType(&quot;image/*&quot;);"
-        errorLine2="                   ~~~~~~~~~~~~~~~~~~">
+        id="InlinedApi"
+        message="Field requires API level 33 (current min is 26): `android.content.Context#RECEIVER_NOT_EXPORTED`"
+        errorLine1="            registerReceiver(buildCancelReceiver, filter, Context.RECEIVER_NOT_EXPORTED);"
+        errorLine2="                                                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/java/com/besome/sketch/editor/manage/image/AddImageActivity.java"
-            line="240"
-            column="20"/>
-        <location
-            file="src/main/java/com/besome/sketch/editor/manage/image/AddImageActivity.java"
-            line="239"
-            column="60"
-            message="Originally set here"/>
+            file="src/main/java/com/besome/sketch/design/DesignActivity.java"
+            line="608"
+            column="59"/>
     </issue>
 
     <issue
-        id="IntentReset"
-        message="Calling `setType` after setting URI in `Intent` constructor will clear the data: Call `setDataAndType` instead?"
-        errorLine1="            intent.setType(&quot;image/*&quot;);"
-        errorLine2="                   ~~~~~~~~~~~~~~~~~~">
+        id="InlinedApi"
+        message="Field requires API level 33 (current min is 26): `android.content.Context#RECEIVER_EXPORTED`"
+        errorLine1="            registerReceiver(logger, intentFilter, Context.RECEIVER_EXPORTED);"
+        errorLine2="                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/java/com/besome/sketch/editor/manage/image/AddImageCollectionActivity.java"
-            line="199"
-            column="20"/>
-        <location
-            file="src/main/java/com/besome/sketch/editor/manage/image/AddImageCollectionActivity.java"
-            line="198"
-            column="60"
-            message="Originally set here"/>
-    </issue>
-
-    <issue
-        id="IntentReset"
-        message="Calling `setType` after setting URI in `Intent` constructor will clear the data: Call `setDataAndType` instead?"
-        errorLine1="        intent.setType(&quot;audio/*&quot;);"
-        errorLine2="               ~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/besome/sketch/editor/manage/sound/AddSoundCollectionActivity.java"
-            line="184"
-            column="16"/>
-        <location
-            file="src/main/java/com/besome/sketch/editor/manage/sound/AddSoundCollectionActivity.java"
-            line="183"
-            column="73"
-            message="Originally set here"/>
+            file="src/main/java/mod/khaled/logcat/LogReaderActivity.java"
+            line="75"
+            column="52"/>
     </issue>
 
     <issue
@@ -1607,7 +1471,7 @@
         errorLine2="              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/themes.xml"
-            line="65"
+            line="66"
             column="15"/>
     </issue>
 
@@ -1668,12 +1532,12 @@
     <issue
         id="WrongConstant"
         message="Must be one or more of: Intent.FLAG_GRANT_READ_URI_PERMISSION, Intent.FLAG_GRANT_WRITE_URI_PERMISSION"
-        errorLine1="                getContentResolver().takePersistableUriPermission(modelUri, takeFlags);"
-        errorLine2="                                                                            ~~~~~~~~~">
+        errorLine1="                    getContentResolver().takePersistableUriPermission(uri, takeFlags);"
+        errorLine2="                                                                           ~~~~~~~~~">
         <location
             file="src/main/java/pro/sketchware/activities/ai/LocalAiManagerActivity.java"
-            line="153"
-            column="77"/>
+            line="653"
+            column="76"/>
     </issue>
 
     <issue
@@ -1721,24 +1585,13 @@
     </issue>
 
     <issue
-        id="DefaultUncaughtExceptionDelegation"
-        message="Must call `getDefaultUncaughtExceptionHandler()` to get the existing handler, and call `existingHandler.uncaughtException(thread, throwable)` from your new handler"
-        errorLine1="        Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {"
-        errorLine2="        ^">
-        <location
-            file="src/main/java/pro/sketchware/SketchApplication.java"
-            line="28"
-            column="9"/>
-    </issue>
-
-    <issue
         id="InflateParams"
         message="Avoid passing `null` as the view root (needed to resolve layout parameters on the inflated layout&apos;s root element)"
         errorLine1="        ViewGroup headerView = (ViewGroup) LayoutInflater.from(context).inflate(R.layout.main_drawer_header, null);"
         errorLine2="                                                                                                             ~~~~">
         <location
             file="src/main/java/com/besome/sketch/MainDrawer.java"
-            line="56"
+            line="55"
             column="110"/>
     </issue>
 
@@ -1749,7 +1602,7 @@
         errorLine2="                                       ~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/besome/sketch/editor/LogicEditorActivity.java"
-            line="1968"
+            line="2007"
             column="40"/>
     </issue>
 
@@ -1760,7 +1613,7 @@
         errorLine2="                     ~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/besome/sketch/editor/LogicEditorActivity.java"
-            line="1980"
+            line="2019"
             column="22"/>
     </issue>
 
@@ -1773,28 +1626,6 @@
             file="src/main/java/pro/sketchware/activities/importicon/ImportIconActivity.java"
             line="431"
             column="24"/>
-    </issue>
-
-    <issue
-        id="UnspecifiedRegisterReceiverFlag"
-        message="`buildCancelReceiver` is missing `RECEIVER_EXPORTED` or `RECEIVER_NOT_EXPORTED` flag for unprotected broadcasts registered for com.besome.sketch.design.ACTION_CANCEL_BUILD"
-        errorLine1="            registerReceiver(buildCancelReceiver, filter);"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/besome/sketch/design/DesignActivity.java"
-            line="591"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnspecifiedRegisterReceiverFlag"
-        message="`logger` is missing `RECEIVER_EXPORTED` or `RECEIVER_NOT_EXPORTED` flag for unprotected broadcasts registered for pro.sketchware.ACTION_NEW_DEBUG_LOG"
-        errorLine1="            registerReceiver(logger, intentFilter);"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/mod/khaled/logcat/LogReaderActivity.java"
-            line="75"
-            column="13"/>
     </issue>
 
     <issue
@@ -1858,7 +1689,7 @@
         errorLine1="distributionUrl=https\://services.gradle.org/distributions/gradle-8.13-bin.zip"
         errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="$HOME/Documents/STUDIO/Sketchware-Pro-main/gradle/wrapper/gradle-wrapper.properties"
+            file="../gradle/wrapper/gradle-wrapper.properties"
             line="4"
             column="17"/>
     </issue>
@@ -1880,9 +1711,20 @@
         errorLine1="activity = &quot;1.11.0&quot;"
         errorLine2="           ~~~~~~~~">
         <location
-            file="$HOME/Documents/STUDIO/Sketchware-Pro-main/gradle/libs.versions.toml"
+            file="../gradle/libs.versions.toml"
             line="2"
             column="12"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.appcompat:appcompat than 1.7.1 is available: 1.8.0"
+        errorLine1="appcompat = &quot;1.7.1&quot;"
+        errorLine2="            ~~~~~~~">
+        <location
+            file="../gradle/libs.versions.toml"
+            line="3"
+            column="13"/>
     </issue>
 
     <issue
@@ -1891,7 +1733,7 @@
         errorLine1="androidxTestCore = &quot;1.6.1&quot;"
         errorLine2="                   ~~~~~~~">
         <location
-            file="$HOME/Documents/STUDIO/Sketchware-Pro-main/gradle/libs.versions.toml"
+            file="../gradle/libs.versions.toml"
             line="4"
             column="20"/>
     </issue>
@@ -1902,7 +1744,7 @@
         errorLine1="androidxTestExtJunit = &quot;1.2.1&quot;"
         errorLine2="                       ~~~~~~~">
         <location
-            file="$HOME/Documents/STUDIO/Sketchware-Pro-main/gradle/libs.versions.toml"
+            file="../gradle/libs.versions.toml"
             line="5"
             column="24"/>
     </issue>
@@ -1913,7 +1755,7 @@
         errorLine1="androidxTestRules = &quot;1.6.1&quot;"
         errorLine2="                    ~~~~~~~">
         <location
-            file="$HOME/Documents/STUDIO/Sketchware-Pro-main/gradle/libs.versions.toml"
+            file="../gradle/libs.versions.toml"
             line="6"
             column="21"/>
     </issue>
@@ -1924,7 +1766,7 @@
         errorLine1="androidxTestRunner = &quot;1.6.2&quot;"
         errorLine2="                     ~~~~~~~">
         <location
-            file="$HOME/Documents/STUDIO/Sketchware-Pro-main/gradle/libs.versions.toml"
+            file="../gradle/libs.versions.toml"
             line="7"
             column="22"/>
     </issue>
@@ -1935,18 +1777,18 @@
         errorLine1="espressoCore = &quot;3.6.1&quot;"
         errorLine2="               ~~~~~~~">
         <location
-            file="$HOME/Documents/STUDIO/Sketchware-Pro-main/gradle/libs.versions.toml"
+            file="../gradle/libs.versions.toml"
             line="9"
             column="16"/>
     </issue>
 
     <issue
         id="GradleDependency"
-        message="A newer version of com.google.firebase:firebase-bom than 34.3.0 is available: 34.13.0"
+        message="A newer version of com.google.firebase:firebase-bom than 34.3.0 is available: 34.19.0"
         errorLine1="firebaseBom = &quot;34.3.0&quot;"
         errorLine2="              ~~~~~~~~">
         <location
-            file="$HOME/Documents/STUDIO/Sketchware-Pro-main/gradle/libs.versions.toml"
+            file="../gradle/libs.versions.toml"
             line="10"
             column="15"/>
     </issue>
@@ -1957,7 +1799,7 @@
         errorLine1="bundletool = &quot;1.18.2&quot;"
         errorLine2="             ~~~~~~~~">
         <location
-            file="$HOME/Documents/STUDIO/Sketchware-Pro-main/gradle/libs.versions.toml"
+            file="../gradle/libs.versions.toml"
             line="12"
             column="14"/>
     </issue>
@@ -1968,7 +1810,7 @@
         errorLine1="coreSplashscreen = &quot;1.0.1&quot;"
         errorLine2="                   ~~~~~~~">
         <location
-            file="$HOME/Documents/STUDIO/Sketchware-Pro-main/gradle/libs.versions.toml"
+            file="../gradle/libs.versions.toml"
             line="18"
             column="20"/>
     </issue>
@@ -1979,7 +1821,7 @@
         errorLine1="exifinterface = &quot;1.4.1&quot;"
         errorLine2="                ~~~~~~~">
         <location
-            file="$HOME/Documents/STUDIO/Sketchware-Pro-main/gradle/libs.versions.toml"
+            file="../gradle/libs.versions.toml"
             line="22"
             column="17"/>
     </issue>
@@ -1990,18 +1832,18 @@
         errorLine1="material = &quot;1.14.0-alpha05&quot;"
         errorLine2="           ~~~~~~~~~~~~~~~~">
         <location
-            file="$HOME/Documents/STUDIO/Sketchware-Pro-main/gradle/libs.versions.toml"
+            file="../gradle/libs.versions.toml"
             line="33"
             column="12"/>
     </issue>
 
     <issue
         id="GradleDependency"
-        message="A newer version of com.android.tools:r8 than 8.11.18 is available: 9.1.31"
+        message="A newer version of com.android.tools:r8 than 8.11.18 is available: 9.4.24"
         errorLine1="r8 = &quot;8.11.18&quot;"
         errorLine2="     ~~~~~~~~~">
         <location
-            file="$HOME/Documents/STUDIO/Sketchware-Pro-main/gradle/libs.versions.toml"
+            file="../gradle/libs.versions.toml"
             line="40"
             column="6"/>
     </issue>
@@ -2012,18 +1854,18 @@
         errorLine1="securityCrypto = &quot;1.1.0-alpha06&quot;"
         errorLine2="                 ~~~~~~~~~~~~~~~">
         <location
-            file="$HOME/Documents/STUDIO/Sketchware-Pro-main/gradle/libs.versions.toml"
+            file="../gradle/libs.versions.toml"
             line="42"
             column="18"/>
     </issue>
 
     <issue
         id="GradleDependency"
-        message="A newer version of com.android.tools:sdklib than 25.3.0 is available: 32.2.1"
+        message="A newer version of com.android.tools:sdklib than 25.3.0 is available: 32.4.1"
         errorLine1="sdklib = &quot;25.3.0&quot;"
         errorLine2="         ~~~~~~~~">
         <location
-            file="$HOME/Documents/STUDIO/Sketchware-Pro-main/gradle/libs.versions.toml"
+            file="../gradle/libs.versions.toml"
             line="44"
             column="10"/>
     </issue>
@@ -2034,7 +1876,7 @@
         errorLine1="swiperefreshlayout = &quot;1.1.0&quot;"
         errorLine2="                     ~~~~~~~">
         <location
-            file="$HOME/Documents/STUDIO/Sketchware-Pro-main/gradle/libs.versions.toml"
+            file="../gradle/libs.versions.toml"
             line="46"
             column="22"/>
     </issue>
@@ -2045,7 +1887,7 @@
         errorLine1="sora-editor = &quot;0.23.5&quot;"
         errorLine2="              ~~~~~~~~">
         <location
-            file="$HOME/Documents/STUDIO/Sketchware-Pro-main/gradle/libs.versions.toml"
+            file="../gradle/libs.versions.toml"
             line="11"
             column="15"/>
     </issue>
@@ -2056,7 +1898,7 @@
         errorLine1="coil = &quot;2.0.0&quot;"
         errorLine2="       ~~~~~~~">
         <location
-            file="$HOME/Documents/STUDIO/Sketchware-Pro-main/gradle/libs.versions.toml"
+            file="../gradle/libs.versions.toml"
             line="15"
             column="8"/>
     </issue>
@@ -2067,29 +1909,29 @@
         errorLine1="coilSvg = &quot;2.0.0&quot;"
         errorLine2="          ~~~~~~~">
         <location
-            file="$HOME/Documents/STUDIO/Sketchware-Pro-main/gradle/libs.versions.toml"
+            file="../gradle/libs.versions.toml"
             line="16"
             column="11"/>
     </issue>
 
     <issue
         id="NewerVersionAvailable"
-        message="A newer version of org.eclipse.jdt:ecj than 3.26.0 is available: 3.45.0"
+        message="A newer version of org.eclipse.jdt:ecj than 3.26.0 is available: 3.46.100"
         errorLine1="ecj = &quot;3.26.0&quot;"
         errorLine2="      ~~~~~~~~">
         <location
-            file="$HOME/Documents/STUDIO/Sketchware-Pro-main/gradle/libs.versions.toml"
+            file="../gradle/libs.versions.toml"
             line="21"
             column="7"/>
     </issue>
 
     <issue
         id="NewerVersionAvailable"
-        message="A newer version of com.github.bumptech.glide:glide than 5.0.4 is available: 5.0.7"
+        message="A newer version of com.github.bumptech.glide:glide than 5.0.4 is available: 5.0.9"
         errorLine1="glide = &quot;5.0.4&quot;"
         errorLine2="        ~~~~~~~">
         <location
-            file="$HOME/Documents/STUDIO/Sketchware-Pro-main/gradle/libs.versions.toml"
+            file="../gradle/libs.versions.toml"
             line="25"
             column="9"/>
     </issue>
@@ -2100,18 +1942,18 @@
         errorLine1="gson = &quot;2.13.1&quot;"
         errorLine2="       ~~~~~~~~">
         <location
-            file="$HOME/Documents/STUDIO/Sketchware-Pro-main/gradle/libs.versions.toml"
+            file="../gradle/libs.versions.toml"
             line="26"
             column="8"/>
     </issue>
 
     <issue
         id="NewerVersionAvailable"
-        message="A newer version of com.github.javaparser:javaparser-symbol-solver-core than 3.25.3 is available: 3.28.1"
+        message="A newer version of com.github.javaparser:javaparser-symbol-solver-core than 3.25.3 is available: 3.28.2"
         errorLine1="javaparserSymbolSolver = &quot;3.25.3&quot;"
         errorLine2="                         ~~~~~~~~">
         <location
-            file="$HOME/Documents/STUDIO/Sketchware-Pro-main/gradle/libs.versions.toml"
+            file="../gradle/libs.versions.toml"
             line="28"
             column="26"/>
     </issue>
@@ -2122,51 +1964,51 @@
         errorLine1="lottie = &quot;6.6.7&quot;"
         errorLine2="         ~~~~~~~">
         <location
-            file="$HOME/Documents/STUDIO/Sketchware-Pro-main/gradle/libs.versions.toml"
+            file="../gradle/libs.versions.toml"
             line="32"
             column="10"/>
     </issue>
 
     <issue
         id="NewerVersionAvailable"
-        message="A newer version of com.squareup.okhttp3:okhttp than 4.12.0 is available: 5.3.2"
+        message="A newer version of com.squareup.okhttp3:okhttp than 4.12.0 is available: 5.5.0"
         errorLine1="okhttp = &quot;4.12.0&quot;"
         errorLine2="         ~~~~~~~~">
         <location
-            file="$HOME/Documents/STUDIO/Sketchware-Pro-main/gradle/libs.versions.toml"
+            file="../gradle/libs.versions.toml"
             line="35"
             column="10"/>
     </issue>
 
     <issue
         id="NewerVersionAvailable"
-        message="A newer version of com.squareup.okio:okio than 3.16.0 is available: 3.17.0"
+        message="A newer version of com.squareup.okio:okio than 3.16.0 is available: 3.18.2"
         errorLine1="okio = &quot;3.16.0&quot;"
         errorLine2="       ~~~~~~~~">
         <location
-            file="$HOME/Documents/STUDIO/Sketchware-Pro-main/gradle/libs.versions.toml"
+            file="../gradle/libs.versions.toml"
             line="36"
             column="8"/>
     </issue>
 
     <issue
         id="NewerVersionAvailable"
-        message="A newer version of com.guardsquare:proguard-core than 9.0.2 is available: 9.3.2"
+        message="A newer version of com.guardsquare:proguard-core than 9.0.2 is available: 9.4.0"
         errorLine1="proguardCore = &quot;9.0.2&quot;"
         errorLine2="               ~~~~~~~">
         <location
-            file="$HOME/Documents/STUDIO/Sketchware-Pro-main/gradle/libs.versions.toml"
+            file="../gradle/libs.versions.toml"
             line="38"
             column="16"/>
     </issue>
 
     <issue
         id="NewerVersionAvailable"
-        message="A newer version of com.google.protobuf:protobuf-java than 3.19.2 is available: 4.35.0"
+        message="A newer version of com.google.protobuf:protobuf-java than 3.19.2 is available: 4.36.2"
         errorLine1="protobufJava = &quot;3.19.2&quot;"
         errorLine2="               ~~~~~~~~">
         <location
-            file="$HOME/Documents/STUDIO/Sketchware-Pro-main/gradle/libs.versions.toml"
+            file="../gradle/libs.versions.toml"
             line="39"
             column="16"/>
     </issue>
@@ -2177,18 +2019,18 @@
         errorLine1="scpkixJdk15on = &quot;1.47.0.2&quot;"
         errorLine2="                ~~~~~~~~~~">
         <location
-            file="$HOME/Documents/STUDIO/Sketchware-Pro-main/gradle/libs.versions.toml"
+            file="../gradle/libs.versions.toml"
             line="43"
             column="17"/>
     </issue>
 
     <issue
         id="NewerVersionAvailable"
-        message="A newer version of com.fasterxml.woodstox:woodstox-core than 7.1.1 is available: 7.2.0"
+        message="A newer version of com.fasterxml.woodstox:woodstox-core than 7.1.1 is available: 7.2.2"
         errorLine1="woodstoxCore = &quot;7.1.1&quot;"
         errorLine2="               ~~~~~~~">
         <location
-            file="$HOME/Documents/STUDIO/Sketchware-Pro-main/gradle/libs.versions.toml"
+            file="../gradle/libs.versions.toml"
             line="48"
             column="16"/>
     </issue>
@@ -2440,7 +2282,7 @@
         errorLine2="                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/themes.xml"
-            line="51"
+            line="52"
             column="36"/>
     </issue>
 
@@ -2506,8 +2348,30 @@
         errorLine2="                                       ~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/besome/sketch/editor/LogicEditorActivity.java"
-            line="576"
+            line="582"
             column="40"/>
+    </issue>
+
+    <issue
+        id="DiscouragedApi"
+        message="Use of this function is discouraged because resource reflection makes it harder to perform build optimizations and compile-time verification of code. It is much more efficient to retrieve resources by identifier (e.g. `R.foo.bar`) than by name (e.g. `getIdentifier(&quot;bar&quot;, &quot;foo&quot;, null)`)."
+        errorLine1="        int attrId = context.getResources().getIdentifier(attrName, &quot;attr&quot;, defPackage);"
+        errorLine2="                                            ~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/pro/sketchware/activities/preview/ProjectResourceResolver.java"
+            line="100"
+            column="45"/>
+    </issue>
+
+    <issue
+        id="DiscouragedApi"
+        message="Use of this function is discouraged because resource reflection makes it harder to perform build optimizations and compile-time verification of code. It is much more efficient to retrieve resources by identifier (e.g. `R.foo.bar`) than by name (e.g. `getIdentifier(&quot;bar&quot;, &quot;foo&quot;, null)`)."
+        errorLine1="            attrId = context.getResources().getIdentifier(attrName, &quot;attr&quot;, &quot;com.google.android.material&quot;);"
+        errorLine2="                                            ~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/pro/sketchware/activities/preview/ProjectResourceResolver.java"
+            line="102"
+            column="45"/>
     </issue>
 
     <issue
@@ -2742,17 +2606,6 @@
     </issue>
 
     <issue
-        id="UseCompatLoadingForDrawables"
-        message="Use `AppCompatResources.getDrawable()`"
-        errorLine1="        menu.add(Menu.NONE, Menu.NONE, Menu.NONE, &quot;Show Manifest Source&quot;).setIcon(getDrawable(R.drawable.ic_mtrl_code)).setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);"
-        errorLine2="                                                                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/mod/hilal/saif/activities/android_manifest/AndroidManifestInjection.java"
-            line="324"
-            column="83"/>
-    </issue>
-
-    <issue
         id="StringFormatInvalid"
         message="Format string &apos;`common_message_name_unavailable`&apos; is not a valid format string so it should not be passed to `String.format`"
         errorLine1="                b.setError(a.getString(R.string.common_message_name_unavailable, 0));"
@@ -2856,6 +2709,17 @@
     </issue>
 
     <issue
+        id="SetJavaScriptEnabled"
+        message="Using `setJavaScriptEnabled` can introduce XSS vulnerabilities into your application, review carefully"
+        errorLine1="            webView.getSettings().setJavaScriptEnabled(true);"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/pro/sketchware/activities/preview/LayoutPreviewActivity.java"
+            line="784"
+            column="13"/>
+    </issue>
+
+    <issue
         id="DataExtractionRules"
         message="The attribute `android:allowBackup` is deprecated from Android 12 and higher and may be removed in future versions. Consider adding the attribute `android:dataExtractionRules` specifying an `@xml` resource which configures cloud backups and device transfers on Android 12 and higher."
         errorLine1="        android:allowBackup=&quot;false&quot;"
@@ -2898,7 +2762,7 @@
         errorLine2="                  ~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/besome/sketch/projects/MyProjectSettingActivity.java"
-            line="509"
+            line="511"
             column="19"/>
     </issue>
 
@@ -3037,17 +2901,6 @@
     <issue
         id="NestedWeights"
         message="Nested weights are bad for performance"
-        errorLine1="                    android:layout_weight=&quot;1&quot;"
-        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_local_ai_app_generator.xml"
-            line="550"
-            column="21"/>
-    </issue>
-
-    <issue
-        id="NestedWeights"
-        message="Nested weights are bad for performance"
         errorLine1="                        android:layout_weight=&quot;1&quot;"
         errorLine2="                        ~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
@@ -3106,19 +2959,8 @@
         errorLine1="    android:background=&quot;?attr/colorSurface&quot;>"
         errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/layout/activity_local_ai_app_generator.xml"
-            line="6"
-            column="5"/>
-    </issue>
-
-    <issue
-        id="Overdraw"
-        message="Possible overdraw: Root element paints background `?attr/colorSurface` with a theme that also paints a background (inferred theme is `@style/Theme.SketchwarePro`)"
-        errorLine1="    android:background=&quot;?attr/colorSurface&quot;>"
-        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
             file="src/main/res/layout/activity_local_ai_manager.xml"
-            line="6"
+            line="7"
             column="5"/>
     </issue>
 
@@ -3351,11 +3193,99 @@
 
     <issue
         id="UnusedResources"
+        message="The resource `R.drawable.bg_bottom_sheet_asymmetric` appears to be unused"
+        errorLine1="&lt;shape xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;>"
+        errorLine2="^">
+        <location
+            file="src/main/res/drawable/bg_bottom_sheet_asymmetric.xml"
+            line="1"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.drawable.bg_card_asymmetric` appears to be unused"
+        errorLine1="&lt;shape xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;>"
+        errorLine2="^">
+        <location
+            file="src/main/res/drawable/bg_card_asymmetric.xml"
+            line="1"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.drawable.bg_chip_asymmetric` appears to be unused"
+        errorLine1="&lt;shape xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;>"
+        errorLine2="^">
+        <location
+            file="src/main/res/drawable/bg_chip_asymmetric.xml"
+            line="1"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.drawable.bg_dialog_asymmetric` appears to be unused"
+        errorLine1="&lt;shape xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;>"
+        errorLine2="^">
+        <location
+            file="src/main/res/drawable/bg_dialog_asymmetric.xml"
+            line="1"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.drawable.bg_gradient_diagonal` appears to be unused"
+        errorLine1="&lt;shape xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;>"
+        errorLine2="^">
+        <location
+            file="src/main/res/drawable/bg_gradient_diagonal.xml"
+            line="1"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.drawable.bg_gradient_diagonal_dark` appears to be unused"
+        errorLine1="&lt;shape xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;>"
+        errorLine2="^">
+        <location
+            file="src/main/res/drawable/bg_gradient_diagonal_dark.xml"
+            line="1"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.drawable.bg_input_asymmetric` appears to be unused"
+        errorLine1="&lt;shape xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;>"
+        errorLine2="^">
+        <location
+            file="src/main/res/drawable/bg_input_asymmetric.xml"
+            line="1"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
         message="The resource `R.drawable.bg_rounded_top_primary_container` appears to be unused"
         errorLine1="&lt;shape xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;>"
         errorLine2="^">
         <location
             file="src/main/res/drawable/bg_rounded_top_primary_container.xml"
+            line="1"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.drawable.bg_toolbar_asymmetric` appears to be unused"
+        errorLine1="&lt;shape xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;>"
+        errorLine2="^">
+        <location
+            file="src/main/res/drawable/bg_toolbar_asymmetric.xml"
             line="1"
             column="1"/>
     </issue>
@@ -4441,6 +4371,50 @@
         <location
             file="src/main/res/values/dimens.xml"
             line="54"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.dimen.asymmetric_padding_left` appears to be unused"
+        errorLine1="    &lt;dimen name=&quot;asymmetric_padding_left&quot;>24dp&lt;/dimen>"
+        errorLine2="           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/dimens.xml"
+            line="58"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.dimen.asymmetric_padding_right` appears to be unused"
+        errorLine1="    &lt;dimen name=&quot;asymmetric_padding_right&quot;>16dp&lt;/dimen>"
+        errorLine2="           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/dimens.xml"
+            line="59"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.dimen.asymmetric_padding_top` appears to be unused"
+        errorLine1="    &lt;dimen name=&quot;asymmetric_padding_top&quot;>20dp&lt;/dimen>"
+        errorLine2="           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/dimens.xml"
+            line="60"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.dimen.asymmetric_padding_bottom` appears to be unused"
+        errorLine1="    &lt;dimen name=&quot;asymmetric_padding_bottom&quot;>12dp&lt;/dimen>"
+        errorLine2="           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/dimens.xml"
+            line="61"
             column="12"/>
     </issue>
 
@@ -21826,6 +21800,28 @@
 
     <issue
         id="UnusedResources"
+        message="The resource `R.style.ShapeAppearance_SketchwarePro_AsymmetricInput` appears to be unused"
+        errorLine1="    &lt;style name=&quot;ShapeAppearance.SketchwarePro.AsymmetricInput&quot; parent=&quot;ShapeAppearance.Material3.Corner.Small&quot;>"
+        errorLine2="           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/styles_new.xml"
+            line="94"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.style.Widget_SketchwarePro_TextInputLayout_Asymmetric` appears to be unused"
+        errorLine1="    &lt;style name=&quot;Widget.SketchwarePro.TextInputLayout.Asymmetric&quot; parent=&quot;Widget.Material3.TextInputLayout.OutlinedBox&quot;>"
+        errorLine2="           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/styles_new.xml"
+            line="108"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
         message="The resource `R.layout.support_simple_spinner_dropdown_item` appears to be unused"
         errorLine1="&lt;TextView xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
         errorLine2="^">
@@ -21937,6 +21933,17 @@
     <issue
         id="UselessParent"
         message="This `LinearLayout` layout or its `LinearLayout` parent is unnecessary"
+        errorLine1="            &lt;LinearLayout"
+        errorLine2="             ~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/fr_ai_local_editor.xml"
+            line="156"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="UselessParent"
+        message="This `LinearLayout` layout or its `LinearLayout` parent is unnecessary"
         errorLine1="        &lt;LinearLayout"
         errorLine2="         ~~~~~~~~~~~~">
         <location
@@ -21954,6 +21961,17 @@
             file="src/main/res/layout/fragment_events_manager_creator.xml"
             line="168"
             column="26"/>
+    </issue>
+
+    <issue
+        id="UselessParent"
+        message="This `LinearLayout` layout or its `FrameLayout` parent is possibly unnecessary"
+        errorLine1="    &lt;LinearLayout"
+        errorLine2="     ~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/item_ai_chat_message.xml"
+            line="9"
+            column="6"/>
     </issue>
 
     <issue
@@ -22075,6 +22093,17 @@
             file="src/main/res/layout/activity_icon_creator.xml"
             line="630"
             column="18"/>
+    </issue>
+
+    <issue
+        id="TooManyViews"
+        message="`activity_local_ai_manager.xml` has more than 80 views, bad for performance"
+        errorLine1="                                &lt;TextView"
+        errorLine2="                                 ~~~~~~~~">
+        <location
+            file="src/main/res/layout/activity_local_ai_manager.xml"
+            line="639"
+            column="34"/>
     </issue>
 
     <issue
@@ -23391,23 +23420,12 @@
     <issue
         id="SmallSp"
         message="Avoid using sizes smaller than `11sp`: `10sp`"
-        errorLine1="                                    android:textSize=&quot;10sp&quot; />"
-        errorLine2="                                    ~~~~~~~~~~~~~~~~~~~~~~~">
+        errorLine1="        android:textSize=&quot;10sp&quot;"
+        errorLine2="        ~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/layout/activity_local_ai_app_generator.xml"
-            line="529"
-            column="37"/>
-    </issue>
-
-    <issue
-        id="SmallSp"
-        message="Avoid using sizes smaller than `11sp`: `10sp`"
-        errorLine1="                                    android:textSize=&quot;10sp&quot; />"
-        errorLine2="                                    ~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_local_ai_app_generator.xml"
-            line="540"
-            column="37"/>
+            file="src/main/res/layout/activity_layout_preview.xml"
+            line="39"
+            column="9"/>
     </issue>
 
     <issue
@@ -23435,23 +23453,45 @@
     <issue
         id="SmallSp"
         message="Avoid using sizes smaller than `11sp`: `10sp`"
-        errorLine1="                        android:textSize=&quot;10sp&quot; />"
-        errorLine2="                        ~~~~~~~~~~~~~~~~~~~~~~~">
+        errorLine1="                    android:textSize=&quot;10sp&quot; />"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/layout/fr_ai_local_editor.xml"
-            line="95"
-            column="25"/>
+            line="100"
+            column="21"/>
     </issue>
 
     <issue
         id="SmallSp"
         message="Avoid using sizes smaller than `11sp`: `10sp`"
-        errorLine1="                        android:textSize=&quot;10sp&quot; />"
-        errorLine2="                        ~~~~~~~~~~~~~~~~~~~~~~~">
+        errorLine1="                    android:textSize=&quot;10sp&quot;"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/layout/fr_ai_local_editor.xml"
-            line="106"
-            column="25"/>
+            line="114"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="SmallSp"
+        message="Avoid using sizes smaller than `11sp`: `10sp`"
+        errorLine1="                android:textSize=&quot;10sp&quot;"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/item_ai_chat_message.xml"
+            line="41"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="SmallSp"
+        message="Avoid using sizes smaller than `11sp`: `10sp`"
+        errorLine1="                android:textSize=&quot;10sp&quot;"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/item_ai_model_catalog.xml"
+            line="44"
+            column="17"/>
     </issue>
 
     <issue
