@@ -71,51 +71,6 @@ jobs:
           SKETCHUB_API_KEY: ${{ secrets.SKETCHUB_API_KEY }}
         run: ./gradlew :app:assembleRelease --no-daemon --stacktrace -PskipMinify
 
-      - name: Diagnose DEX + bytecode archives (temporal)
-        if: always()
-        continue-on-error: true
-        timeout-minutes: 10
-        run: |
-          python3 - <<'PY'
-          import glob, os, zipfile
-          def is_dex(b):
-              return b[:4] in (b'dex\n', b'dex\x00') or b[:3] == b'dey'
-          roots = [
-              'app/libs',
-              'app/build/filtered-libs',
-              os.path.expanduser('~/.gradle/caches/modules-2'),
-              os.path.expanduser('~/.gradle/caches/transforms-4'),
-          ]
-          scanned = 0
-          found = []
-          for root in roots:
-              for p in glob.glob(os.path.join(root, '**', '*'), recursive=True):
-                  if not p.lower().endswith(('.jar', '.aar', '.zip')):
-                      continue
-                  try:
-                      with zipfile.ZipFile(p) as z:
-                          infos = [i for i in z.infolist() if not i.is_dir()]
-                          has_class = any(i.filename.endswith('.class') for i in infos)
-                          hits = []
-                          for i in infos:
-                              if i.file_size < 4096:
-                                  continue
-                              with z.open(i) as fh:
-                                  if is_dex(fh.read(4)):
-                                      hits.append(i.filename)
-                              if len(hits) >= 5:
-                                  break
-                      scanned += 1
-                      if hits:
-                          found.append((p, has_class, hits))
-                  except Exception:
-                      pass
-          print('DIAG: archives escaneados = %d' % scanned)
-          print('DIAG: archives con contenido DEX = %d' % len(found))
-          for p, has_class, hits in found[:20]:
-              print('DIAG DEX -> %s | bytecode=%s | %s' % (p, has_class, hits[:3]))
-          PY
-
       - name: Set short SHA
         id: set_sha
         run: echo "short_sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT

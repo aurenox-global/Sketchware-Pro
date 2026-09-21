@@ -44,7 +44,7 @@
       compile on the device and get an installable APK — no computer required.
     </p>
     <div class="btns">
-      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.1" target="_blank" rel="noopener">⬇ Download APK</a>
+      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.2" target="_blank" rel="noopener">⬇ Download APK</a>
       <a class="btn ghost" href="https://github.com/aurenox-global/Sketchware-Pro" target="_blank" rel="noopener">View source on GitHub</a>
     </div>
 
@@ -160,6 +160,16 @@
         purpose, so new APKs install over existing installs. Verified with <code>apksigner</code>: all four split
         APKs carry that fingerprint. A private 4096-bit keystore is kept aside at
         <code>~/.android-keys/sketchware-pro/release.jks</code> for the day a real distribution identity is wanted.</p>
+      </div>
+
+      <div class="item done">
+        <span class="when">2026-09-21 · CI</span>
+        <h3>CI is green <span class="pill ok">done</span></h3>
+        <p>Android CI and Verification Baseline pass now. The last blocker was subtle: the <code>bundletool</code> jar
+        that GitHub Actions downloads ships embedded <code>classes.dex</code> files next to Java bytecode, and R8
+        refuses an archive with both — the local Gradle cache has the same version without them. Filtering that jar
+        is unsafe (it drops <code>aapt2-proto</code>, and those dex files are what bundletool uses to build AABs), so
+        CI builds with <code>-PskipMinify</code> while local release builds keep R8 enabled.</p>
       </div>
 
       <div class="item done">
@@ -285,6 +295,8 @@
           <tr><td>Resource shrinking (<code>keep.xml</code>)</td><td><span class="pill warn">blocked</span></td></tr>
           <tr><td>Bilingual documentation and this site</td><td><span class="pill ok">done</span></td></tr>
           <tr><td>Repository complete: restored the packages hidden by <code>.gitignore</code></td><td><span class="pill ok">done</span></td></tr>
+          <tr><td>CI green: Android CI + Verification Baseline</td><td><span class="pill ok">done</span></td></tr>
+          <tr><td>R8 running in CI (blocked by the <code>bundletool</code> jar)</td><td><span class="pill warn">blocked</span></td></tr>
           <tr><td>ABI splits (one APK per architecture)</td><td><span class="pill ok">done</span></td></tr>
           <tr><td>Translations, deprecated APIs, test coverage</td><td><span class="pill info">planned</span></td></tr>
         </tbody>

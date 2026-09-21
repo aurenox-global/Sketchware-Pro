@@ -134,6 +134,19 @@ Requirements:
 This repository is a personal fork. Every improvement is added here as it lands, and the
 [website](https://aurenox-global.github.io/Sketchware-Pro/) is updated at the same time.
 
+### 2026-09-21 — CI green, and why R8 only failed there
+
+- **Android CI and Verification Baseline now pass.** The last blocker was subtle: the `bundletool` jar that
+  GitHub Actions downloads contains embedded `classes.dex` files next to Java bytecode
+  (`com/android/tools/build/bundletool/archive/dex/**`), and R8 refuses an archive with both. The local Gradle
+  cache has the very same version *without* them, which is why release builds minified fine locally and failed
+  only in CI. Filtering that jar is not safe (it drops `aapt2-proto`, and those dex files are what bundletool
+  uses to build AABs), so **CI builds with `-PskipMinify`** while local release builds keep R8 enabled.
+- Along the way: `google-services.json` mock for the release variant, the public testkey committed so CI signs
+  with the same key, ABI splits handled in the workflow, lint baseline regenerated and a real lint error fixed.
+- **Published [v7.0.5.2](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.2)** with the R8
+  APKs (~106 MB per architecture).
+
 ### 2026-09-21 — the repository was incomplete (and CI could not compile)
 
 - **Found and fixed a `.gitignore` bug with real consequences.** The pattern `build/` matched *any* directory
@@ -197,6 +210,8 @@ This repository is a personal fork. Every improvement is added here as it lands,
 | Git history, public repo, first release | done |
 | Bilingual documentation and website | done |
 | Repository complete: restored the source packages hidden by `.gitignore` | done |
+| CI green: Android CI + Verification Baseline | done |
+| R8 running in CI (blocked by the `bundletool` jar) | blocked |
 | ABI splits (one APK per architecture) | done |
 | Release signing keeps the original key (on purpose) | done |
 | R8 code shrinking (release builds) | done |

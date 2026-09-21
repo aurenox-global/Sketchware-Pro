@@ -134,6 +134,18 @@ Requisitos:
 Este repositorio es un fork personal. Cada mejora se añade aquí según entra, y el
 [sitio web](https://aurenox-global.github.io/Sketchware-Pro/es.html) se actualiza a la vez.
 
+### 2026-09-21 — CI en verde, y por qué R8 solo fallaba allí
+
+- **Android CI y Verification Baseline ya pasan.** El último bloqueo era sutil: el jar de `bundletool` que
+  descarga GitHub Actions incluye ficheros `classes.dex` embebidos junto al bytecode
+  (`com/android/tools/build/bundletool/archive/dex/**`), y R8 rechaza un archive con ambos. La caché local de
+  Gradle tiene esa misma versión *sin* ellos, y por eso el build minificado funcionaba en local y fallaba solo
+  en CI. Filtrar ese jar no es seguro (se pierde `aapt2-proto` y esos dex son los que bundletool usa para
+  construir AABs), así que **el CI compila con `-PskipMinify`** y el build local de release mantiene R8 activo.
+- Por el camino: mock de `google-services.json` para la variante release, la testkey pública subida para que el
+  CI firme con la misma clave, ABI splits en el workflow, baseline de lint regenerado y un error de lint real corregido.
+- **Publicada la [v7.0.5.2](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.2)** con los APK de R8 (~106 MB por arquitectura).
+
 ### 2026-09-21 — el repositorio estaba incompleto (y por eso el CI no compilaba)
 
 - **Encontrado y arreglado un fallo del `.gitignore` con consecuencias reales.** El patrón `build/`
@@ -196,6 +208,8 @@ Este repositorio es un fork personal. Cada mejora se añade aquí según entra, 
 | Historial git, repo público, primera release | hecho |
 | Documentación bilingüe y sitio web | hecho |
 | Repositorio completo: recuperados los paquetes ocultos por `.gitignore` | hecho |
+| CI en verde: Android CI + Verification Baseline | hecho |
+| R8 funcionando en CI (bloqueado por el jar de `bundletool`) | bloqueado |
 | ABI splits (un APK por arquitectura) | hecho |
 | Firma de release: se mantiene la clave original (por decisión) | hecho |
 | Reducción de código con R8 (builds de release) | hecho |
