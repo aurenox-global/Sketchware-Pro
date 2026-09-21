@@ -137,12 +137,14 @@ This repository is a personal fork. Every improvement is added here as it lands,
   one, so a device stops downloading the other three sets of native libraries. Verified: every split APK carries
   only its own `lib/<abi>/`, including the bundled `aapt2`, and the APK is still signed with the private key.
 
-### 2026-09-21 — private release keystore
+### 2026-09-21 — signing: the original key stays
 
-- **Releases are signed with a real key now.** A 4096-bit RSA keystore was generated outside the repository
-  (`~/.android-keys/sketchware-pro/release.jks`) and its credentials are read from `~/.gradle/gradle.properties`,
-  never from the source tree. Verified with `apksigner`: the APK is signed by
-  `CN=Andres Mag, OU=Sketchware Pro, O=aurenox-global` (SHA-256 `02120913…`), no longer by the public AOSP test key.
+- **Releases keep the original signing key, on purpose.** The published APK has to remain updatable over
+  existing installs, so release builds are signed with the project's own `testkey.keystore` (SHA-256
+  `a40da80a…`), the same identity the published v7.0.5 uses. Verified with `apksigner`: all four split APKs
+  carry that exact fingerprint.
+- A private 4096-bit keystore was generated and kept at `~/.android-keys/sketchware-pro/release.jks` for the
+  day a real distribution identity is wanted. Switching to it would require uninstalling and reinstalling.
 
 ### 2026-09-21 — first versioned build (v7.0.5)
 
@@ -168,7 +170,7 @@ This repository is a personal fork. Every improvement is added here as it lands,
 | Git history, public repo, first release | done |
 | Bilingual documentation and website | done |
 | ABI splits (one APK per architecture) | done |
-| Private release keystore | done |
+| Release signing keeps the original key (on purpose) | done |
 | R8 code shrinking (blocked by the `kotlinc` jar) | blocked |
 | Resource shrinking (`res/raw/keep.xml`) | blocked |
 | Translations, deprecated APIs, test coverage | planned |

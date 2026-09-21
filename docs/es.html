@@ -154,11 +154,12 @@
 
       <div class="item done">
         <span class="when">2026-09-21 · firma</span>
-        <h3>Keystore propia de release <span class="pill ok">hecho</span></h3>
-        <p>Las releases se firman con una clave RSA real de 4096 bits generada fuera del repositorio
-        (<code>~/.android-keys/sketchware-pro/release.jks</code>), con las credenciales en
-        <code>~/.gradle/gradle.properties</code>. Verificado con <code>apksigner</code>: firmante
-        <code>CN=Andres Mag, OU=Sketchware Pro, O=aurenox-global</code> — ya no la testkey pública de AOSP.</p>
+        <h3>Se mantiene la clave de firma original <span class="pill ok">hecho</span></h3>
+        <p>El build de release conserva la <code>testkey.keystore</code> del propio proyecto (SHA-256
+        <code>a40da80a…</code>) a propósito, para que los APK nuevos se instalen encima de los existentes.
+        Verificado con <code>apksigner</code>: los cuatro APK por arquitectura llevan esa huella. La keystore
+        privada de 4096 bits queda guardada en <code>~/.android-keys/sketchware-pro/release.jks</code> para el día
+        en que se quiera una identidad de distribución real.</p>
       </div>
 
       <div class="item pending">
@@ -264,7 +265,7 @@
           <tr><td>Build sin git, default de la API key, catches silenciados</td><td><span class="pill ok">hecho</span></td></tr>
           <tr><td>Credenciales de release fuera del código</td><td><span class="pill ok">hecho</span></td></tr>
           <tr><td>Historial git, repo público, primera release</td><td><span class="pill ok">hecho</span></td></tr>
-          <tr><td>Keystore privada de release</td><td><span class="pill ok">hecho</span></td></tr>
+          <tr><td>Firma de release: se mantiene la clave original (por decisión)</td><td><span class="pill ok">hecho</span></td></tr>
           <tr><td>Reducción de código con R8 (bloqueada por el jar de kotlinc)</td><td><span class="pill warn">bloqueado</span></td></tr>
           <tr><td>Reducción de recursos (<code>keep.xml</code>)</td><td><span class="pill warn">bloqueado</span></td></tr>
           <tr><td>Documentación bilingüe y este sitio</td><td><span class="pill ok">hecho</span></td></tr>
@@ -283,7 +284,7 @@
     <details class="faq"><summary>¿Necesita ordenador?</summary><p>No. Todo el IDE y el compilador funcionan en el teléfono. El ordenador solo hace falta para compilar este repositorio desde el código.</p></details>
     <details class="faq"><summary>¿Las apps que hago son mías?</summary><p>Sí. Sketchware Pro genera fuentes y recursos Android estándar, y los APK que compilas son tuyos. Lo que no es tuyo es el código de Sketchware Pro.</p></details>
     <details class="faq"><summary>¿Por qué el APK pesa tanto?</summary><p>Incluye el compilador en el dispositivo, cuatro binarios <code>aapt2</code>, un jar de Android, archivos de librerías y el toolchain de Kotlin. Los ABI splits ya lo bajaron de 141 MB a unos 129 MB por dispositivo; la reducción de código y recursos sigue en la hoja de ruta.</p></details>
-    <details class="faq"><summary>¿Por qué la release usa una test key?</summary><p>Porque este fork todavía no tiene una keystore privada. Sirve para sideload y pruebas, pero no para distribución real.</p></details>
+    <details class="faq"><summary>¿Por qué la release usa una test key?</summary><p>A propósito: es la identidad de firma original, así las actualizaciones se instalan encima de lo que ya tengas. Al ser una clave pública, trátalos como builds de sideload y prueba, y cambia a la keystore privada solo si aceptas reinstalar desde cero.</p></details>
   </section>
 
   <!-- =========================================================== legal -->

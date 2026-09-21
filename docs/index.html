@@ -153,11 +153,12 @@
       </div>
 
       <div class="item done">
-        <h3>Private release keystore <span class="pill ok">done</span></h3>
-        <p>Releases are signed with a real 4096-bit RSA key generated outside the repository
-        (<code>~/.android-keys/sketchware-pro/release.jks</code>), with credentials read from
-        <code>~/.gradle/gradle.properties</code>. Verified with <code>apksigner</code>: signer
-        <code>CN=Andres Mag, OU=Sketchware Pro, O=aurenox-global</code> — no longer the public AOSP test key.</p>
+        <span class="when">2026-09-21 · signing</span>
+        <h3>The original signing key stays <span class="pill ok">done</span></h3>
+        <p>Release builds keep the project's own <code>testkey.keystore</code> (SHA-256 <code>a40da80a…</code>) on
+        purpose, so new APKs install over existing installs. Verified with <code>apksigner</code>: all four split
+        APKs carry that fingerprint. A private 4096-bit keystore is kept aside at
+        <code>~/.android-keys/sketchware-pro/release.jks</code> for the day a real distribution identity is wanted.</p>
       </div>
 
       <div class="item pending">
@@ -264,7 +265,7 @@
           <tr><td>Build without git, API key default, silent catches</td><td><span class="pill ok">done</span></td></tr>
           <tr><td>Release credentials out of the source tree</td><td><span class="pill ok">done</span></td></tr>
           <tr><td>Git history, public repo, first release</td><td><span class="pill ok">done</span></td></tr>
-          <tr><td>Private release keystore</td><td><span class="pill ok">done</span></td></tr>
+          <tr><td>Release signing keeps the original key (on purpose)</td><td><span class="pill ok">done</span></td></tr>
           <tr><td>R8 code shrinking (blocked by the kotlinc jar)</td><td><span class="pill warn">blocked</span></td></tr>
           <tr><td>Resource shrinking (<code>keep.xml</code>)</td><td><span class="pill warn">blocked</span></td></tr>
           <tr><td>Bilingual documentation and this site</td><td><span class="pill ok">done</span></td></tr>
@@ -283,7 +284,7 @@
     <details class="faq"><summary>Does it need a computer?</summary><p>No. The whole IDE and the compiler run on the phone. A computer is only useful for building this repository from source.</p></details>
     <details class="faq"><summary>Are the apps I make mine?</summary><p>Yes. Sketchware Pro generates plain Android sources and resources, and the APKs you build belong to you. What is not yours is Sketchware Pro's own code.</p></details>
     <details class="faq"><summary>Why is the APK so large?</summary><p>It bundles the on-device compiler, four <code>aapt2</code> binaries, an Android jar, library archives and a Kotlin toolchain. ABI splits already cut it from 141 MB to about 129 MB per device; code and resource shrinking are still on the roadmap.</p></details>
-    <details class="faq"><summary>Why does the release use a test key?</summary><p>Because this fork has no private keystore yet. It is fine for sideloading and testing, but not for real distribution.</p></details>
+    <details class="faq"><summary>Why does the release use a test key?</summary><p>On purpose: it is the original signing identity, so updates install over existing builds. It is a public key, so treat these APKs as sideload/testing builds and switch to the private keystore only if you accept a full reinstall.</p></details>
   </section>
 
   <!-- =========================================================== legal -->

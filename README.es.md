@@ -137,12 +137,14 @@ Este repositorio es un fork personal. Cada mejora se añade aquí según entra, 
   así que el dispositivo deja de descargar los otros tres juegos de librerías nativas. Verificado: cada APK lleva
   solo su propio `lib/<abi>/`, incluido el `aapt2` incluido, y sigue firmado con la clave privada.
 
-### 2026-09-21 — keystore propia de release
+### 2026-09-21 — firma: se mantiene la clave original
 
-- **Las releases ya se firman con una clave real.** Se generó una keystore RSA de 4096 bits fuera del
-  repositorio (`~/.android-keys/sketchware-pro/release.jks`) y sus credenciales se leen de
-  `~/.gradle/gradle.properties`, nunca del código. Verificado con `apksigner`: el APK está firmado por
-  `CN=Andres Mag, OU=Sketchware Pro, O=aurenox-global` (SHA-256 `02120913…`), ya no por la testkey pública de AOSP.
+- **Las releases conservan la clave de firma original, a propósito.** El APK publicado tiene que poder
+  actualizarse encima de las instalaciones existentes, así que el build de release se firma con la
+  `testkey.keystore` del propio proyecto (SHA-256 `a40da80a…`), la misma identidad que usa la v7.0.5 publicada.
+  Verificado con `apksigner`: los cuatro APK por arquitectura llevan exactamente esa huella.
+- Se generó una keystore privada de 4096 bits y se guardó en `~/.android-keys/sketchware-pro/release.jks`
+  para el día en que se quiera una identidad de distribución real. Cambiar a ella obligaría a desinstalar y reinstalar.
 
 ### 2026-09-21 — primera versión versionada (v7.0.5)
 
@@ -167,7 +169,7 @@ Este repositorio es un fork personal. Cada mejora se añade aquí según entra, 
 | Historial git, repo público, primera release | hecho |
 | Documentación bilingüe y sitio web | hecho |
 | ABI splits (un APK por arquitectura) | hecho |
-| Keystore privada de release | hecho |
+| Firma de release: se mantiene la clave original (por decisión) | hecho |
 | Reducción de código con R8 (bloqueada por el jar de `kotlinc`) | bloqueado |
 | Reducción de recursos (`res/raw/keep.xml`) | bloqueado |
 | Traducciones, APIs deprecadas, cobertura de tests | planificado |
