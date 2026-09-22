@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.5.5-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.5.6-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -134,6 +134,17 @@ Requisitos:
 Este repositorio es un fork personal. Cada mejora se añade aquí según entra, y el
 [sitio web](https://aurenox-global.github.io/Sketchware-Pro/es.html) se actualiza a la vez.
 
+### 2026-09-22 — completado del SDK y de las librerias (fase 3 del IDE)
+
+- **El autocompletado ya no se limita a tu codigo:** ahora incluye las **clases del SDK de Android** (todo
+  `android.jar`) y las de las **librerias que usa el proyecto** (las declaradas en el gestor de librerias mas los
+  jars locales que anadas).
+- Se inserta el **nombre simple** y en la descripcion va el **nombre completo**.
+- El indice se lee una vez, se cachea en memoria y en disco (se invalida cuando cambia el jar) y se precalienta al
+  abrir un `.java`. Orden: primero los simbolos de tu proyecto, luego palabras clave y al final SDK/librerias.
+- Version **v7.0.5.6** (versionCode 156), publicada como
+  [v7.0.5.6](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.6).
+
 ### 2026-09-22 — diagnosticos de Java en vivo (fase 2 del IDE)
 
 - **Los errores y avisos se subrayan mientras escribes.** 1,2 s despues de dejar de escribir, la app compila
@@ -245,7 +256,8 @@ Este repositorio es un fork personal. Cada mejora se añade aquí según entra, 
 | Los enlaces de GitHub de la app apuntan a este fork | hecho |
 | IDE dentro de la app: autocompletado con simbolos del proyecto (fase 1) | hecho |
 | IDE dentro de la app: diagnosticos en vivo con ECJ (fase 2) | hecho |
-| IDE dentro de la app: completado del SDK y librerias (fase 3) | siguiente |
+| IDE dentro de la app: completado del SDK y librerias (fase 3) | hecho |
+| IDE dentro de la app: navegacion (ir a definicion / buscar usos, fase 4) | siguiente |
 | R8 funcionando en CI (bloqueado por el jar de `bundletool`) | bloqueado |
 | ABI splits (un APK por arquitectura) | hecho |
 | Firma de release: se mantiene la clave original (por decisión) | hecho |

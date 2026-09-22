@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.5.5-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.5.6-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -134,6 +134,17 @@ Requirements:
 This repository is a personal fork. Every improvement is added here as it lands, and the
 [website](https://aurenox-global.github.io/Sketchware-Pro/) is updated at the same time.
 
+### 2026-09-22 — SDK and library completions (IDE phase 3)
+
+- **Completions are no longer limited to your own code:** they now include the **Android SDK classes** (all of
+  `android.jar`) and the classes of the **libraries the project uses** (the ones declared in the library manager
+  plus any local jars you add).
+- The **simple name** is inserted, with the **fully qualified name** shown as the description.
+- The index is read once, cached in memory and on disk (invalidated when the jar changes) and warmed up when a
+  `.java` file is opened. Order in the list: your project's symbols first, then keywords, then SDK/library classes.
+- Version **v7.0.5.6** (versionCode 156), published as
+  [v7.0.5.6](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.6).
+
 ### 2026-09-22 — live Java diagnostics (IDE phase 2)
 
 - **Errors and warnings are underlined as you type.** 1.2 s after you stop typing, the app compiles *only the
@@ -246,7 +257,8 @@ This repository is a personal fork. Every improvement is added here as it lands,
 | In-app GitHub links point to this fork | done |
 | In-app IDE: project-symbol autocompletion (phase 1) | done |
 | In-app IDE: ECJ live diagnostics (phase 2) | done |
-| In-app IDE: SDK and library completions (phase 3) | next |
+| In-app IDE: SDK and library completions (phase 3) | done |
+| In-app IDE: navigation (go to definition / find usages, phase 4) | next |
 | R8 running in CI (blocked by the `bundletool` jar) | blocked |
 | ABI splits (one APK per architecture) | done |
 | Release signing keeps the original key (on purpose) | done |
