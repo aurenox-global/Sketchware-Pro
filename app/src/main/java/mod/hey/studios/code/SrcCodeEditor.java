@@ -72,6 +72,7 @@ import mod.jbk.code.CodeEditorColorSchemes;
 import mod.jbk.code.CodeEditorLanguages;
 import mod.jbk.code.JavaDiagnosticsAnalyzer;
 import mod.jbk.code.ProjectJavaLanguage;
+import mod.jbk.code.ProjectKotlinLanguage;
 import pro.sketchware.lsp.LocalSymbolNavigationProvider;
 import pro.sketchware.lsp.LspLanguage;
 import pro.sketchware.lsp.LspNavigationCoordinator;
@@ -170,7 +171,7 @@ public class SrcCodeEditor extends BaseAppCompatActivity {
                 break;
 
             case 1:
-                ed.setEditorLanguage(CodeEditorLanguages.loadTextMateLanguage(CodeEditorLanguages.SCOPE_NAME_KOTLIN));
+                ed.setEditorLanguage(new ProjectKotlinLanguage(currentScId));
                 languageId = 1;
                 break;
 
@@ -366,7 +367,7 @@ public class SrcCodeEditor extends BaseAppCompatActivity {
             languageId = 0;
             setupLiveDiagnostics(binding.editor, title);
         } else if (title.endsWith(".kt")) {
-            binding.editor.setEditorLanguage(CodeEditorLanguages.loadTextMateLanguage(CodeEditorLanguages.SCOPE_NAME_KOTLIN));
+            binding.editor.setEditorLanguage(new ProjectKotlinLanguage(currentScId));
             binding.editor.setColorScheme(CodeEditorColorSchemes.loadTextMateColorScheme(CodeEditorColorSchemes.THEME_DRACULA));
             languageId = 1;
         } else if (title.endsWith(".xml")) {

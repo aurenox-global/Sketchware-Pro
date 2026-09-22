@@ -76,6 +76,17 @@ public class ProjectSymbolIndex {
             Pattern.compile("^[\\t ]*(?:(?:public|private|protected|static|final|volatile|transient)\\s+)+([A-Za-z_$][\\w$<>\\[\\],.]*)\\s+([A-Za-z_$][\\w$]*)\\s*(?:=[^;]*)?;",
                     Pattern.MULTILINE);
 
+    /** Kotlin: class / interface / object / enum class / data class / sealed class. */
+    private static final Pattern KOTLIN_TYPE_DECL = Pattern.compile(
+            "\\b(?:(?:data|sealed|abstract|open|internal|private|public|enum|annotation|value)\\s+)*" +
+                    "(?:class|interface|object)\\s+([A-Za-z_$][\\w$]*)");
+    /** Kotlin: fun nombre(...), con o sin receptor y con genéricos. */
+    private static final Pattern KOTLIN_FUN_DECL = Pattern.compile(
+            "\\bfun\\s+(?:<[^>]{0,80}>\\s*)?(?:[\\w.<>?,]+\\.)?([A-Za-z_$][\\w$]*)\\s*\\(");
+    /** Kotlin: val/var nombre (propiedades de clase y de nivel superior). */
+    private static final Pattern KOTLIN_PROPERTY_DECL = Pattern.compile(
+            "\\b(?:val|var)\\s+([A-Za-z_$][\\w$]*)\\s*(?::[^=\\n]{0,60})?(?:=|$)", Pattern.MULTILINE);
+
     private ProjectSymbolIndex() {
     }
 
@@ -161,7 +172,7 @@ public class ProjectSymbolIndex {
             if (text == null || text.isEmpty()) {
                 continue;
             }
-            collectDeclarations(text, file.getAbsolutePath(), unique);
+            collectDeclarations(text, file.getAbsolutePath(), file.getName().endsWith(".kt"), unique);
         }
         return new ArrayList<>(unique.values());
     }
@@ -186,7 +197,11 @@ public class ProjectSymbolIndex {
         }
     }
 
-    private static void collectDeclarations(String text, String filePath, Map<String, Symbol> out) {
+    private static void collectDeclarations(String text, String filePath, boolean kotlin, Map<String, Symbol> out) {
+        if (kotlin) {
+            collectKotlinDeclarations(text, filePath, out);
+        }
+
         Matcher m = TYPE_DECL.matcher(text);
         int searchFrom = 0;
         int line = 1;
@@ -224,6 +239,44 @@ public class ProjectSymbolIndex {
                 continue;
             }
             put(out, name, type + " " + name, KIND_FIELD, filePath, line - 1);
+        }
+    }
+
+    /** Declaraciones propias de Kotlin: clases/objetos, funciones y propiedades. */
+    private static void collectKotlinDeclarations(String text, String filePath, Map<String, Symbol> out) {
+        Matcher m = KOTLIN_TYPE_DECL.matcher(text);
+        int searchFrom = 0;
+        int line = 1;
+        while (m.find()) {
+            line = advance(text, searchFrom, m.start(), line);
+            searchFrom = m.start();
+            put(out, m.group(1), "clase de Kotlin del proyecto", KIND_CLASS, filePath, line - 1);
+        }
+
+        m = KOTLIN_FUN_DECL.matcher(text);
+        searchFrom = 0;
+        line = 1;
+        while (m.find()) {
+            line = advance(text, searchFrom, m.start(), line);
+            searchFrom = m.start();
+            String name = m.group(1);
+            if (isKeyword(name)) {
+                continue;
+            }
+            put(out, name, "fun " + name + "(...)", KIND_METHOD, filePath, line - 1);
+        }
+
+        m = KOTLIN_PROPERTY_DECL.matcher(text);
+        searchFrom = 0;
+        line = 1;
+        while (m.find()) {
+            line = advance(text, searchFrom, m.start(), line);
+            searchFrom = m.start();
+            String name = m.group(1);
+            if (isKeyword(name)) {
+                continue;
+            }
+            put(out, name, "propiedad de Kotlin: " + name, KIND_FIELD, filePath, line - 1);
         }
     }
 
