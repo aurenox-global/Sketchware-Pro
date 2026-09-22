@@ -10,6 +10,8 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Pair;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -33,6 +35,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -46,6 +50,10 @@ import javax.xml.xpath.XPathConstants;
 import javax.xml.xpath.XPathFactory;
 
 import a.a.a.Lx;
+import io.github.rosemoe.sora.event.ContentChangeEvent;
+import io.github.rosemoe.sora.lang.diagnostic.DiagnosticDetail;
+import io.github.rosemoe.sora.lang.diagnostic.DiagnosticRegion;
+import io.github.rosemoe.sora.lang.diagnostic.DiagnosticsContainer;
 import io.github.rosemoe.sora.langs.textmate.TextMateColorScheme;
 import io.github.rosemoe.sora.widget.CodeEditor;
 import io.github.rosemoe.sora.widget.component.EditorAutoCompletion;
@@ -58,6 +66,7 @@ import io.github.rosemoe.sora.widget.schemes.SchemeVS2019;
 import mod.hey.studios.util.Helper;
 import mod.jbk.code.CodeEditorColorSchemes;
 import mod.jbk.code.CodeEditorLanguages;
+import mod.jbk.code.JavaDiagnosticsAnalyzer;
 import mod.jbk.code.ProjectJavaLanguage;
 import pro.sketchware.R;
 import pro.sketchware.activities.ai.LocalAiManagerActivity;
@@ -88,6 +97,12 @@ public class SrcCodeEditor extends BaseAppCompatActivity {
     public static int languageId;
     /** sc_id del proyecto abierto: permite ofrecer los simbolos del proyecto al autocompletar. */
     private static String currentScId;
+    /** Retardo antes de analizar el fichero, para no compilar en cada tecla. */
+    private static final int DIAGNOSTICS_DELAY_MS = 1200;
+    private static final ExecutorService diagnosticsExecutor = Executors.newSingleThreadExecutor();
+    private final Handler diagnosticsHandler = new Handler(Looper.getMainLooper());
+    private final java.util.concurrent.atomic.AtomicBoolean diagnosticsRunning = new java.util.concurrent.atomic.AtomicBoolean(false);
+    private Runnable pendingDiagnostics;
     private String beforeContent = "";
     private CodeEditorHsBinding binding;
     private boolean fromAndroidManifest;
@@ -319,6 +334,7 @@ public class SrcCodeEditor extends BaseAppCompatActivity {
         if (title.endsWith(".java")) {
             binding.editor.setEditorLanguage(new ProjectJavaLanguage(currentScId));
             languageId = 0;
+            setupLiveDiagnostics(binding.editor, title);
         } else if (title.endsWith(".kt")) {
             binding.editor.setEditorLanguage(CodeEditorLanguages.loadTextMateLanguage(CodeEditorLanguages.SCOPE_NAME_KOTLIN));
             binding.editor.setColorScheme(CodeEditorColorSchemes.loadTextMateColorScheme(CodeEditorColorSchemes.THEME_DRACULA));
@@ -732,5 +748,91 @@ public class SrcCodeEditor extends BaseAppCompatActivity {
         intent.putExtras(getIntent());
         intent.putExtra("xml", binding.editor.getText().toString());
         startActivity(intent);
+    }
+
+    // ------------------------------------------------------------------ IDE: diagnosticos en vivo
+
+    /**
+     * Analiza con ECJ, con retardo, el fichero Java abierto y subraya errores y avisos en el editor.
+     * El analisis corre fuera del hilo de UI y nunca puede romper el editor: si algo falla, simplemente
+     * no se marca nada.
+     */
+    private void setupLiveDiagnostics(CodeEditor editor, String fileName) {
+        editor.subscribeEvent(ContentChangeEvent.class, (event, source) -> scheduleDiagnostics(editor, fileName));
+        scheduleDiagnostics(editor, fileName);
+    }
+
+    private void scheduleDiagnostics(CodeEditor editor, String fileName) {
+        if (pendingDiagnostics != null) {
+            diagnosticsHandler.removeCallbacks(pendingDiagnostics);
+        }
+        pendingDiagnostics = () -> runDiagnostics(editor, fileName);
+        diagnosticsHandler.postDelayed(pendingDiagnostics, DIAGNOSTICS_DELAY_MS);
+    }
+
+    private void runDiagnostics(CodeEditor editor, String fileName) {
+        String scId = currentScId;
+        if (scId == null || scId.isEmpty()) {
+            return;
+        }
+        // Si ya hay un analisis en curso, no encolamos otro: reintentamos cuando toque.
+        if (diagnosticsRunning.get()) {
+            scheduleDiagnostics(editor, fileName);
+            return;
+        }
+        diagnosticsRunning.set(true);
+        String content = editor.getText().toString();
+        Context appContext = getApplicationContext();
+        diagnosticsExecutor.execute(() -> {
+            try {
+                List<JavaDiagnosticsAnalyzer.Problem> problems =
+                        JavaDiagnosticsAnalyzer.analyze(appContext, scId, fileName, content);
+                diagnosticsHandler.post(() -> applyDiagnostics(editor, content, problems));
+            } finally {
+                diagnosticsRunning.set(false);
+            }
+        });
+    }
+
+    private void applyDiagnostics(CodeEditor editor, String analyzedContent,
+                                  List<JavaDiagnosticsAnalyzer.Problem> problems) {
+        // Si el usuario ha seguido escribiendo, este analisis ya no vale: hay otro en camino.
+        if (!analyzedContent.contentEquals(editor.getText().toString())) {
+            return;
+        }
+
+        DiagnosticsContainer container = new DiagnosticsContainer();
+        for (JavaDiagnosticsAnalyzer.Problem problem : problems) {
+            int start = indexOfLine(analyzedContent, problem.line);
+            if (start < 0) {
+                continue;
+            }
+            int end = analyzedContent.indexOf('\n', start);
+            if (end < 0) {
+                end = analyzedContent.length();
+            }
+            end = Math.max(end, start + 1);
+
+            DiagnosticRegion region = new DiagnosticRegion(start, end, (short) problem.severity);
+            region.detail = new DiagnosticDetail(problem.message, problem.message, null, null);
+            container.addDiagnostic(region);
+        }
+        editor.setDiagnostics(container);
+    }
+
+    /** Indice del primer caracter de una linea (1-based), o -1 si esa linea no existe. */
+    private static int indexOfLine(String text, int line) {
+        if (line <= 1) {
+            return 0;
+        }
+        int index = 0;
+        for (int current = 1; current < line; current++) {
+            int next = text.indexOf('\n', index);
+            if (next < 0) {
+                return -1;
+            }
+            index = next + 1;
+        }
+        return index;
     }
 }
