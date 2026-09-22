@@ -39,9 +39,23 @@ public class AndroidDeviceSmokeTest {
         launcherIntent.addCategory(Intent.CATEGORY_LAUNCHER);
         launcherIntent.setPackage(appContext.getPackageName());
 
-        ResolveInfo resolveInfo = appContext
-                .getPackageManager()
-                .resolveActivity(launcherIntent, PackageManager.MATCH_DEFAULT_ONLY);
+        // En un emulador recien arrancado el PackageManager puede tardar un instante en indexar
+        // la app recien instalada, y el primer resolveActivity devuelve null. Reintentamos unos
+        // segundos en vez de dar el test por fallido.
+        ResolveInfo resolveInfo = null;
+        for (int attempt = 0; attempt < 10 && resolveInfo == null; attempt++) {
+            resolveInfo = appContext
+                    .getPackageManager()
+                    .resolveActivity(launcherIntent, PackageManager.MATCH_DEFAULT_ONLY);
+            if (resolveInfo == null) {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }
 
         assertNotNull("Launcher activity should be resolvable", resolveInfo);
     }

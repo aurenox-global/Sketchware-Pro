@@ -1,0 +1,15 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      Visibilidad de paquetes (Android 11+ / API 30): el APK de test consulta la activity de
+      lanzamiento de la app bajo prueba con PackageManager.resolveActivity. Sin declararlo aqui,
+      Android puede devolver null y el smoke test falla en el emulador.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
+</manifest>
