@@ -760,6 +760,17 @@ public class SrcCodeEditor extends BaseAppCompatActivity {
     private void setupLiveDiagnostics(CodeEditor editor, String fileName) {
         editor.subscribeEvent(ContentChangeEvent.class, (event, source) -> scheduleDiagnostics(editor, fileName));
         scheduleDiagnostics(editor, fileName);
+
+        // Precalienta los indices de clases del SDK y de las librerias para que la primera
+        // sugerencia no tarde (la primera lectura de android.jar cuesta unas decimas de segundo).
+        String scId = currentScId;
+        if (scId != null && !scId.isEmpty()) {
+            Context appContext = getApplicationContext();
+            diagnosticsExecutor.execute(() -> {
+                mod.jbk.code.SdkSymbolIndex.getSdkClasses(appContext);
+                mod.jbk.code.SdkSymbolIndex.getLibraryClasses(appContext, scId);
+            });
+        }
     }
 
     private void scheduleDiagnostics(CodeEditor editor, String fileName) {

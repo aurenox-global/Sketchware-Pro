@@ -20,6 +20,7 @@ import io.github.rosemoe.sora.langs.java.JavaLanguage;
 import io.github.rosemoe.sora.text.CharPosition;
 import io.github.rosemoe.sora.text.ContentReference;
 import io.github.rosemoe.sora.widget.SymbolPairMatch;
+import pro.sketchware.SketchApplication;
 
 /**
  * Variante del lenguaje Java del editor que ademas ofrece autocompletado con los simbolos del
@@ -33,6 +34,8 @@ public class ProjectJavaLanguage implements Language {
 
     private static final int MAX_ITEMS = 200;
     private static final int MAX_PREFIX_LENGTH = 64;
+    /** Cuantas sugerencias como maximo vienen del SDK y de las librerias. */
+    private static final int MAX_EXTERNAL_ITEMS = 120;
 
     private static final String[] KEYWORDS = {
             "abstract", "assert", "boolean", "break", "byte", "case", "catch", "char", "class",
@@ -159,6 +162,55 @@ public class ProjectJavaLanguage implements Language {
             publisher.addItem(toItem(symbol, prefixLength));
             added++;
         }
+
+        // Clases del SDK de Android y de las librerias que usa el proyecto.
+        try {
+            addExternalSymbols(prefix, prefixLength, publisher, added);
+        } catch (Throwable ignored) {
+            // Sin SDK o sin librerias: nos quedamos con lo del proyecto.
+        }
+    }
+
+    /**
+     * Anade clases del SDK (android.jar) y de las librerias del proyecto. Se inserta el nombre simple
+     * de la clase (como haria un IDE), y en la descripcion va el nombre completo.
+     */
+    private void addExternalSymbols(String prefix, int prefixLength, CompletionPublisher publisher, int alreadyAdded) {
+        if (alreadyAdded >= MAX_ITEMS) {
+            return;
+        }
+        android.content.Context context = SketchApplication.getContext();
+        if (context == null) {
+            return;
+        }
+
+        List<String> candidates = new ArrayList<>();
+        candidates.addAll(SdkSymbolIndex.getSdkClasses(context));
+        candidates.addAll(SdkSymbolIndex.getLibraryClasses(context, scId));
+        if (candidates.isEmpty()) {
+            return;
+        }
+
+        int added = alreadyAdded;
+        int externalAdded = 0;
+        for (String fullName : candidates) {
+            if (added >= MAX_ITEMS || externalAdded >= MAX_EXTERNAL_ITEMS) {
+                break;
+            }
+            String simpleName = simpleName(fullName);
+            if (simpleName.isEmpty() || !startsWithIgnoreCase(simpleName, prefix)) {
+                continue;
+            }
+            publisher.addItem(new SimpleCompletionItem(simpleName, fullName, prefixLength, simpleName)
+                    .kind(CompletionItemKind.Class));
+            added++;
+            externalAdded++;
+        }
+    }
+
+    private static String simpleName(String fullName) {
+        int index = fullName.lastIndexOf('.');
+        return index < 0 ? fullName : fullName.substring(index + 1);
     }
 
     private static SimpleCompletionItem toItem(ProjectSymbolIndex.Symbol symbol, int prefixLength) {
