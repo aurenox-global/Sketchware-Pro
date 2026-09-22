@@ -46,7 +46,6 @@ import javax.xml.xpath.XPathConstants;
 import javax.xml.xpath.XPathFactory;
 
 import a.a.a.Lx;
-import io.github.rosemoe.sora.langs.java.JavaLanguage;
 import io.github.rosemoe.sora.langs.textmate.TextMateColorScheme;
 import io.github.rosemoe.sora.widget.CodeEditor;
 import io.github.rosemoe.sora.widget.component.EditorAutoCompletion;
@@ -59,6 +58,7 @@ import io.github.rosemoe.sora.widget.schemes.SchemeVS2019;
 import mod.hey.studios.util.Helper;
 import mod.jbk.code.CodeEditorColorSchemes;
 import mod.jbk.code.CodeEditorLanguages;
+import mod.jbk.code.ProjectJavaLanguage;
 import pro.sketchware.R;
 import pro.sketchware.activities.ai.LocalAiManagerActivity;
 import pro.sketchware.ai.LocalAiConfig;
@@ -86,6 +86,8 @@ public class SrcCodeEditor extends BaseAppCompatActivity {
     );
     public static SharedPreferences pref;
     public static int languageId;
+    /** sc_id del proyecto abierto: permite ofrecer los simbolos del proyecto al autocompletar. */
+    private static String currentScId;
     private String beforeContent = "";
     private CodeEditorHsBinding binding;
     private boolean fromAndroidManifest;
@@ -131,7 +133,7 @@ public class SrcCodeEditor extends BaseAppCompatActivity {
         switch (which) {
             default:
             case 0:
-                ed.setEditorLanguage(new JavaLanguage());
+                ed.setEditorLanguage(new ProjectJavaLanguage(currentScId));
                 languageId = 0;
                 break;
 
@@ -291,6 +293,7 @@ public class SrcCodeEditor extends BaseAppCompatActivity {
         fromAndroidManifest = getIntent().getBooleanExtra(FLAG_FROM_ANDROID_MANIFEST, false);
         String title = getIntent().getStringExtra("title");
         scId = getIntent().getStringExtra("sc_id");
+        currentScId = scId;
         activityName = getIntent().getStringExtra("activity_name");
 
         binding.editor.setTypefaceText(EditorUtils.getTypeface(this));
@@ -314,7 +317,7 @@ public class SrcCodeEditor extends BaseAppCompatActivity {
         binding.editor.setText(beforeContent);
 
         if (title.endsWith(".java")) {
-            binding.editor.setEditorLanguage(new JavaLanguage());
+            binding.editor.setEditorLanguage(new ProjectJavaLanguage(currentScId));
             languageId = 0;
         } else if (title.endsWith(".kt")) {
             binding.editor.setEditorLanguage(CodeEditorLanguages.loadTextMateLanguage(CodeEditorLanguages.SCOPE_NAME_KOTLIN));
