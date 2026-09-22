@@ -37,14 +37,14 @@
 
   <!-- ============================================================ hero -->
   <section class="hero" style="border-top:none">
-    <div class="tag">● v7.0.5.3 · versionCode 153 · source-available</div>
+    <div class="tag">● v7.0.5.4 · versionCode 154 · source-available</div>
     <h1>Build real Android apps<br><span class="accent">from your phone.</span></h1>
     <p class="lead">
       Sketchware Pro is an Android IDE that runs on Android itself: drag blocks, write Java or Kotlin,
       compile on the device and get an installable APK — no computer required.
     </p>
     <div class="btns">
-      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.3" target="_blank" rel="noopener">⬇ Download APK</a>
+      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.4" target="_blank" rel="noopener">⬇ Download APK</a>
       <a class="btn ghost" href="https://github.com/aurenox-global/Sketchware-Pro" target="_blank" rel="noopener">View source on GitHub</a>
     </div>
 
@@ -160,6 +160,15 @@
         purpose, so new APKs install over existing installs. Verified with <code>apksigner</code>: all four split
         APKs carry that fingerprint. A private 4096-bit keystore is kept aside at
         <code>~/.android-keys/sketchware-pro/release.jks</code> for the day a real distribution identity is wanted.</p>
+      </div>
+
+      <div class="item done">
+        <span class="when">2026-09-22 · editor</span>
+        <h3>Autocompletion with your own symbols <span class="pill ok">done</span></h3>
+        <p>First slice of the in-app IDE: the Java editor now suggests the <strong>classes, methods and fields of
+        your project</strong> while you type, plus Java keywords. The index is built by reading the project's
+        source files (no compiler), cached and refreshed only when sources change. Everything else in the editor
+        still delegates to sora-editor's language. Version <strong>v7.0.5.4</strong>.</p>
       </div>
 
       <div class="item done">
@@ -305,6 +314,8 @@
           <tr><td>Repository complete: restored the packages hidden by <code>.gitignore</code></td><td><span class="pill ok">done</span></td></tr>
           <tr><td>CI green: Android CI + Verification Baseline</td><td><span class="pill ok">done</span></td></tr>
           <tr><td>In-app GitHub links point to this fork</td><td><span class="pill ok">done</span></td></tr>
+          <tr><td>In-app IDE: autocompletion with project symbols (phase 1)</td><td><span class="pill ok">done</span></td></tr>
+          <tr><td>In-app IDE: live diagnostics with ECJ (phase 2)</td><td><span class="pill warn">next</span></td></tr>
           <tr><td>R8 running in CI (blocked by the <code>bundletool</code> jar)</td><td><span class="pill warn">blocked</span></td></tr>
           <tr><td>ABI splits (one APK per architecture)</td><td><span class="pill ok">done</span></td></tr>
           <tr><td>Translations, deprecated APIs, test coverage</td><td><span class="pill info">planned</span></td></tr>

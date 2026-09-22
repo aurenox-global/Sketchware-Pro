@@ -37,14 +37,14 @@
 
   <!-- ============================================================ hero -->
   <section class="hero" style="border-top:none">
-    <div class="tag">● v7.0.5.3 · versionCode 153 · source-available</div>
+    <div class="tag">● v7.0.5.4 · versionCode 154 · source-available</div>
     <h1>Crea apps Android reales<br><span class="accent">desde tu móvil.</span></h1>
     <p class="lead">
       Sketchware Pro es un IDE de Android que funciona sobre Android: arrastra bloques, escribe Java o Kotlin,
       compila en el propio dispositivo y obtén un APK instalable — sin necesidad de ordenador.
     </p>
     <div class="btns">
-      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.3" target="_blank" rel="noopener">⬇ Descargar APK</a>
+      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.4" target="_blank" rel="noopener">⬇ Descargar APK</a>
       <a class="btn ghost" href="https://github.com/aurenox-global/Sketchware-Pro" target="_blank" rel="noopener">Ver el código en GitHub</a>
     </div>
 
@@ -161,6 +161,15 @@
         Verificado con <code>apksigner</code>: los cuatro APK por arquitectura llevan esa huella. La keystore
         privada de 4096 bits queda guardada en <code>~/.android-keys/sketchware-pro/release.jks</code> para el día
         en que se quiera una identidad de distribución real.</p>
+      </div>
+
+      <div class="item done">
+        <span class="when">2026-09-22 · editor</span>
+        <h3>Autocompletado con tus propios simbolos <span class="pill ok">hecho</span></h3>
+        <p>Primera pieza del IDE dentro de la app: el editor de Java sugiere ahora las <strong>clases, metodos y
+        campos de tu proyecto</strong> mientras escribes, ademas de las palabras clave. El indice se construye
+        leyendo las fuentes del proyecto (sin compilador), cacheado y refrescado solo cuando cambian. El resto del
+        editor sigue delegando en sora-editor. Version <strong>v7.0.5.4</strong>.</p>
       </div>
 
       <div class="item done">
@@ -307,6 +316,8 @@
           <tr><td>Repositorio completo: recuperados los paquetes ocultos por <code>.gitignore</code></td><td><span class="pill ok">hecho</span></td></tr>
           <tr><td>CI en verde: Android CI + Verification Baseline</td><td><span class="pill ok">hecho</span></td></tr>
           <tr><td>Los enlaces de GitHub de la app apuntan a este fork</td><td><span class="pill ok">hecho</span></td></tr>
+          <tr><td>IDE dentro de la app: autocompletado con simbolos del proyecto (fase 1)</td><td><span class="pill ok">hecho</span></td></tr>
+          <tr><td>IDE dentro de la app: diagnosticos en vivo con ECJ (fase 2)</td><td><span class="pill warn">siguiente</span></td></tr>
           <tr><td>R8 funcionando en CI (bloqueado por el jar de <code>bundletool</code>)</td><td><span class="pill warn">bloqueado</span></td></tr>
           <tr><td>ABI splits (un APK por arquitectura)</td><td><span class="pill ok">hecho</span></td></tr>
           <tr><td>Traducciones, APIs deprecadas, cobertura de tests</td><td><span class="pill info">planificado</span></td></tr>

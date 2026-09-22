@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.5.3-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.5.4-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -134,6 +134,19 @@ Requirements:
 This repository is a personal fork. Every improvement is added here as it lands, and the
 [website](https://aurenox-global.github.io/Sketchware-Pro/) is updated at the same time.
 
+### 2026-09-22 — first slice of the in-app IDE: project-aware autocompletion
+
+- **The Java editor now completes your project's own symbols:** while you type it suggests the classes, methods
+  and fields found in the project's `files/java` sources, plus Java keywords.
+- The index is built without a compiler — it reads the `.java`/`.kt` files and extracts declarations with regular
+  expressions, cached per project and refreshed only when sources change (caps: 400 files, 4000 symbols, 512 KB
+  per file).
+- The editor language delegates everything else to sora-editor's `JavaLanguage`, so highlighting, indenting and
+  bracket matching behave exactly as before. Worst case, the suggestion list simply does not show up.
+- Version **v7.0.5.4** (versionCode 154), published as
+  [v7.0.5.4](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.4). Next: ECJ live diagnostics,
+  go-to-definition and an integrated build console.
+
 ### 2026-09-21 — the app's GitHub links point to this fork
 
 - **In-app GitHub links now redirect here** instead of upstream: the repository link, the releases link and the
@@ -220,6 +233,8 @@ This repository is a personal fork. Every improvement is added here as it lands,
 | Repository complete: restored the source packages hidden by `.gitignore` | done |
 | CI green: Android CI + Verification Baseline | done |
 | In-app GitHub links point to this fork | done |
+| In-app IDE: project-symbol autocompletion (phase 1) | done |
+| In-app IDE: ECJ live diagnostics (phase 2) | next |
 | R8 running in CI (blocked by the `bundletool` jar) | blocked |
 | ABI splits (one APK per architecture) | done |
 | Release signing keeps the original key (on purpose) | done |

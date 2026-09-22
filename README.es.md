@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.5.3-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.5.4-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -134,6 +134,19 @@ Requisitos:
 Este repositorio es un fork personal. Cada mejora se añade aquí según entra, y el
 [sitio web](https://aurenox-global.github.io/Sketchware-Pro/es.html) se actualiza a la vez.
 
+### 2026-09-22 — primera pieza del IDE dentro de la app: autocompletado con los simbolos del proyecto
+
+- **El editor de Java ya completa los simbolos de tu proyecto:** mientras escribes sugiere las clases,
+  metodos y campos que encuentra en las fuentes de `files/java`, ademas de las palabras clave de Java.
+- El indice se construye **sin compilador**: lee los `.java`/`.kt` y extrae declaraciones con expresiones
+  regulares; se cachea por proyecto y solo se refresca cuando cambian las fuentes (topes: 400 ficheros,
+  4000 simbolos, 512 KB por fichero).
+- El lenguaje del editor delega todo lo demas en el `JavaLanguage` de sora-editor, asi que resaltado, indentado
+  y emparejado de simbolos siguen igual. En el peor caso, simplemente no aparece la lista de sugerencias.
+- Version **v7.0.5.4** (versionCode 154), publicada como
+  [v7.0.5.4](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.4). Siguientes: diagnosticos
+  en vivo con ECJ, ir a definicion y consola de build integrada.
+
 ### 2026-09-21 — los enlaces de GitHub de la app apuntan a este fork
 
 - **Los enlaces de GitHub dentro de la app redirigen ahora aquí** en vez de al upstream: el enlace del
@@ -219,6 +232,8 @@ Este repositorio es un fork personal. Cada mejora se añade aquí según entra, 
 | Repositorio completo: recuperados los paquetes ocultos por `.gitignore` | hecho |
 | CI en verde: Android CI + Verification Baseline | hecho |
 | Los enlaces de GitHub de la app apuntan a este fork | hecho |
+| IDE dentro de la app: autocompletado con simbolos del proyecto (fase 1) | hecho |
+| IDE dentro de la app: diagnosticos en vivo con ECJ (fase 2) | siguiente |
 | R8 funcionando en CI (bloqueado por el jar de `bundletool`) | bloqueado |
 | ABI splits (un APK por arquitectura) | hecho |
 | Firma de release: se mantiene la clave original (por decisión) | hecho |
