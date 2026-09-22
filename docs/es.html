@@ -37,14 +37,14 @@
 
   <!-- ============================================================ hero -->
   <section class="hero" style="border-top:none">
-    <div class="tag">● v7.0.5.8 · versionCode 158 · source-available</div>
+    <div class="tag">● v7.0.5.9 · versionCode 159 · source-available</div>
     <h1>Crea apps Android reales<br><span class="accent">desde tu móvil.</span></h1>
     <p class="lead">
       Sketchware Pro es un IDE de Android que funciona sobre Android: arrastra bloques, escribe Java o Kotlin,
       compila en el propio dispositivo y obtén un APK instalable — sin necesidad de ordenador.
     </p>
     <div class="btns">
-      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.8" target="_blank" rel="noopener">⬇ Descargar APK</a>
+      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.9" target="_blank" rel="noopener">⬇ Descargar APK</a>
       <a class="btn ghost" href="https://github.com/aurenox-global/Sketchware-Pro" target="_blank" rel="noopener">Ver el código en GitHub</a>
     </div>
 
@@ -161,6 +161,16 @@
         Verificado con <code>apksigner</code>: los cuatro APK por arquitectura llevan esa huella. La keystore
         privada de 4096 bits queda guardada en <code>~/.android-keys/sketchware-pro/release.jks</code> para el día
         en que se quiera una identidad de distribución real.</p>
+      </div>
+
+      <div class="item done">
+        <span class="when">2026-09-22 · editor</span>
+        <h3>Autocompletado de Kotlin <span class="pill ok">hecho</span></h3>
+        <p>Los ficheros <code>.kt</code> reciben el mismo trato que Java: sugerencias con los simbolos Kotlin de tu
+        proyecto (clases, objetos, <code>fun</code>, <code>val</code>/<code>var</code>), palabras clave de Kotlin y
+        clases del SDK y de las librerias. El resaltado y el indentado siguen delegando en el lenguaje TextMate de
+        Kotlin. Los diagnosticos de Kotlin necesitan el compilador de Kotlin y llegaran en una fase aparte. Version
+        <strong>v7.0.5.9</strong>.</p>
       </div>
 
       <div class="item done">
@@ -357,7 +367,8 @@
           <tr><td>IDE dentro de la app: completado del SDK y librerias (fase 3)</td><td><span class="pill ok">hecho</span></td></tr>
           <tr><td>IDE dentro de la app: navegacion, ir a definicion / buscar usos (fase 4)</td><td><span class="pill ok">hecho</span></td></tr>
           <tr><td>IDE dentro de la app: quick fixes sobre los diagnosticos (fase 5)</td><td><span class="pill ok">hecho</span></td></tr>
-          <tr><td>IDE dentro de la app: soporte de Kotlin (fase 6)</td><td><span class="pill warn">siguiente</span></td></tr>
+          <tr><td>IDE dentro de la app: soporte de Kotlin (fase 6)</td><td><span class="pill ok">hecho</span></td></tr>
+          <tr><td>IDE dentro de la app: diagnosticos de Kotlin (fase 7)</td><td><span class="pill warn">siguiente</span></td></tr>
           <tr><td>R8 funcionando en CI (bloqueado por el jar de <code>bundletool</code>)</td><td><span class="pill warn">bloqueado</span></td></tr>
           <tr><td>ABI splits (un APK por arquitectura)</td><td><span class="pill ok">hecho</span></td></tr>
           <tr><td>Traducciones, APIs deprecadas, cobertura de tests</td><td><span class="pill info">planificado</span></td></tr>

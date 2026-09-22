@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.5.8-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.5.9-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -133,6 +133,18 @@ Requisitos:
 
 Este repositorio es un fork personal. Cada mejora se añade aquí según entra, y el
 [sitio web](https://aurenox-global.github.io/Sketchware-Pro/es.html) se actualiza a la vez.
+
+### 2026-09-22 — soporte de Kotlin: autocompletado en ficheros .kt (fase 6 del IDE)
+
+- **El editor de Kotlin ya completa tambien.** Los `.kt` reciben por fin el mismo trato que Java: sugerencias con
+  los **simbolos de tu proyecto** (clases, objetos, `fun` y propiedades `val`/`var`), las **palabras clave de
+  Kotlin** y las **clases del SDK y de las librerias**.
+- El indice aprendio declaraciones de Kotlin (`class`/`interface`/`object` con modificadores, `fun` con receptor y
+  genericos, propiedades) y solo aplica esos patrones a ficheros `.kt`.
+- Lo demas (resaltado, indentado, emparejado) sigue delegando en el lenguaje TextMate de Kotlin, asi que si algo
+  falla el editor se comporta igual que antes. Los **diagnosticos** de Kotlin aun no estan: necesitan el compilador
+  de Kotlin, mucho mas pesado que ECJ, y iran en una fase aparte.
+- Version **v7.0.5.9** (versionCode 159).
 
 ### 2026-09-22 — quick fix: importar la clase que falta (fase 5 del IDE)
 
@@ -279,7 +291,8 @@ Este repositorio es un fork personal. Cada mejora se añade aquí según entra, 
 | IDE dentro de la app: completado del SDK y librerias (fase 3) | hecho |
 | IDE dentro de la app: navegacion (ir a definicion / buscar usos, fase 4) | hecho |
 | IDE dentro de la app: quick fixes sobre los diagnosticos (fase 5) | hecho |
-| IDE dentro de la app: soporte de Kotlin (fase 6) | siguiente |
+| IDE dentro de la app: soporte de Kotlin (fase 6) | hecho |
+| IDE dentro de la app: diagnosticos de Kotlin (fase 7) | siguiente |
 | R8 funcionando en CI (bloqueado por el jar de `bundletool`) | bloqueado |
 | ABI splits (un APK por arquitectura) | hecho |
 | Firma de release: se mantiene la clave original (por decisión) | hecho |
