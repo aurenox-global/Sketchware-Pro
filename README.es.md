@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.5.6-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.5.7-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -133,6 +133,16 @@ Requisitos:
 
 Este repositorio es un fork personal. Cada mejora se añade aquí según entra, y el
 [sitio web](https://aurenox-global.github.io/Sketchware-Pro/es.html) se actualiza a la vez.
+
+### 2026-09-22 — navegacion de codigo: ir a definicion y buscar usos (fase 4 del IDE)
+
+- **El editor ya salta entre ficheros.** "Go to definition" y "Find usages" en el menu del editor resuelven el
+  simbolo bajo el cursor en **todas las fuentes del proyecto** (no solo el fichero abierto) y abren el resultado;
+  si hay varias coincidencias, sale un selector con fichero, linea y vista previa.
+- El indice de simbolos guarda ahora la **ubicacion** de cada declaracion (fichero + linea) y la navegacion pasa
+  por el andamiaje LSP que ya tenia el repo (`pro.sketchware.lsp`): proveedor nuevo de ambito proyecto con el
+  buscador de un solo fichero como reserva, ademas de timeout y ejecucion en segundo plano.
+- Version **v7.0.5.7** (versionCode 157).
 
 ### 2026-09-22 — completado del SDK y de las librerias (fase 3 del IDE)
 
@@ -257,7 +267,8 @@ Este repositorio es un fork personal. Cada mejora se añade aquí según entra, 
 | IDE dentro de la app: autocompletado con simbolos del proyecto (fase 1) | hecho |
 | IDE dentro de la app: diagnosticos en vivo con ECJ (fase 2) | hecho |
 | IDE dentro de la app: completado del SDK y librerias (fase 3) | hecho |
-| IDE dentro de la app: navegacion (ir a definicion / buscar usos, fase 4) | siguiente |
+| IDE dentro de la app: navegacion (ir a definicion / buscar usos, fase 4) | hecho |
+| IDE dentro de la app: quick fixes sobre los diagnosticos (fase 5) | siguiente |
 | R8 funcionando en CI (bloqueado por el jar de `bundletool`) | bloqueado |
 | ABI splits (un APK por arquitectura) | hecho |
 | Firma de release: se mantiene la clave original (por decisión) | hecho |

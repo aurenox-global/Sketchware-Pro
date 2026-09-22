@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.5.6-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.5.7-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -133,6 +133,16 @@ Requirements:
 
 This repository is a personal fork. Every improvement is added here as it lands, and the
 [website](https://aurenox-global.github.io/Sketchware-Pro/) is updated at the same time.
+
+### 2026-09-22 — code navigation: go to definition and find usages (IDE phase 4)
+
+- **The editor can now jump between files.** "Go to definition" and "Find usages" in the editor menu resolve
+  the symbol under the cursor across **all the project's sources** (not just the file you have open) and open the
+  result; when there are several matches you get a chooser with file, line and a preview.
+- The symbol index now records the **location** of every declaration (file + line), and the navigation goes
+  through the LSP scaffolding that was already in the repo (`pro.sketchware.lsp`): a new project-wide provider
+  with the existing single-file provider as fallback, plus timeout and background execution.
+- Version **v7.0.5.7** (versionCode 157).
 
 ### 2026-09-22 — SDK and library completions (IDE phase 3)
 
@@ -258,7 +268,8 @@ This repository is a personal fork. Every improvement is added here as it lands,
 | In-app IDE: project-symbol autocompletion (phase 1) | done |
 | In-app IDE: ECJ live diagnostics (phase 2) | done |
 | In-app IDE: SDK and library completions (phase 3) | done |
-| In-app IDE: navigation (go to definition / find usages, phase 4) | next |
+| In-app IDE: navigation (go to definition / find usages, phase 4) | done |
+| In-app IDE: quick fixes over diagnostics (phase 5) | next |
 | R8 running in CI (blocked by the `bundletool` jar) | blocked |
 | ABI splits (one APK per architecture) | done |
 | Release signing keeps the original key (on purpose) | done |

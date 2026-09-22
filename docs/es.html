@@ -37,14 +37,14 @@
 
   <!-- ============================================================ hero -->
   <section class="hero" style="border-top:none">
-    <div class="tag">● v7.0.5.6 · versionCode 156 · source-available</div>
+    <div class="tag">● v7.0.5.7 · versionCode 157 · source-available</div>
     <h1>Crea apps Android reales<br><span class="accent">desde tu móvil.</span></h1>
     <p class="lead">
       Sketchware Pro es un IDE de Android que funciona sobre Android: arrastra bloques, escribe Java o Kotlin,
       compila en el propio dispositivo y obtén un APK instalable — sin necesidad de ordenador.
     </p>
     <div class="btns">
-      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.6" target="_blank" rel="noopener">⬇ Descargar APK</a>
+      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.7" target="_blank" rel="noopener">⬇ Descargar APK</a>
       <a class="btn ghost" href="https://github.com/aurenox-global/Sketchware-Pro" target="_blank" rel="noopener">Ver el código en GitHub</a>
     </div>
 
@@ -161,6 +161,15 @@
         Verificado con <code>apksigner</code>: los cuatro APK por arquitectura llevan esa huella. La keystore
         privada de 4096 bits queda guardada en <code>~/.android-keys/sketchware-pro/release.jks</code> para el día
         en que se quiera una identidad de distribución real.</p>
+      </div>
+
+      <div class="item done">
+        <span class="when">2026-09-22 · editor</span>
+        <h3>Ir a definicion y buscar usos <span class="pill ok">hecho</span></h3>
+        <p>El editor ya salta entre ficheros: "Go to definition" y "Find usages" resuelven el simbolo bajo el cursor
+        en <strong>todas las fuentes del proyecto</strong> y abren el resultado, con selector cuando hay varias
+        coincidencias. El indice guarda fichero y linea de cada declaracion, y la navegacion corre sobre el
+        andamiaje LSP que ya tenia el repo. Version <strong>v7.0.5.7</strong>.</p>
       </div>
 
       <div class="item done">
@@ -337,7 +346,8 @@
           <tr><td>IDE dentro de la app: autocompletado con simbolos del proyecto (fase 1)</td><td><span class="pill ok">hecho</span></td></tr>
           <tr><td>IDE dentro de la app: diagnosticos en vivo con ECJ (fase 2)</td><td><span class="pill ok">hecho</span></td></tr>
           <tr><td>IDE dentro de la app: completado del SDK y librerias (fase 3)</td><td><span class="pill ok">hecho</span></td></tr>
-          <tr><td>IDE dentro de la app: navegacion, ir a definicion / buscar usos (fase 4)</td><td><span class="pill warn">siguiente</span></td></tr>
+          <tr><td>IDE dentro de la app: navegacion, ir a definicion / buscar usos (fase 4)</td><td><span class="pill ok">hecho</span></td></tr>
+          <tr><td>IDE dentro de la app: quick fixes sobre los diagnosticos (fase 5)</td><td><span class="pill warn">siguiente</span></td></tr>
           <tr><td>R8 funcionando en CI (bloqueado por el jar de <code>bundletool</code>)</td><td><span class="pill warn">bloqueado</span></td></tr>
           <tr><td>ABI splits (un APK por arquitectura)</td><td><span class="pill ok">hecho</span></td></tr>
           <tr><td>Traducciones, APIs deprecadas, cobertura de tests</td><td><span class="pill info">planificado</span></td></tr>
