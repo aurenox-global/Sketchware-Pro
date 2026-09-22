@@ -37,14 +37,14 @@
 
   <!-- ============================================================ hero -->
   <section class="hero" style="border-top:none">
-    <div class="tag">● v7.0.5.9 · versionCode 159 · source-available</div>
+    <div class="tag">● v7.0.6.0 · versionCode 160 · source-available</div>
     <h1>Crea apps Android reales<br><span class="accent">desde tu móvil.</span></h1>
     <p class="lead">
       Sketchware Pro es un IDE de Android que funciona sobre Android: arrastra bloques, escribe Java o Kotlin,
       compila en el propio dispositivo y obtén un APK instalable — sin necesidad de ordenador.
     </p>
     <div class="btns">
-      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.9" target="_blank" rel="noopener">⬇ Descargar APK</a>
+      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.6.0" target="_blank" rel="noopener">⬇ Descargar APK</a>
       <a class="btn ghost" href="https://github.com/aurenox-global/Sketchware-Pro" target="_blank" rel="noopener">Ver el código en GitHub</a>
     </div>
 
@@ -171,6 +171,16 @@
         clases del SDK y de las librerias. El resaltado y el indentado siguen delegando en el lenguaje TextMate de
         Kotlin. Los diagnosticos de Kotlin necesitan el compilador de Kotlin y llegaran en una fase aparte. Version
         <strong>v7.0.5.9</strong>.</p>
+      </div>
+
+      <div class="item done">
+        <span class="when">2026-09-22 · arreglo</span>
+        <h3>La vista previa de layouts ya no sale en blanco <span class="pill ok">arreglado</span></h3>
+        <p>Los disenos hechos con elementos View (AndroidX, widgets) mostraban la vista previa en blanco: iban por el
+        renderizador del editor de diseno, que devolvia una raiz vacia cuando el nombre del layout no aparecia en los
+        datos del proyecto. Ahora todos los layouts se construyen con el constructor de vistas reales (solo necesita
+        el XML), con el renderizador nativo como reserva y un mensaje visible si ambos fallan. Version
+        <strong>v7.0.6.0</strong>.</p>
       </div>
 
       <div class="item done">

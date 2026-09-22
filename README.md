@@ -134,6 +134,17 @@ Requirements:
 This repository is a personal fork. Every improvement is added here as it lands, and the
 [website](https://aurenox-global.github.io/Sketchware-Pro/) is updated at the same time.
 
+### 2026-09-22 — layout preview fixed for View-based designs
+
+- **The layout preview no longer shows a blank screen.** Designs built with View elements (AndroidX, widgets) went
+  through the design editor's native renderer, which asks the project's internal data for the layout's root
+  (`view_root`); when the layout name did not match an entry it returned an **empty root**, so nothing was drawn —
+  silently. Layouts with HTML/WebView used the real-views builder, which is why those looked fine.
+- Now **every** layout is built with the real-views builder (which works from the XML alone), with the native
+  renderer as fallback, and a visible message if both fail instead of a silent blank screen.
+- Version **v7.0.6.0** (versionCode 160), published as
+  [v7.0.6.0](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.6.0).
+
 ### 2026-09-22 — Kotlin support: completions in .kt files (IDE phase 6)
 
 - **The Kotlin editor now completes too.** `.kt` files finally get the same treatment as Java: suggestions from
@@ -299,6 +310,7 @@ This repository is a personal fork. Every improvement is added here as it lands,
 | R8 code shrinking (release builds) | done |
 | Resource shrinking (`res/raw/keep.xml`) | blocked |
 | Translations, deprecated APIs, test coverage | planned |
+| Layout preview blank for View-based designs | fixed |
 
 Known blockers, in detail:
 

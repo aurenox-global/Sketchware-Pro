@@ -37,14 +37,14 @@
 
   <!-- ============================================================ hero -->
   <section class="hero" style="border-top:none">
-    <div class="tag">● v7.0.5.9 · versionCode 159 · source-available</div>
+    <div class="tag">● v7.0.6.0 · versionCode 160 · source-available</div>
     <h1>Build real Android apps<br><span class="accent">from your phone.</span></h1>
     <p class="lead">
       Sketchware Pro is an Android IDE that runs on Android itself: drag blocks, write Java or Kotlin,
       compile on the device and get an installable APK — no computer required.
     </p>
     <div class="btns">
-      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.9" target="_blank" rel="noopener">⬇ Download APK</a>
+      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.6.0" target="_blank" rel="noopener">⬇ Download APK</a>
       <a class="btn ghost" href="https://github.com/aurenox-global/Sketchware-Pro" target="_blank" rel="noopener">View source on GitHub</a>
     </div>
 
@@ -169,6 +169,15 @@
         (classes, objects, <code>fun</code>, <code>val</code>/<code>var</code>), Kotlin keywords, and the SDK and
         library classes. Highlighting and indenting still delegate to the TextMate Kotlin language. Kotlin
         diagnostics need the Kotlin compiler and will come in a later phase. Version <strong>v7.0.5.9</strong>.</p>
+      </div>
+
+      <div class="item done">
+        <span class="when">2026-09-22 · fix</span>
+        <h3>Layout preview no longer blank <span class="pill ok">fixed</span></h3>
+        <p>Designs built with View elements (AndroidX, widgets) showed a blank preview: they went through the design
+        editor's renderer, which returned an empty root when the layout name was not found in the project data.
+        Now every layout is built with the real-views builder that works from the XML alone, with the native
+        renderer as fallback and a visible message if both fail. Version <strong>v7.0.6.0</strong>.</p>
       </div>
 
       <div class="item done">
