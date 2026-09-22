@@ -33,11 +33,15 @@ public final class JavaDiagnosticsAnalyzer {
         public final int line;
         public final int severity;
         public final String message;
+        /** Nombres completos de clase que podrian resolver un tipo no resuelto (para "importar"). */
+        public final List<String> importCandidates;
 
-        Problem(int line, int severity, String message) {
+        Problem(int line, int severity, String message, List<String> importCandidates) {
             this.line = line;
             this.severity = severity;
             this.message = message;
+            this.importCandidates = importCandidates == null
+                    ? Collections.emptyList() : importCandidates;
         }
     }
 
@@ -52,6 +56,15 @@ public final class JavaDiagnosticsAnalyzer {
      */
     private static final Pattern PROBLEM_PATTERN = Pattern.compile(
             "(\\d+)\\. (ERROR|WARNING) in ([^\\n]*?) \\(at line (\\d+)\\)\\s*\\n\\s*([^\\n]*)");
+
+    /**
+     * Mensajes de ECJ para tipos que no encuentra, p. ej. "Button cannot be resolved to a type".
+     * De ahi sacamos el nombre simple que buscamos en el classpath para ofrecer el import.
+     */
+    private static final Pattern UNRESOLVED_TYPE_PATTERN = Pattern.compile(
+            "^([A-Z][\\w$]*) cannot be resolved(?: to a type)?$");
+
+    private static final int MAX_IMPORT_CANDIDATES = 3;
 
     private static final String TAG = "JavaDiagnostics";
 
@@ -115,7 +128,56 @@ public final class JavaDiagnosticsAnalyzer {
             return Collections.emptyList();
         }
 
-        return parse(errBuffer.toString(), tempSource.getAbsolutePath());
+        return enrichWithImportCandidates(context, scId, parse(errBuffer.toString(), tempSource.getAbsolutePath()));
+    }
+
+    /** Anade, a los problemas de tipos no resueltos, las clases del classpath que los resolverian. */
+    private static List<Problem> enrichWithImportCandidates(Context context, String scId, List<Problem> problems) {
+        if (problems.isEmpty()) {
+            return problems;
+        }
+        List<Problem> enriched = new ArrayList<>(problems.size());
+        for (Problem problem : problems) {
+            List<String> candidates = importCandidates(context, scId, problem.message);
+            enriched.add(candidates.isEmpty()
+                    ? problem
+                    : new Problem(problem.line, problem.severity, problem.message, candidates));
+        }
+        return enriched;
+    }
+
+    private static List<String> importCandidates(Context context, String scId, String message) {
+        if (context == null || message == null || message.isEmpty()) {
+            return Collections.emptyList();
+        }
+        Matcher matcher = UNRESOLVED_TYPE_PATTERN.matcher(message.trim());
+        if (!matcher.find()) {
+            return Collections.emptyList();
+        }
+        String simpleName = matcher.group(1);
+        String suffix = "." + simpleName;
+
+        List<String> candidates = new ArrayList<>();
+        try {
+            collectCandidates(SdkSymbolIndex.getSdkClasses(context), suffix, candidates);
+            if (candidates.size() < MAX_IMPORT_CANDIDATES) {
+                collectCandidates(SdkSymbolIndex.getLibraryClasses(context, scId), suffix, candidates);
+            }
+        } catch (Throwable ignored) {
+            // Sin indice: nos quedamos sin sugerencia de import.
+        }
+        return candidates;
+    }
+
+    private static void collectCandidates(List<String> classNames, String suffix, List<String> out) {
+        for (String fullName : classNames) {
+            if (out.size() >= MAX_IMPORT_CANDIDATES) {
+                return;
+            }
+            if (fullName.endsWith(suffix) && !out.contains(fullName)) {
+                out.add(fullName);
+            }
+        }
     }
 
     /** Classpath del proyecto: android.jar, lambda stubs y las librerias locales del proyecto. */
@@ -171,7 +233,7 @@ public final class JavaDiagnosticsAnalyzer {
                     ? DiagnosticRegion.SEVERITY_ERROR
                     : DiagnosticRegion.SEVERITY_WARNING;
             String message = matcher.group(5) == null ? "" : matcher.group(5).trim();
-            problems.add(new Problem(line, severity, message));
+            problems.add(new Problem(line, severity, message, Collections.emptyList()));
             if (problems.size() >= 200) {
                 break;
             }

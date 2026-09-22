@@ -55,8 +55,10 @@ import io.github.rosemoe.sora.event.SelectionChangeEvent;
 import io.github.rosemoe.sora.lang.diagnostic.DiagnosticDetail;
 import io.github.rosemoe.sora.lang.diagnostic.DiagnosticRegion;
 import io.github.rosemoe.sora.lang.diagnostic.DiagnosticsContainer;
+import io.github.rosemoe.sora.lang.diagnostic.Quickfix;
 import io.github.rosemoe.sora.langs.textmate.TextMateColorScheme;
 import io.github.rosemoe.sora.text.CharPosition;
+import io.github.rosemoe.sora.text.Content;
 import io.github.rosemoe.sora.widget.CodeEditor;
 import io.github.rosemoe.sora.widget.component.EditorAutoCompletion;
 import io.github.rosemoe.sora.widget.schemes.EditorColorScheme;
@@ -870,10 +872,56 @@ public class SrcCodeEditor extends BaseAppCompatActivity {
             end = Math.max(end, start + 1);
 
             DiagnosticRegion region = new DiagnosticRegion(start, end, (short) problem.severity);
-            region.detail = new DiagnosticDetail(problem.message, problem.message, null, null);
+            region.detail = new DiagnosticDetail(problem.message, problem.message,
+                    buildQuickfixes(editor, problem), null);
             container.addDiagnostic(region);
         }
         editor.setDiagnostics(container);
+    }
+
+    /**
+     * Acciones rapidas de un diagnostico. De momento, cuando ECJ no resuelve un tipo, ofrecemos
+     * importar la clase que lo resolveria (segun el indice del SDK y de las librerias).
+     */
+    private static List<Quickfix> buildQuickfixes(CodeEditor editor, JavaDiagnosticsAnalyzer.Problem problem) {
+        if (problem.importCandidates == null || problem.importCandidates.isEmpty()) {
+            return null;
+        }
+        long documentVersion = editor.getText().getDocumentVersion();
+        List<Quickfix> quickfixes = new ArrayList<>();
+        for (String candidate : problem.importCandidates) {
+            quickfixes.add(new Quickfix("Importar " + candidate, documentVersion,
+                    () -> insertImport(editor, candidate)));
+        }
+        return quickfixes;
+    }
+
+    /** Inserta {@code import x;} despues de la linea del paquete (o al principio si no hay paquete). */
+    private static void insertImport(CodeEditor editor, String fullName) {
+        String content = editor.getText().toString();
+        String[] lines = content.split("\n", -1);
+
+        int insertLine = 0;
+        for (int i = 0; i < lines.length; i++) {
+            String trimmed = lines[i].trim();
+            if (trimmed.startsWith("package ")) {
+                insertLine = i + 1;
+                break;
+            }
+            if (!trimmed.isEmpty() && !trimmed.startsWith("//") && !trimmed.startsWith("/*")
+                    && !trimmed.startsWith("*")) {
+                insertLine = i;
+                break;
+            }
+        }
+
+        Content text = editor.getText();
+        text.beginBatchEdit();
+        try {
+            text.insert(insertLine, 0, "import " + fullName + ";\n");
+        } finally {
+            text.endBatchEdit();
+        }
     }
 
     /** Indice del primer caracter de una linea (1-based), o -1 si esa linea no existe. */
