@@ -51,10 +51,12 @@ import javax.xml.xpath.XPathFactory;
 
 import a.a.a.Lx;
 import io.github.rosemoe.sora.event.ContentChangeEvent;
+import io.github.rosemoe.sora.event.SelectionChangeEvent;
 import io.github.rosemoe.sora.lang.diagnostic.DiagnosticDetail;
 import io.github.rosemoe.sora.lang.diagnostic.DiagnosticRegion;
 import io.github.rosemoe.sora.lang.diagnostic.DiagnosticsContainer;
 import io.github.rosemoe.sora.langs.textmate.TextMateColorScheme;
+import io.github.rosemoe.sora.text.CharPosition;
 import io.github.rosemoe.sora.widget.CodeEditor;
 import io.github.rosemoe.sora.widget.component.EditorAutoCompletion;
 import io.github.rosemoe.sora.widget.schemes.EditorColorScheme;
@@ -68,6 +70,14 @@ import mod.jbk.code.CodeEditorColorSchemes;
 import mod.jbk.code.CodeEditorLanguages;
 import mod.jbk.code.JavaDiagnosticsAnalyzer;
 import mod.jbk.code.ProjectJavaLanguage;
+import pro.sketchware.lsp.LocalSymbolNavigationProvider;
+import pro.sketchware.lsp.LspLanguage;
+import pro.sketchware.lsp.LspNavigationCoordinator;
+import pro.sketchware.lsp.LspNavigationLocation;
+import pro.sketchware.lsp.LspNavigationRequest;
+import pro.sketchware.lsp.LspNavigationResult;
+import pro.sketchware.lsp.LspSessionConfig;
+import pro.sketchware.lsp.ProjectSymbolNavigationProvider;
 import pro.sketchware.R;
 import pro.sketchware.activities.ai.LocalAiManagerActivity;
 import pro.sketchware.ai.LocalAiConfig;
@@ -85,6 +95,8 @@ import pro.sketchware.utility.UI;
 
 public class SrcCodeEditor extends BaseAppCompatActivity {
     public static final String FLAG_FROM_ANDROID_MANIFEST = "from_android_manifest";
+    /** Extra con la linea a la que saltar al abrir (0-based), usada por la navegacion de codigo. */
+    public static final String EXTRA_GOTO_LINE = "goto_line";
     public static final List<Pair<String, Class<? extends EditorColorScheme>>> KNOWN_COLOR_SCHEMES = List.of(
             new Pair<>("Default", EditorColorScheme.class),
             new Pair<>("GitHub", SchemeGitHub.class),
@@ -103,6 +115,9 @@ public class SrcCodeEditor extends BaseAppCompatActivity {
     private final Handler diagnosticsHandler = new Handler(Looper.getMainLooper());
     private final java.util.concurrent.atomic.AtomicBoolean diagnosticsRunning = new java.util.concurrent.atomic.AtomicBoolean(false);
     private Runnable pendingDiagnostics;
+    /** Ultima posicion del cursor (linea 0-based y columna), para la navegacion de codigo. */
+    private int caretLine;
+    private int caretColumn;
     private String beforeContent = "";
     private CodeEditorHsBinding binding;
     private boolean fromAndroidManifest;
@@ -331,6 +346,19 @@ public class SrcCodeEditor extends BaseAppCompatActivity {
             beforeContent = FileUtil.readFile(getIntent().getStringExtra("content"));
         binding.editor.setText(beforeContent);
 
+        // Si venimos de "ir a definicion" o "buscar usos", colocamos el cursor en la linea pedida.
+        int gotoLine = getIntent().getIntExtra(EXTRA_GOTO_LINE, -1);
+        if (gotoLine >= 0) {
+            final int targetLine = gotoLine;
+            binding.editor.postDelayed(() -> {
+                int lineCount = binding.editor.getText().getLineCount();
+                if (lineCount > 0) {
+                    binding.editor.setSelection(Math.min(targetLine, lineCount - 1), 0);
+                    binding.editor.ensureSelectionVisible();
+                }
+            }, 300);
+        }
+
         if (title.endsWith(".java")) {
             binding.editor.setEditorLanguage(new ProjectJavaLanguage(currentScId));
             languageId = 0;
@@ -433,6 +461,8 @@ public class SrcCodeEditor extends BaseAppCompatActivity {
             toolbarMenu.add(Menu.NONE, Menu.NONE, Menu.NONE, "Select theme");
             toolbarMenu.add(Menu.NONE, Menu.NONE, Menu.NONE, "Auto complete").setCheckable(true).setChecked(local_pref.getBoolean("act_ac", true));
             toolbarMenu.add(Menu.NONE, Menu.NONE, Menu.NONE, "Auto complete symbol pair").setCheckable(true).setChecked(local_pref.getBoolean("act_acsp", true));
+            toolbarMenu.add(Menu.NONE, Menu.NONE, Menu.NONE, "Go to definition");
+            toolbarMenu.add(Menu.NONE, Menu.NONE, Menu.NONE, "Find usages");
 
             binding.toolbar.setOnMenuItemClickListener(item -> {
                 String title1 = item.getTitle().toString();
@@ -447,6 +477,14 @@ public class SrcCodeEditor extends BaseAppCompatActivity {
 
                     case "Save":
                         save();
+                        break;
+
+                    case "Go to definition":
+                        navigateToSymbol(true);
+                        break;
+
+                    case "Find usages":
+                        navigateToSymbol(false);
                         break;
 
                     case "Pretty print":
@@ -759,6 +797,13 @@ public class SrcCodeEditor extends BaseAppCompatActivity {
      */
     private void setupLiveDiagnostics(CodeEditor editor, String fileName) {
         editor.subscribeEvent(ContentChangeEvent.class, (event, source) -> scheduleDiagnostics(editor, fileName));
+        editor.subscribeEvent(SelectionChangeEvent.class, (event, source) -> {
+            CharPosition position = event.getLeft();
+            if (position != null) {
+                caretLine = position.line;
+                caretColumn = position.column;
+            }
+        });
         scheduleDiagnostics(editor, fileName);
 
         // Precalienta los indices de clases del SDK y de las librerias para que la primera
@@ -845,5 +890,82 @@ public class SrcCodeEditor extends BaseAppCompatActivity {
             index = next + 1;
         }
         return index;
+    }
+
+    // ------------------------------------------------------------------ IDE: navegacion de codigo
+
+    /**
+     * Resuelve el simbolo bajo el cursor con el indice del proyecto (con el buscador local del
+     * fichero como reserva) y abre el resultado: la definicion o los usos.
+     */
+    private void navigateToSymbol(boolean definition) {
+        String scId = currentScId;
+        String filePath = getIntent().getStringExtra("content");
+        if (scId == null || scId.isEmpty() || filePath == null || filePath.isEmpty()) {
+            android.widget.Toast.makeText(this, "Sin proyecto abierto", android.widget.Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        String content = binding.editor.getText().toString();
+        LspSessionConfig config = new LspSessionConfig(scId, filePath, LspLanguage.JAVA);
+        LspNavigationRequest request = new LspNavigationRequest(content, null, caretLine, caretColumn);
+        LspNavigationCoordinator coordinator = new LspNavigationCoordinator(
+                new ProjectSymbolNavigationProvider(),
+                new LocalSymbolNavigationProvider(),
+                8000);
+
+        android.widget.Toast.makeText(this, definition ? "Buscando definicion..." : "Buscando usos...",
+                android.widget.Toast.LENGTH_SHORT).show();
+
+        diagnosticsExecutor.execute(() -> {
+            LspNavigationResult result = definition
+                    ? coordinator.requestDefinition(config, request)
+                    : coordinator.requestReferences(config, request);
+            coordinator.dispose();
+            diagnosticsHandler.post(() -> showNavigationResult(result, definition));
+        });
+    }
+
+    private void showNavigationResult(LspNavigationResult result, boolean definition) {
+        List<LspNavigationLocation> locations = (result == null || result.locations == null)
+                ? Collections.emptyList() : result.locations;
+
+        if (locations.isEmpty()) {
+            android.widget.Toast.makeText(this,
+                    definition ? "No se ha encontrado la definicion" : "No se han encontrado usos",
+                    android.widget.Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (locations.size() == 1) {
+            openLocation(locations.get(0));
+            return;
+        }
+
+        String[] entries = new String[locations.size()];
+        for (int i = 0; i < locations.size(); i++) {
+            LspNavigationLocation location = locations.get(i);
+            entries[i] = new java.io.File(location.documentPath).getName()
+                    + ":" + (location.range.startLine + 1)
+                    + "\n" + location.preview;
+        }
+        new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle(definition ? "Definiciones" : "Usos (" + locations.size() + ")")
+                .setItems(entries, (dialog, which) -> openLocation(locations.get(which)))
+                .show();
+    }
+
+    /** Abre otro fichero del proyecto en el editor, colocando el cursor en la linea indicada. */
+    private void openLocation(LspNavigationLocation location) {
+        if (location == null || location.documentPath == null || location.documentPath.isEmpty()) {
+            return;
+        }
+        Intent intent = new Intent(getApplicationContext(), SrcCodeEditor.class);
+        intent.putExtra("title", new java.io.File(location.documentPath).getName());
+        intent.putExtra("content", location.documentPath);
+        if (currentScId != null) {
+            intent.putExtra("sc_id", currentScId);
+        }
+        intent.putExtra(EXTRA_GOTO_LINE, location.range.startLine);
+        startActivity(intent);
     }
 }
