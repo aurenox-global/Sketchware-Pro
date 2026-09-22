@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.5.4-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.5.5-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -134,6 +134,17 @@ Requirements:
 This repository is a personal fork. Every improvement is added here as it lands, and the
 [website](https://aurenox-global.github.io/Sketchware-Pro/) is updated at the same time.
 
+### 2026-09-22 — live Java diagnostics (IDE phase 2)
+
+- **Errors and warnings are underlined as you type.** 1.2 s after you stop typing, the app compiles *only the
+  file you are editing* with the Eclipse compiler (ECJ) it already bundles, using the project classpath
+  (`android.jar` + `core-lambda-stubs` + your local libraries) and `files/java` as source path. Tapping the mark
+  shows the compiler message.
+- The analysis runs off the UI thread, never piles up (one in flight at a time, stale results discarded), and
+  fails silently: if anything goes wrong, nothing is underlined and the editor behaves as before.
+- Version **v7.0.5.5** (versionCode 155), published as
+  [v7.0.5.5](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.5).
+
 ### 2026-09-22 — first slice of the in-app IDE: project-aware autocompletion
 
 - **The Java editor now completes your project's own symbols:** while you type it suggests the classes, methods
@@ -234,7 +245,8 @@ This repository is a personal fork. Every improvement is added here as it lands,
 | CI green: Android CI + Verification Baseline | done |
 | In-app GitHub links point to this fork | done |
 | In-app IDE: project-symbol autocompletion (phase 1) | done |
-| In-app IDE: ECJ live diagnostics (phase 2) | next |
+| In-app IDE: ECJ live diagnostics (phase 2) | done |
+| In-app IDE: SDK and library completions (phase 3) | next |
 | R8 running in CI (blocked by the `bundletool` jar) | blocked |
 | ABI splits (one APK per architecture) | done |
 | Release signing keeps the original key (on purpose) | done |
