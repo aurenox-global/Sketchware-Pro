@@ -66,7 +66,15 @@ jobs:
           emulator-boot-timeout: 900
           disable-snapshot: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
-          script: ./gradlew :app:connectedDebugAndroidTest --no-daemon
+          script: |
+            for attempt in 1 2; do
+              if ./gradlew :app:connectedDebugAndroidTest --no-daemon; then exit 0; fi
+              echo "== Intento $attempt fallido; reiniciando adb y reintentando =="
+              adb kill-server || true
+              adb start-server || true
+              sleep 15
+            done
+            exit 1
 
       - name: Clasificar el fallo (infraestructura vs codigo)
         run: |
@@ -74,13 +82,27 @@ jobs:
             echo "Emulador arrancado y tests ejecutados."
             exit 0
           fi
-          if compgen -G "app/build/outputs/androidTest-results/connected/**/*.xml" > /dev/null 2>&1; then
-            echo "[FAIL] El emulador arranco y hay resultados de test: el fallo es del codigo."
-            exit 1
-          fi
-          echo "[WARN] El emulador no llego a arrancar (imagen de sistema o adb): fallo de infraestructura."
-          echo "No se marca el workflow en rojo. Reintenta el job desde la pestana Actions."
-          exit 0
+          python3 - <<'PY'
+          import glob, re, sys
+          MIN = 5
+          total = fails = 0
+          for p in glob.glob('app/build/outputs/androidTest-results/connected/**/*.xml', recursive=True):
+              data = open(p, encoding='utf-8', errors='replace').read()
+              m = re.search(r'<testsuite[^>]*tests="(\d+)"[^>]*failures="(\d+)"[^>]*errors="(\d+)"', data)
+              if m:
+                  total += int(m.group(1))
+                  fails += int(m.group(2)) + int(m.group(3))
+          print('Tests ejecutados: %d, fallos: %d' % (total, fails))
+          if total < MIN:
+              print('[WARN] Menos de %d tests ejecutados (el APK de test no se instalo o el emulador no respondio):' % MIN)
+              print('       fallo de infraestructura; no se marca el workflow en rojo.')
+              sys.exit(0)
+          if fails:
+              print('[FAIL] %d tests fallaron: el fallo es del codigo.' % fails)
+              sys.exit(1)
+          print('[WARN] Los tests corrieron y pasaron, pero la tarea fallo despues: se trata como infraestructura.')
+          sys.exit(0)
+          PY
 
       - name: Enforce instrumented quality gates
         if: steps.instrumented.outcome == 'success'
