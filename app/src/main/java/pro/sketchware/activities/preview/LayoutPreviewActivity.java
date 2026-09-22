@@ -176,14 +176,12 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
     }
 
     private void renderLayout(String layoutName, String xml) {
-        // Layouts with a WebView use the real-views builder so HTML/https content works.
-        // Layouts without one use the design editor's native renderer for pixel-perfect looks.
-        if (xmlContainsWebView(xml)) {
-            if (!tryInflateRealLayout(layoutName, xml)) {
-                renderWithViewPane(layoutName, xml);
-            }
-        } else {
-            renderWithViewPane(layoutName, xml);
+        // Construimos siempre con el constructor de vistas reales: trabaja SOLO con el XML (no depende de
+        // los datos internos del proyecto) y ya soportaba WebView/HTML. Antes, los layouts sin WebView iban
+        // por el renderizador del editor de diseno, que si no encuentra el nombre del layout en los datos
+        // del proyecto pinta una raiz vacia: de ahi las vistas previas en blanco.
+        if (!tryInflateRealLayout(layoutName, xml) && !renderWithViewPane(layoutName, xml)) {
+            SketchwareUtil.toastError("No se pudo generar la vista previa de este layout");
         }
     }
 
@@ -629,7 +627,7 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
         view.setLayoutParams(params);
     }
 
-    private void renderWithViewPane(String layoutName, String xml) {
+    private boolean renderWithViewPane(String layoutName, String xml) {
         try {
             pane.removeAllViews();
             pane.updateRootLayout(scId, layoutName);
@@ -638,8 +636,10 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
             loadViews(beans);
             wirePaneNavigation(layoutName);
             debug("Preview nativa OK · vistas: " + beans.size());
+            return true;
         } catch (Exception e) {
             debug("Render error: " + e.getMessage());
+            return false;
         }
     }
 
