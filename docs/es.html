@@ -37,14 +37,14 @@
 
   <!-- ============================================================ hero -->
   <section class="hero" style="border-top:none">
-    <div class="tag">● v7.0.5.7 · versionCode 157 · source-available</div>
+    <div class="tag">● v7.0.5.8 · versionCode 158 · source-available</div>
     <h1>Crea apps Android reales<br><span class="accent">desde tu móvil.</span></h1>
     <p class="lead">
       Sketchware Pro es un IDE de Android que funciona sobre Android: arrastra bloques, escribe Java o Kotlin,
       compila en el propio dispositivo y obtén un APK instalable — sin necesidad de ordenador.
     </p>
     <div class="btns">
-      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.7" target="_blank" rel="noopener">⬇ Descargar APK</a>
+      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.8" target="_blank" rel="noopener">⬇ Descargar APK</a>
       <a class="btn ghost" href="https://github.com/aurenox-global/Sketchware-Pro" target="_blank" rel="noopener">Ver el código en GitHub</a>
     </div>
 
@@ -161,6 +161,15 @@
         Verificado con <code>apksigner</code>: los cuatro APK por arquitectura llevan esa huella. La keystore
         privada de 4096 bits queda guardada en <code>~/.android-keys/sketchware-pro/release.jks</code> para el día
         en que se quiera una identidad de distribución real.</p>
+      </div>
+
+      <div class="item done">
+        <span class="when">2026-09-22 · editor</span>
+        <h3>Quick fix: importar la clase que falta <span class="pill ok">hecho</span></h3>
+        <p>Los diagnosticos ya arreglan lo que avisan: cuando un tipo no se resuelve, el diagnostico ofrece
+        <strong>"Importar android.widget.Button"</strong> (o la clase que coincida en el SDK y tus librerias) y al
+        elegirla se inserta el <code>import</code> despues de la linea del <code>package</code>. Las acciones rapidas van
+        ligadas a la version del documento, asi que las obsoletas se descartan solas. Version <strong>v7.0.5.8</strong>.</p>
       </div>
 
       <div class="item done">
@@ -347,7 +356,8 @@
           <tr><td>IDE dentro de la app: diagnosticos en vivo con ECJ (fase 2)</td><td><span class="pill ok">hecho</span></td></tr>
           <tr><td>IDE dentro de la app: completado del SDK y librerias (fase 3)</td><td><span class="pill ok">hecho</span></td></tr>
           <tr><td>IDE dentro de la app: navegacion, ir a definicion / buscar usos (fase 4)</td><td><span class="pill ok">hecho</span></td></tr>
-          <tr><td>IDE dentro de la app: quick fixes sobre los diagnosticos (fase 5)</td><td><span class="pill warn">siguiente</span></td></tr>
+          <tr><td>IDE dentro de la app: quick fixes sobre los diagnosticos (fase 5)</td><td><span class="pill ok">hecho</span></td></tr>
+          <tr><td>IDE dentro de la app: soporte de Kotlin (fase 6)</td><td><span class="pill warn">siguiente</span></td></tr>
           <tr><td>R8 funcionando en CI (bloqueado por el jar de <code>bundletool</code>)</td><td><span class="pill warn">bloqueado</span></td></tr>
           <tr><td>ABI splits (un APK por arquitectura)</td><td><span class="pill ok">hecho</span></td></tr>
           <tr><td>Traducciones, APIs deprecadas, cobertura de tests</td><td><span class="pill info">planificado</span></td></tr>

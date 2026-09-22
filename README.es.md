@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.5.7-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.5.8-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -133,6 +133,16 @@ Requisitos:
 
 Este repositorio es un fork personal. Cada mejora se añade aquí según entra, y el
 [sitio web](https://aurenox-global.github.io/Sketchware-Pro/es.html) se actualiza a la vez.
+
+### 2026-09-22 — quick fix: importar la clase que falta (fase 5 del IDE)
+
+- **Los diagnosticos ya no solo avisan: tambien arreglan.** Cuando el compilador no resuelve un tipo
+  (`Button cannot be resolved to a type`), el diagnostico ofrece una accion rapida:
+  **"Importar android.widget.Button"**, resuelta contra el SDK y las librerias del proyecto. Al elegirla se
+  inserta el `import` despues de la linea del `package`.
+- Las acciones rapidas van asociadas al diagnostico con la version del documento, asi que las obsoletas se
+  descartan solas.
+- Version **v7.0.5.8** (versionCode 158).
 
 ### 2026-09-22 — navegacion de codigo: ir a definicion y buscar usos (fase 4 del IDE)
 
@@ -268,7 +278,8 @@ Este repositorio es un fork personal. Cada mejora se añade aquí según entra, 
 | IDE dentro de la app: diagnosticos en vivo con ECJ (fase 2) | hecho |
 | IDE dentro de la app: completado del SDK y librerias (fase 3) | hecho |
 | IDE dentro de la app: navegacion (ir a definicion / buscar usos, fase 4) | hecho |
-| IDE dentro de la app: quick fixes sobre los diagnosticos (fase 5) | siguiente |
+| IDE dentro de la app: quick fixes sobre los diagnosticos (fase 5) | hecho |
+| IDE dentro de la app: soporte de Kotlin (fase 6) | siguiente |
 | R8 funcionando en CI (bloqueado por el jar de `bundletool`) | bloqueado |
 | ABI splits (un APK por arquitectura) | hecho |
 | Firma de release: se mantiene la clave original (por decisión) | hecho |

@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.5.7-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.5.8-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -133,6 +133,15 @@ Requirements:
 
 This repository is a personal fork. Every improvement is added here as it lands, and the
 [website](https://aurenox-global.github.io/Sketchware-Pro/) is updated at the same time.
+
+### 2026-09-22 — quick fix: import the class that is missing (IDE phase 5)
+
+- **The diagnostics now do something about the error.** When the compiler cannot resolve a type
+  (`Button cannot be resolved to a type`), the diagnostic offers a quick fix: **"Importar android.widget.Button"**,
+  resolved against the SDK and the project's libraries. Choosing it inserts the `import` after the `package` line.
+- Quick fixes are attached to the diagnostic with the editor's document version, so stale ones are discarded
+  automatically.
+- Version **v7.0.5.8** (versionCode 158).
 
 ### 2026-09-22 — code navigation: go to definition and find usages (IDE phase 4)
 
@@ -269,7 +278,8 @@ This repository is a personal fork. Every improvement is added here as it lands,
 | In-app IDE: ECJ live diagnostics (phase 2) | done |
 | In-app IDE: SDK and library completions (phase 3) | done |
 | In-app IDE: navigation (go to definition / find usages, phase 4) | done |
-| In-app IDE: quick fixes over diagnostics (phase 5) | next |
+| In-app IDE: quick fixes over diagnostics (phase 5) | done |
+| In-app IDE: Kotlin support (phase 6) | next |
 | R8 running in CI (blocked by the `bundletool` jar) | blocked |
 | ABI splits (one APK per architecture) | done |
 | Release signing keeps the original key (on purpose) | done |
