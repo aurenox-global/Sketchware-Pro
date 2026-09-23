@@ -132,14 +132,20 @@ object FlutterToolchainUi {
     /** Igual que [statusLine] pero reutilizando un estado ya calculado. */
     @JvmStatic
     fun statusLine(context: Context, state: State): String {
-        return if (state.installed) {
-            context.getString(
+        return when {
+            state.installed -> context.getString(
                 R.string.flutter_discoverability_row_installed,
                 state.dartVersion ?: "-",
                 FlutterToolchainManager.formatBytes(state.installedBytes)
             )
-        } else {
-            context.getString(
+            // Estado intermedio: los datos del SDK Dart estan extraidos, pero aun no se puede
+            // compilar (p. ej. los ejecutables de esta ABI no arrancan). No es "no instalado".
+            state.dartVersion != null -> context.getString(
+                R.string.flutter_discoverability_row_partial,
+                state.dartVersion,
+                FlutterToolchainManager.formatBytes(state.installedBytes)
+            )
+            else -> context.getString(
                 R.string.flutter_discoverability_row_missing,
                 FlutterToolchainManager.formatBytes(state.downloadBytes)
             )
@@ -178,6 +184,7 @@ object FlutterToolchainUi {
             val size = FlutterToolchainManager.formatBytes(state.downloadBytes)
             message.append("\n\n").append(context.getString(R.string.flutter_toolchain_consent_download_size, size))
             message.append("\n").append(context.getString(R.string.flutter_toolchain_consent_network, size))
+            message.append("\n").append(context.getString(R.string.flutter_toolchain_consent_disk_note))
         } else if (state.installedBytes > 0L) {
             message.append("\n\n").append(
                 context.getString(

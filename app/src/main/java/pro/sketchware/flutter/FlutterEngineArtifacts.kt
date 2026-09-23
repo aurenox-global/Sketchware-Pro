@@ -250,6 +250,8 @@ object FlutterEngineArtifacts {
                 progress("No se pudo crear ${target.absolutePath}")
                 return false
             }
+            // Los archivos de pub.dev van SIN prefijo de directorio; `extractTarGz` lo tolera
+            // (reintenta sin prefijo si el indicado no encaja en ninguna entrada).
             val entries = extractTarGz(
                 tarball = cache,
                 stripPrefix = "${dependency.directoryName}/",
@@ -451,6 +453,26 @@ object FlutterEngineArtifacts {
      * @return numero de ficheros escritos, o `-1` si el tar estaba corrupto.
      */
     private fun extractTarGz(
+        tarball: File,
+        stripPrefix: String,
+        targetDir: File,
+        mapRelativePath: (String) -> String?,
+        progress: (String) -> Unit,
+    ): Int {
+        val written = extractTarGzPass(tarball, stripPrefix, targetDir, mapRelativePath, progress)
+        if (written != 0 || stripPrefix.isEmpty()) {
+            return written
+        }
+        // Los tarballs de **pub.dev** no llevan directorio raiz: sus entradas son `lib/…`,
+        // `pubspec.yaml`, … (comprobado con `tar -tzf characters-1.4.1.tar.gz`), asi que con el
+        // prefijo `<paquete>-<version>/` no coincide ninguna entrada y se extraeria vacio. Visto en el
+        // emulador: "El paquete characters 1.4.1 no se extrajo bien". Se reintenta sin prefijo.
+        Log.w(TAG, "${tarball.name}: sin entradas con el prefijo '$stripPrefix'; se reintenta sin prefijo")
+        return extractTarGzPass(tarball, "", targetDir, mapRelativePath, progress)
+    }
+
+    /** Una pasada de extraccion; devuelve los ficheros escritos (0 si el prefijo no encaja). */
+    private fun extractTarGzPass(
         tarball: File,
         stripPrefix: String,
         targetDir: File,

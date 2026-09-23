@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.10.0-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.10.1-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -160,6 +160,35 @@ Este repositorio es un fork personal. Cada mejora se añade aquí según entra, 
 - **Coste:** los dos ejecutables empaquetados suman **10,18 MB** al APK `arm64-v8a`. Las otras ABIs no tienen
   backend AOT y lo dicen, en vez de fallar en silencio. El modo por defecto sigue siendo **debug/JIT**, esto
   continua siendo experimental y todavia no hay hot reload.
+- **v7.0.10.1 (versionCode 168) — el toolchain ya no dice "no instalado", y los nombres heredados de iconos se
+  distinguen.** El fallo del toolchain de Flutter era nuestro, no tuyo: la app comprobaba la instalacion **ejecutando**
+  `<filesDir>/flutter-toolchain/dart/bin/dart --version`, y SELinux prohibe ejecutar un ELF que vive en el directorio de
+  datos de la app (`execute_no_trans`, `error=13`, dominio `untrusted_app`), asi que el instalador abortaba **antes** de
+  bajar el engine y terminaba con **"Toolchain de Flutter no instalado"** despues de 91 MB. Ahora **"instalado" es un
+  criterio de datos** (marcador `installed.properties` + `gen_kernel_aot.dart.snapshot` + `dartdev_aot.dart.snapshot` +
+  `lib/_internal/vm_platform.dill`) y **"puede compilar" anade una sonda de ejecucion real** lanzada desde el
+  directorio de librerias nativas (`libdartaotruntime.so`), asi que `bin/dart` no se vuelve a ejecutar y todos los
+  mensajes dicen **la pieza, la ruta y la causa**. Verificado en un emulador arm64 API 34: la instalacion completa
+  (`.deb` de 91 MB + artefactos del engine) ahora acaba en **"Toolchain Flutter: instalado (Dart 3.13.4) · 813.7 MB"**,
+  y el estado intermedio tambien es honesto (`SDK Dart 3.13.4 extraido … pero NO listo para compilar`) en vez de un
+  falso "no instalado". **Un segundo bug, pre-existente, salio a la luz y quedo arreglado:** las dependencias de pub se
+  extraian con el prefijo `<paquete>-<version>/` que los tarballs de pub.dev **no** llevan, asi que se escribian 0
+  ficheros y la instalacion moria con *"El paquete characters 1.4.1 no se extrajo bien"*; ahora reintenta sin prefijo.
+  El dialogo de consentimiento ademas avisa del espacio real en disco (la descarga son ~307 MB, pero al extraerlo ocupa
+  ~800 MB). Honesto: la **compilacion completa** (pub get + build) dentro de la app no se pudo automatizar en el
+  emulador, asi que no se afirma; lo que **si** esta probado es que el binario empaquetado se ejecuta dentro del propio
+  proceso de la app. **Nombres heredados de iconos:** `ic_tune_white` (y su familia) no existe en **ninguna** fuente de
+  este IDE — se volcaron 2.382 drawables y el equivalente actual es `ic_tune_24`/`ic_mtrl_tune` —, asi que la vista
+  previa ahora resuelve esos nombres viejos como **ultimo recurso**, solo despues de proyecto, assets, librerias e IDE,
+  normalizando prefijos (`ic_`, `img_`, `icon_`) y sufijos de color/tamano; si hay coincidencia **unica** la usa y si
+  hay varias lo considera ambiguo y sigue en rojo. Y **nada en silencio**: grupo propio en el dialogo de detalle
+  (`Nombre heredado resuelto -> @drawable/ic_tune_white -> @drawable/ic_tune_24`), **barra ambar** informativa cuando
+  no hay fallos reales, y log. Medido: el caso real pasa de **2 bloques rojos (2.080 px) a 1 (1.040 px)** y la barra
+  dice `1 recurso no encontrado · 1 nombre heredado resuelto`; regresion intacta. Honesto: cubre los nombres cuyo
+  concepto sigue existiendo (~19/44 de las familias probadas); typos, mipmaps y conceptos sin icono actual siguen en
+  rojo. Pagina de la release: [v7.0.10.1](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.1).
+  Todos los detalles: [docs/flutter-consent.md](docs/flutter-consent.md) (estado/instalacion del toolchain) y
+  [docs/preview-fix.md](docs/preview-fix.md) (ronda 5).
 - **v7.0.10.0 (versionCode 167) — la descarga de Dart que no encontrabas, y la ronda 4 de la vista previa.** La queja
   era que el toolchain no aparecia por ningun lado, asi que el flag `FLUTTER_EXPERIMENTAL_ENABLE` ahora viene **activado
   por defecto** (quien ya lo haya cambiado conserva su valor), una **tarjeta "Flutter (Dart)"** en los ajustes del

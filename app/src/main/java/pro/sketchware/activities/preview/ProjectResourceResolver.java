@@ -87,6 +87,32 @@ public class ProjectResourceResolver {
     /** Resumen de donde se ha buscado (para el detalle del aviso). */
     private String searchedLocations = "";
 
+    /**
+     * Nombres heredados que NO existen con ese nombre pero que se han podido mapear a un drawable
+     * real del IDE (p.ej. {@code @drawable/ic_tune_white} -> {@code ic_tune_24}).
+     *
+     * Se guardan aparte de {@link #warningsByKind} a proposito: un nombre heredado resuelto NO es un
+     * fallo, pero la vista previa SI debe decirlo ("nada de sustituir en silencio"): el detalle
+     * distingue "resuelto por nombre heredado -> nombre real" de "no encontrado".
+     */
+    private final List<LegacyResolution> legacyResolutions = new ArrayList<>();
+
+    /** Un nombre heredado (Sketchware antiguo) mapeado a un drawable actual del IDE. */
+    public static final class LegacyResolution {
+        /** Como lo pedia el diseno, tal cual aparece en el XML (p.ej. "@drawable/ic_tune_white"). */
+        public final String original;
+        /** El drawable real del IDE que se ha dibujado (p.ej. "ic_tune_24"). */
+        public final String resolved;
+        /** La regla/variante que ha funcionado (p.ej. "ic_<base>_24", base "tune"). */
+        public final String rule;
+
+        LegacyResolution(String original, String resolved, String rule) {
+            this.original = original;
+            this.resolved = resolved;
+            this.rule = rule;
+        }
+    }
+
     private boolean colorsLoaded;
 
     public ProjectResourceResolver(Context context, String scId) {
@@ -117,8 +143,14 @@ public class ProjectResourceResolver {
         return searchedLocations;
     }
 
+    /** Nombres heredados resueltos a un drawable actual (para explicarlo en el aviso). */
+    public List<LegacyResolution> getLegacyResolutions() {
+        return new ArrayList<>(legacyResolutions);
+    }
+
     public void clearWarnings() {
         warningsByKind.clear();
+        legacyResolutions.clear();
     }
 
     private void warning(Kind kind, String message) {
@@ -319,6 +351,12 @@ public class ProjectResourceResolver {
                 name = name.substring("@asset/".length());
             }
             resolved = loadProjectOrIdeDrawable(name);
+            if (resolved == null) {
+                // Ultimo recurso: nombre heredado de una version vieja de Sketchware (p.ej.
+                // "ic_tune_white"). Solo con una regla clara y una coincidencia del IDE; si no,
+                // se mantiene el rojo honesto con el motivo.
+                resolved = resolveLegacyIdeDrawable(name, v);
+            }
         }
 
         if (resolved != null) {
@@ -584,6 +622,181 @@ public class ProjectResourceResolver {
             android.util.Log.d("SketchwarePro", "ProjectResourceResolver: Throwable ignored", ignored);
         }
         return null;
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Nombres heredados (Sketchware antiguo): "@drawable/ic_tune_white" -> "ic_tune_24"
+    // ---------------------------------------------------------------------------------------------
+
+    /**
+     * Sufijos que la Sketchware antigua pegaba al nombre del icono (color y tamano). Se quitan del
+     * FINAL, repetidamente y sin importar el orden relativo (p.ej. "add_circle_white_24dp" ->
+     * "add_circle"). Solo se usan para BUSCAR un equivalente; nunca renombran lo que pide el XML.
+     */
+    private static final String[] LEGACY_SUFFIX_TOKENS = {
+            "_white", "_black", "_dark", "_light", "_primary", "_accent",
+            "_grey600", "_grey", "_gray", "_holo_light", "_holo_dark",
+            "_24dp", "_36dp", "_48dp", "_96dp", "_64dp", "_40dp", "_32dp", "_18dp", "_16dp", "_12dp", "_8dp",
+            "_24", "_36", "_48", "_96", "_64", "_40", "_32", "_18", "_16", "_12", "_8",
+            "_dp", "_px", "_alpha"
+    };
+
+    /** Prefijos de la nomenclatura antigua ("ic_tune_white" -> "tune_white"). */
+    private static final String[] LEGACY_PREFIXES = {"ic_", "img_", "icon_"};
+
+    /**
+     * Convierte un nombre heredado en su "base" de concepto: sin prefijo ({@code ic_}/{@code img_})
+     * ni sufijos de color/tamano. Devuelve null si no queda una base utilizable (nombre vacio o
+     * demasiado corto), para no mapear cualquier cosa a un icono cualquiera.
+     */
+    @Nullable
+    static String legacyBaseName(String name) {
+        if (name == null) {
+            return null;
+        }
+        String base = name.trim().toLowerCase(Locale.US);
+        for (String prefix : LEGACY_PREFIXES) {
+            if (base.startsWith(prefix) && base.length() > prefix.length()) {
+                base = base.substring(prefix.length());
+                break;
+            }
+        }
+        boolean stripped = true;
+        while (stripped) {
+            stripped = false;
+            for (String suffix : LEGACY_SUFFIX_TOKENS) {
+                if (base.length() > suffix.length() && base.endsWith(suffix)) {
+                    base = base.substring(0, base.length() - suffix.length());
+                    stripped = true;
+                    break;
+                }
+            }
+        }
+        base = trimSeparators(base);
+        // Una base de 1 caracter (o vacia) mapearia demasiadas cosas: no arriesgamos.
+        if (base.length() < 2 || !base.matches("[a-z0-9_]+")) {
+            return null;
+        }
+        return base;
+    }
+
+    private static String trimSeparators(String value) {
+        int start = 0;
+        int end = value.length();
+        while (start < end && value.charAt(start) == '_') {
+            start++;
+        }
+        while (end > start && value.charAt(end - 1) == '_') {
+            end--;
+        }
+        return value.substring(start, end);
+    }
+
+    /**
+     * Variantes que se prueban contra los recursos del IDE, EN ORDEN de prioridad. El primer
+     * candidato que exista gana; si el nombre heredado es genuinamente dudoso (no encaja con
+     * ninguna) o demasiado generico, no hay candidato y se mantiene el aviso.
+     *
+     * El orden es fijo a proposito: hace la resolucion DETERMINISTA (nada de adivinar entre dos
+     * iconos parecidos por puntuacion difusa).
+     */
+    private static List<String> legacyCandidateNames(String base) {
+        List<String> candidates = new ArrayList<>();
+        // 1) El nombre tal cual lo usa hoy el IDE para sus propios iconos.
+        candidates.add("ic_" + base);
+        // 2) Iconos con tamano de 24 (la convencion de esta era; p.ej. ic_tune_24).
+        candidates.add("ic_" + base + "_24");
+        // 3) La familia Material del IDE (p.ej. ic_mtrl_tune).
+        candidates.add("ic_mtrl_" + base);
+        // 4) Otras densidades/formatos que el IDE tambien usa.
+        candidates.add("ic_" + base + "_24dp");
+        candidates.add("ic_" + base + "_48dp");
+        candidates.add("ic_" + base + "_48");
+        candidates.add("ic_" + base + "_36");
+        candidates.add("ic_" + base + "_18");
+        // 5) El nombre sin prefijo (p.ej. "arrow_back_white_48dp").
+        candidates.add(base);
+        return candidates;
+    }
+
+    /**
+     * Ultimo recurso de {@link #resolveDrawable}: mapea un nombre heredado a un drawable actual del
+     * IDE. Devuelve null (y el que llama deja el aviso rojo) si no hay base utilizable o ningun
+     * candidato existe.
+     *
+     * Dos pasos, ambos deterministas:
+     * <ol>
+     *   <li><b>Variantes estructurales</b> ({@code ic_<base>}, {@code ic_<base>_24},
+     *       {@code ic_mtrl_<base>}, ...): gana la primera que exista, en orden fijo.</li>
+     *   <li><b>Variantes de color/tamano</b> ({@code ic_<base>_black_24}, {@code ic_<base>_white_24dp},
+     *       ...): solo se usan si existe EXACTAMENTE UNA. Si existen dos o mas candidatos de este
+     *       tipo no hay forma honesta de elegir -> no se resuelve ("dudas" -> se mantiene el rojo).</li>
+     * </ol>
+     */
+    @Nullable
+    private Drawable resolveLegacyIdeDrawable(String name, String original) {
+        String base = legacyBaseName(name);
+        if (base == null) {
+            return null;
+        }
+        for (String candidate : legacyCandidateNames(base)) {
+            if (isIdeDrawable(candidate)) {
+                return recordLegacyResolution(original, candidate, base, "variante estructural");
+            }
+        }
+        List<String> matches = new ArrayList<>();
+        for (String candidate : legacyColorVariantNames(base)) {
+            if (isIdeDrawable(candidate)) {
+                matches.add(candidate);
+            }
+        }
+        if (matches.size() == 1) {
+            return recordLegacyResolution(original, matches.get(0), base, "unica variante de color/tamano");
+        }
+        if (matches.size() > 1) {
+            // Dudoso a proposito: dos iconos distintos podrian valer y elegir seria adivinar.
+            android.util.Log.i(TAG, "info: nombre heredado ambiguo, no se resuelve: " + original
+                    + " (candidatos: " + matches + ")");
+        }
+        return null;
+    }
+
+    private Drawable recordLegacyResolution(String original, String candidate, String base, String reason) {
+        Drawable drawable = loadIdeDrawable(candidate);
+        if (drawable == null) {
+            return null;
+        }
+        legacyResolutions.add(new LegacyResolution(original, candidate, reason + " (base: " + base + ")"));
+        android.util.Log.i(TAG, "info: nombre heredado resuelto: " + original
+                + " -> @drawable/" + candidate + " [base: " + base + ", " + reason + "]");
+        return drawable;
+    }
+
+    /**
+     * Variantes con el color/tamano que usa el IDE para esa familia (p.ej. {@code ic_arrow_back_*}).
+     * Solo valen si hay UNA: con varias no se puede saber cual queria el diseno antiguo.
+     */
+    private static List<String> legacyColorVariantNames(String base) {
+        List<String> candidates = new ArrayList<>();
+        candidates.add("ic_" + base + "_black_24");
+        candidates.add("ic_" + base + "_white_24dp");
+        candidates.add("ic_" + base + "_black_24dp");
+        candidates.add("ic_" + base + "_white_24");
+        candidates.add("ic_" + base + "_black");
+        candidates.add("ic_" + base + "_white");
+        candidates.add("ic_" + base + "_grey600_24dp");
+        candidates.add("ic_" + base + "_gray_48dp");
+        candidates.add("ic_" + base + "_grey_48dp");
+        return candidates;
+    }
+
+    /** Existe ese drawable en los recursos del propio IDE? (id != 0). */
+    private boolean isIdeDrawable(String name) {
+        try {
+            return context.getResources().getIdentifier(name, "drawable", context.getPackageName()) != 0;
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 
     @Nullable

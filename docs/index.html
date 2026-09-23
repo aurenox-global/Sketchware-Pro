@@ -37,14 +37,14 @@
 
   <!-- ============================================================ hero -->
   <section class="hero" style="border-top:none">
-    <div class="tag">● v7.0.10.0 · versionCode 167 · source-available</div>
+    <div class="tag">● v7.0.10.1 · versionCode 168 · source-available</div>
     <h1>Build real Android apps<br><span class="accent">from your phone.</span></h1>
     <p class="lead">
       Sketchware Pro is an Android IDE that runs on Android itself: drag blocks, write Java or Kotlin,
       compile on the device and get an installable APK — no computer required.
     </p>
     <div class="btns">
-      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.0" target="_blank" rel="noopener">⬇ Download APK</a>
+      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.1" target="_blank" rel="noopener">⬇ Download APK</a>
       <a class="btn ghost" href="https://github.com/aurenox-global/Sketchware-Pro" target="_blank" rel="noopener">View source on GitHub</a>
     </div>
 
@@ -134,12 +134,66 @@
       <span class="k">Top milestones</span>
       <p>
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.0">Flutter running on the device, release/AOT included</a> &middot;
-        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.0">the design preview fixed, rounds 1 to 4</a> &middot;
-        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.0">the Dart toolchain download is now your decision, and easy to find</a> &middot;
+        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.1">the design preview fixed, rounds 1 to 5</a> &middot;
+        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.1">the Dart toolchain download is now your decision, and the toolchain no longer says "not installed"</a> &middot;
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.9">Kotlin support in the in-app IDE</a>.
       </p>
     </div>
     <div class="log" id="change-log">
+      <div class="item done featured">
+        <span class="when">2026-09-24 · Flutter + preview</span>
+        <h3>The toolchain no longer says "not installed", and the inherited icon names  <span class="pill feat">highlight</span> <span class="pill ok">fixed</span></h3>
+        <ul class="clean">
+          <li><strong>The "not installed" was our check, not your install.</strong> The installer verified the Dart SDK by
+          <strong>running</strong> <code>&lt;filesDir&gt;/flutter-toolchain/dart/bin/dart --version</code>, and SELinux
+          forbids executing an ELF that lives in the app's data directory
+          (<code>execute_no_trans</code>, <code>error=13</code>, <code>untrusted_app</code>). The probe returned
+          <code>null</code>, the install aborted <strong>before downloading the engine artifacts</strong> and the UI
+          ended at <code>Toolchain de Flutter no instalado</code> after 91 MB — a bug in our check, with the SDK data
+          already on disk.</li>
+          <li><strong>"Installed" is now a data criterion.</strong> The marker <code>installed.properties</code>, the
+          AOT snapshots <code>gen_kernel_aot.dart.snapshot</code> and <code>dartdev_aot.dart.snapshot</code> and
+          <code>lib/_internal/vm_platform.dill</code> decide it; a <code>bin/dart</code> that will not start can no
+          longer turn a correct extraction into "not installed". "Can compile" adds a <strong>real execution</strong>
+          probe launched from the native libraries directory
+          (<code>nativeLibraryDir/libdartaotruntime.so</code>), so <code>bin/dart</code> is never executed again and
+          every message names the <strong>piece, the path and the cause</strong>, plus an honest intermediate state
+          (<code>SDK Dart … extraido … pero NO listo para compilar</code>) instead of blaming W^X.</li>
+          <li><strong>A second, pre-existing bug fixed.</strong> The pub dependencies were extracted with a
+          <code>&lt;package&gt;-&lt;version&gt;/</code> prefix that pub.dev tarballs do <strong>not</strong> carry, so 0
+          files were written and the install died with <em>El paquete characters 1.4.1 no se extrajo bien</em>; it now
+          retries without the prefix. The consent dialog also warns about the real disk space: the download is
+          ~307 MB, but extracted the toolchain takes ~800 MB.</li>
+          <li><strong>Verified on an arm64 API 34 emulator:</strong> the full install ends at
+          <code>Toolchain Flutter: instalado (Dart 3.13.4) · 813.7 MB</code> and the installer log shows the app running
+          <code>nativeLibraryDir/lib/arm64/libdartaotruntime.so</code> inside its own process. <strong>Honest:</strong>
+          the full compile (pub get + build) inside the app could not be automated on the emulator and is not claimed;
+          what is proven is that the packaged binary does run in the app's process.</li>
+          <li><strong>Inherited icon names.</strong> <code>ic_tune_white</code> exists in <strong>no</strong> source of
+          this IDE — 2,382 drawables were dumped and the current equivalent is
+          <code>ic_tune_24</code>/<code>ic_mtrl_tune</code> — so the preview now resolves those old names as a
+          <strong>last resort</strong>, only after project, assets, libraries and the IDE, normalising prefixes
+          (<code>ic_</code>, <code>img_</code>, <code>icon_</code>) and colour/size suffixes; a <strong>single</strong>
+          match is used, several are called ambiguous and stay red. And <strong>nothing happens silently</strong>: its
+          own group in the detail dialog
+          (<code>Nombre heredado resuelto -&gt; @drawable/ic_tune_white -&gt; @drawable/ic_tune_24</code>), an
+          <strong>amber info bar</strong> when there is no real failure, and the log.</li>
+          <li><strong>Measured:</strong> the real case goes from <strong>2 red blocks (2,080 px) to 1 (1,040 px)</strong>
+          and the bar reads <code>1 recurso no encontrado · 1 nombre heredado resuelto</code>; the round-4 grouped
+          detail and every earlier preview case keep working. <strong>Honest pending:</strong> it covers the names whose
+          concept still exists (~19/44 of the families tested); typos, mipmaps and concepts with no current icon stay
+          red.</li>
+        </ul>
+        <p>
+          <img src="assets/flutter-toolchain-installed.png" alt="Project settings: the Flutter (Dart) card showing Toolchain Flutter: instalado (Dart 3.13.4) · 813.7 MB" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)">
+          <img src="assets/preview-r5-before.png" alt="Before: ic_tune_white and an unknown name both show red markers, 2 recursos no encontrados" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)">
+          <img src="assets/preview-r5-after.png" alt="After: ic_tune_white draws the IDE's tune icon and only one red marker is left" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)">
+        </p>
+        <p>Version <strong>v7.0.10.1</strong> (versionCode 168). The round-5 write-up is at the end of
+        <a href="preview-fix.md">docs/preview-fix.md</a>; the toolchain state/install fix is in
+        <a href="flutter-consent.md">docs/flutter-consent.md</a>.</p>
+      </div>
+
       <div class="item done featured">
         <span class="when">2026-09-24 · Flutter + preview</span>
         <h3>The Dart download you could not find, and preview round 4  <span class="pill feat">highlight</span> <span class="pill ok">fixed</span></h3>

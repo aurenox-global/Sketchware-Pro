@@ -388,3 +388,62 @@ Todas salen con **`Preview OK`**, sin avisos.
   degradados, `.9.png` sin parches, `?atributo` con el tema del IDE, Material3 sin probar, nada en móvil físico).
 
 El detalle completo (método, XML de los casos, evidencia cruda) está en `preview-r4.md` y en `preview-evidence/r4/`.
+
+## 9. Ronda 5 (v7.0.10.1)
+
+### 9.1 Nombres heredados de iconos (`ic_tune_white` y familia)
+
+El diseño real usa `@drawable/ic_tune_white`, un nombre heredado de una Sketchware vieja, y la vista previa lo marcaba
+en rojo. El mensaje ya era correcto y se mantiene; lo nuevo es una **red de último recurso**: si el nombre heredado **se
+puede mapear sin ambigüedad** a un icono que el IDE **sí** tiene, se dibuja ese icono y **el aviso lo explica** (nunca
+se sustituye en silencio).
+
+**Qué nombres usa de verdad el IDE (dato, no suposición).** Se volcaron los recursos del APK del IDE con
+`aapt2 dump resources`: **2.382 nombres de drawable únicos**. `drawable/ic_tune_white` **no existe**; los equivalentes
+actuales son **`ic_tune_24`** (convención del IDE) e **`ic_mtrl_tune`** (familia Material, 272 iconos `ic_mtrl_*`).
+
+**Reglas implementadas** (en `ProjectResourceResolver.java`, más el aviso en `LayoutPreviewActivity.java`):
+
+- **Normalización (solo para buscar, nunca para renombrar lo que pide el XML):** se quitan los prefijos `ic_`, `img_`,
+  `icon_` y, repetidamente, los sufijos de color/estilo (`_white`, `_black`, `_dark`, `_light`, `_primary`, `_accent`,
+  `_grey600`, `_holo_light`…) y de tamaño (`_24`, `_24dp`, `_48dp`, `_96dp`…). Guardas: base vacía, de 1 carácter o con
+  caracteres raros → no se mapea nada.
+- **Candidatos en dos pasos deterministas:** primero variantes estructurales por orden fijo
+  (`ic_<base>`, `ic_<base>_24`, `ic_mtrl_<base>`, `ic_<base>_24dp`, `ic_<base>_48dp`…); después variantes de
+  color/tamaño, que **solo** se usan si existe **exactamente una** — si hay dos o más, es ambiguo y **no se resuelve**.
+- **Ultimo recurso:** el mapa solo se consulta después de que fallen proyecto, assets, librerías e IDE (los 44
+  drawables `*_white`/`*_black` que el IDE **sí** conserva se resuelven por la vía normal).
+- **Nada en silencio:** el nombre heredado resuelto no cuenta como "recurso no encontrado"; la barra añade
+  `… · N nombre(s) heredado(s) resuelto(s)` (ámbar si no hay fallos reales), el diálogo de detalle tiene un **grupo
+  propio** (`Nombres heredados resueltos -> icono actual` con pares `heredado -> real`) y queda en el log
+  (`I LayoutPreview: info: nombre heredado resuelto: @drawable/ic_tune_white -> @drawable/ic_tune_24 [base: tune, variante estructural]`).
+
+**Caso real medido** (`ic_tune_white` + un nombre inexistente):
+
+| | Barra | Marcador rojo |
+| --- | --- | --- |
+| **ANTES** | `⚠ Preview PARCIAL: 2 recursos no encontrados` | **2 bloques** (2.080 px) |
+| **DESPUÉS** | `⚠ Preview PARCIAL: 1 recurso no encontrado · 1 nombre heredado resuelto` | **1 bloque** (1.040 px) |
+
+![Antes: dos marcadores rojos y la barra con 2 recursos no encontrados](assets/preview-r5-before.png)
+![Después: ic_tune_white dibuja ic_tune_24 y solo queda un marcador rojo](assets/preview-r5-after.png)
+
+En la captura *después*, la fila **A** (`ic_tune_white`, heredado) dibuja el icono *tune* del IDE, la fila **B**
+(`ic_no_existe_xyz`) sigue con el marcador rojo, y las filas **C/D/E** (`ic_tune_24` exacto del IDE, `foto` del proyecto
+y vector del proyecto) se dibujan igual que antes: la resolución normal queda intacta.
+
+**Regresión**: `reg_R5_variants` mantiene el icono **de la librería** (verde, 3.240 px) y **no** lo sustituye; el
+detalle agrupado de la ronda 4 (`4 recursos no encontrados · 1 vista no instanciable`) es idéntico; y los casos de
+color/estilos/fondos/imágenes/`MaterialButton`+WebView/layout real siguen en `Preview OK`.
+
+### 9.2 Pendientes honestos de la ronda 5
+
+- Cubre los nombres heredados cuyo **concepto sigue existiendo** en el IDE con una base compatible: en la simulación
+  contra los 2.382 drawables, si desaparecieran los 44 nombres `*_white`/`*_black` actuales las reglas reconstruirían
+  **19** (≈43 %). El resto (`footprint_96_white`, `spades_96_white`, `bg_rectangle_black`…) **se queda en rojo**, que es
+  lo correcto.
+- **Typos y nombres inventados** (`ic_tune_whit`, `ic_hom_white`, `ic_no_existe_xyz`) siguen en **rojo**: no se adivina.
+- Nombres con **más de una** variante de color/tamaño posible: ambiguo → **no se resuelve** (anotado en el log).
+- `@mipmap/ic_launcher` y recursos generados por el compilador del proyecto: sin cambios (limitación de la ronda 4).
+- El mapa es **por nombre**, no por id (`OldResourceIdMapper` sigue siendo solo del selector de icono de app).
+- Todo probado en **emulador** arm64 API 34; nada en móvil físico ni con Material3 activado.

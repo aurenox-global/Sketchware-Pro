@@ -21,10 +21,17 @@ class ToolchainExecutableStatus(
     val runnable: Boolean,
     /** Primera linea de `--version`, si se pudo ejecutar. */
     val versionLine: String?,
+    /** Motivo exacto del fallo de ejecucion (null si [runnable] o si ni existe). */
+    val failureReason: String? = null,
 ) {
-    override fun toString(): String =
-        "$name=${if (!exists) "ausente" else if (runnable) "ejecutable" else "NO-ejecutable"}" +
-            "(${if (packaged) "nativeLibraryDir" else "filesDir"})"
+    override fun toString(): String {
+        val state = when {
+            !exists -> "ausente"
+            runnable -> "ejecutable"
+            else -> "NO-ejecutable" + (failureReason?.let { " {$it}" } ?: "")
+        }
+        return "$name=$state(${if (packaged) "nativeLibraryDir" else "filesDir"})"
+    }
 }
 
 /**
@@ -51,21 +58,23 @@ object FlutterToolchainManager {
     fun toolchainDir(context: Context): File = FlutterToolchainPaths.toolchainDir(context)
 
     /**
-     * Version de Dart instalada, o `null` si no hay toolchain **ejecutable**.
+     * Version de Dart instalada (**datos**), o `null` si el SDK Dart no esta extraido.
      *
-     * No se confia solo en el marcador: exige que `dartaotruntime` (el empaquetado en
-     * `nativeLibraryDir` si existe, o el extraido del `.deb`) **se ejecute de verdad** y que este el
-     * `gen_kernel_aot.dart.snapshot` (es el front-end que la app lanza con el).
+     * Criterio de datos, que es lo que deja el `.deb`: marcador + los snapshots AOT que la app lanza
+     * (`gen_kernel_aot.dart.snapshot`, `dartdev_aot.dart.snapshot`) + `lib/_internal/vm_platform.dill`.
+     *
+     * NO se exige poder ejecutar `bin/dart`: es el CLI del `.deb`, vive en `filesDir` y SELinux
+     * prohibe ejecutarlo (W^X), ademas de que la app no lo usa. La version sale del marcador (dato
+     * verificado del paquete) y, si faltara, de la sonda real
+     * ([FlutterToolchainInstaller.probeDartRuntime], que ejecuta `libdartaotruntime.so --version`
+     * desde `nativeLibraryDir`).
+     *
+     * Si los datos estan pero los ejecutables no arrancan, lo dice [executableBlockerReason]; este
+     * metodo nunca reporta "no instalado" por eso.
      */
     @JvmStatic
     fun installedDartVersion(context: Context): String? {
-        val runtimeStatus = probeExecutables(context)
-            .firstOrNull { it.name == FlutterToolchainPaths.PACKAGED_DART_AOT_RUNTIME }
-            ?: return null
-        if (!runtimeStatus.runnable) {
-            return null
-        }
-        if (!FlutterToolchainPaths.genKernelSnapshot(context).isFile) {
+        if (missingDartData(context).isNotEmpty()) {
             return null
         }
 
@@ -80,8 +89,34 @@ object FlutterToolchainManager {
             }
         }
 
-        // Marcador ausente pero runtime ejecutable: se deduce de la salida real.
-        return runtimeStatus.versionLine
+        // Marcador sin version: la del runtime que de verdad se ejecuta, o la del paquete esperado.
+        return FlutterToolchainInstaller.probeDartRuntime(context).versionLine
+            ?: FlutterToolchainPaths.DART_VERSION
+    }
+
+    /**
+     * Datos del SDK Dart que faltan en disco (lista vacia si estan todos).
+     *
+     * Son los ficheros que el instalador extrae del `.deb` y que la app necesita en tiempo de build:
+     * sin ellos el SDK no esta instalado, con ellos si (independientemente de si `bin/dart` arranca o
+     * no, que es otra pregunta: [executableBlockerReason]).
+     */
+    @JvmStatic
+    fun missingDartData(context: Context): List<String> {
+        val missing = mutableListOf<String>()
+        if (!FlutterToolchainPaths.dartMarkerFile(context).isFile) {
+            missing.add("installed.properties (marcador de la extraccion)")
+        }
+        if (!FlutterToolchainPaths.genKernelSnapshot(context).isFile) {
+            missing.add("bin/snapshots/gen_kernel_aot.dart.snapshot")
+        }
+        if (!FlutterToolchainPaths.dartDevSnapshot(context).isFile) {
+            missing.add("bin/snapshots/dartdev_aot.dart.snapshot")
+        }
+        if (!FlutterToolchainPaths.vmPlatformDill(context).isFile) {
+            missing.add("lib/_internal/vm_platform.dill")
+        }
+        return missing
     }
 
     /** ABI del dispositivo soportada por el toolchain, o `null`. */
@@ -120,7 +155,15 @@ object FlutterToolchainManager {
         probeCache?.let { (cachedKey, cachedValue) -> if (cachedKey == key) return cachedValue }
 
         val results = candidates.map { (name, file) ->
-            val version = if (file.isFile) FlutterToolchainInstaller.executableVersion(file) else null
+            val probe = if (file.isFile) {
+                FlutterToolchainInstaller.probeExecutableResult(file)
+            } else {
+                FlutterToolchainInstaller.ExecProbeResult(null, null)
+            }
+            val version = probe.output
+                ?.lineSequence()
+                ?.firstOrNull { it.isNotBlank() }
+                ?.trim()
             ToolchainExecutableStatus(
                 name = name,
                 path = file.absolutePath,
@@ -130,6 +173,7 @@ object FlutterToolchainManager {
                 exists = file.isFile,
                 runnable = version != null,
                 versionLine = version,
+                failureReason = if (file.isFile) probe.failure else null,
             )
         }
         probeCache = key to results
@@ -145,9 +189,13 @@ object FlutterToolchainManager {
      * `true` si dart + engine + framework Dart del [FlutterBuildMode] indicado están completos **y**
      * los ejecutables que ese modo necesita se pueden ejecutar de verdad.
      *
-     * - los dos modos necesitan `dartaotruntime` ejecutable (lanza `gen_kernel` y `pub`);
+     * - los datos del SDK Dart tienen que estar extraidos ([installedDartVersion]);
+     * - los dos modos necesitan que `dartaotruntime` **arranque** (lanza `gen_kernel` y `pub`);
      * - [FlutterBuildMode.RELEASE_AOT] necesita ademas nuestro `gen_snapshot` y la plataforma
      *   `flutter_patched_sdk_product`.
+     *
+     * La sonda es una ejecucion real (no permisos): el APK puede traer todos los datos y aun asi no
+     * poder compilar si no empaqueta los binarios de su ABI (ver [executableBlockerReason]).
      */
     @JvmStatic
     fun isReady(context: Context, mode: FlutterBuildMode): Boolean {
@@ -157,16 +205,48 @@ object FlutterToolchainManager {
         if (!FlutterEngineArtifacts.areArtifactsReady(context, mode)) {
             return false
         }
+        return executableBlockerReason(context, mode) == null
+    }
+
+    /**
+     * Motivo (**que pieza** y **por que**) por el que los ejecutables del toolchain no se pueden
+     * lanzar para [mode], o `null` si todo lo que ese modo necesita se ejecuta de verdad.
+     *
+     * Distingue el caso "no esta" del caso "esta pero SELinux no lo deja ejecutar" (W^X), y nombra
+     * siempre la ruta concreta, para que el mensaje sea accionable.
+     */
+    @JvmStatic
+    fun executableBlockerReason(context: Context, mode: FlutterBuildMode): String? {
+        val runtime = probeExecutable(context, FlutterToolchainPaths.PACKAGED_DART_AOT_RUNTIME)
+        if (runtime == null || !runtime.exists) {
+            return "Falta el ejecutable `dartaotruntime` (ni " +
+                "nativeLibraryDir/${FlutterToolchainPaths.PACKAGED_DART_AOT_RUNTIME} ni " +
+                "${FlutterToolchainPaths.dartAotRuntime(context).absolutePath}): instala el toolchain " +
+                "desde el menu Flutter del editor."
+        }
+        if (!runtime.runnable) {
+            return "`dartaotruntime` esta en ${runtime.path} pero NO se puede ejecutar " +
+                "(${runtime.failureReason ?: "motivo desconocido"}). SELinux solo deja ejecutar " +
+                "binarios de nativeLibraryDir con targetSdk >= 29, y este APK (ABI " +
+                "'${FlutterToolchainPaths.deviceAbiName()}') no empaqueta " +
+                "lib/${FlutterToolchainPaths.ABI_ARM64_V8A}/${FlutterToolchainPaths.PACKAGED_DART_AOT_RUNTIME}. " +
+                "Instala la variante arm64-v8a (el SDK Dart ya esta en disco: no se vuelve a descargar)."
+        }
         if (mode == FlutterBuildMode.RELEASE_AOT) {
-            if (FlutterToolchainPaths.aotBackendUnavailableReason(context) != null) {
-                return false
-            }
+            FlutterToolchainPaths.aotBackendUnavailableReason(context)?.let { return it }
             val genSnapshot = probeExecutable(context, FlutterToolchainPaths.PACKAGED_GEN_SNAPSHOT)
-            if (genSnapshot == null || !genSnapshot.runnable) {
-                return false
+            if (genSnapshot == null || !genSnapshot.exists) {
+                return "Falta nativeLibraryDir/${FlutterToolchainPaths.PACKAGED_GEN_SNAPSHOT} (nuestro " +
+                    "`gen_snapshot` product, el unico que produce un `libapp.so` que el engine release " +
+                    "acepta): usa el modo DEBUG_JIT o instala la variante arm64-v8a."
+            }
+            if (!genSnapshot.runnable) {
+                return "`gen_snapshot` esta en ${genSnapshot.path} pero NO se puede ejecutar " +
+                    "(${genSnapshot.failureReason ?: "motivo desconocido"}): SELinux solo permite " +
+                    "ejecutar desde nativeLibraryDir (W^X)."
             }
         }
-        return true
+        return null
     }
 
     /** Igual que [isReady] pero con el modo por defecto (el unico que compila hoy: DEBUG_JIT). */
@@ -220,19 +300,32 @@ object FlutterToolchainManager {
         }
 
         if (installedDartVersion(context) == null) {
-            progress("Instalando SDK Dart on-device...")
+            val missing = missingDartData(context)
+            progress("Instalando SDK Dart on-device... (faltan: ${missing.joinToString(", ")})")
             if (!FlutterToolchainInstaller.install(context, progress)) {
                 return false
             }
+        }
+
+        // El SDK Dart ya esta en disco. Antes de descargar cientos de MB de artefactos del engine: si
+        // los ejecutables que necesita el modo NO se pueden lanzar (p. ej. esta ABI no empaqueta
+        // `libdartaotruntime.so`), se para aqui con la pieza y la causa exactas, en vez de bajar todo
+        // para acabar fallando en la compilacion.
+        executableBlockerReason(context, mode)?.let { reason ->
+            progress("Toolchain Flutter instalado a medias: $reason")
+            return false
         }
 
         if (!FlutterEngineArtifacts.ensureArtifacts(context, mode, progress)) {
             return false
         }
 
-        val ready = isReady(context, mode)
-        progress(if (ready) "Toolchain Flutter listo" else "Toolchain Flutter incompleto")
-        return ready
+        if (isReady(context, mode)) {
+            progress("Toolchain Flutter listo (Dart ${installedDartVersion(context)}, modo $mode)")
+            return true
+        }
+        progress("Toolchain Flutter incompleto: ${describeNotReady(context, mode)}")
+        return false
     }
 
     /**
@@ -413,11 +506,8 @@ object FlutterToolchainManager {
         return total
     }
 
-    /** `true` si el SDK Dart esta extraido (marcador + runtime + snapshot del front-end). */
-    private fun isDartSdkInstalled(context: Context): Boolean =
-        FlutterToolchainPaths.dartMarkerFile(context).isFile &&
-            FlutterToolchainPaths.dartAotRuntimeExecutable(context).isFile &&
-            FlutterToolchainPaths.genKernelSnapshot(context).isFile
+    /** `true` si los **datos** del SDK Dart estan extraidos (marcador + snapshots + vm_platform.dill). */
+    private fun isDartSdkInstalled(context: Context): Boolean = missingDartData(context).isEmpty()
 
     /**
      * Resumen de una linea del estado del toolchain (para el dialogo de la UI).
@@ -435,12 +525,20 @@ object FlutterToolchainManager {
         val version = installedDartVersion(context)
         val installed = isReady(context, mode)
         val occupied = formatBytes(installedBytes(context))
-        return if (installed) {
-            "Toolchain Flutter listo (Dart $version, $occupied en disco, modo $mode)"
-        } else {
-            val pending = formatBytes(estimatedDownloadBytes(context, mode))
-            "Toolchain Flutter NO instalado (Dart ${version ?: "sin instalar"}, $occupied en disco; " +
-                "faltan $pending de descarga, modo $mode)"
+        return when {
+            installed -> "Toolchain Flutter listo (Dart $version, $occupied en disco, modo $mode)"
+            // Estado intermedio honesto: los datos del SDK Dart estan, lo que falta es otra cosa
+            // (ejecutables que no arrancan, artefactos del engine...). Nunca "no instalado".
+            version != null -> {
+                val blocker = executableBlockerReason(context, mode)
+                "Toolchain Flutter: SDK Dart $version extraido ($occupied en disco) pero NO listo para " +
+                    "compilar, modo $mode" + (blocker?.let { ": $it" } ?: "")
+            }
+            else -> {
+                val pending = formatBytes(estimatedDownloadBytes(context, mode))
+                "Toolchain Flutter NO instalado (Dart sin instalar, $occupied en disco; " +
+                    "faltan $pending de descarga, modo $mode)"
+            }
         }
     }
 
@@ -489,31 +587,18 @@ object FlutterToolchainManager {
      */
     @JvmStatic
     fun describeNotReady(context: Context, mode: FlutterBuildMode): String {
-        val runtime = probeExecutable(context, FlutterToolchainPaths.PACKAGED_DART_AOT_RUNTIME)
-        if (runtime == null || !runtime.exists) {
-            return "Falta `dartaotruntime` (ni empaquetado en nativeLibraryDir ni extraido del .deb): " +
-                "instala el toolchain Flutter desde el menu Flutter del editor."
+        // 1) Datos del SDK Dart (lo que trae el .deb).
+        val missingData = missingDartData(context)
+        if (missingData.isNotEmpty()) {
+            return "Falta el SDK Dart on-device (${missingData.joinToString(", ")}): instalalo desde el " +
+                "menu Flutter del editor (descarga consentida del .deb de Termux)."
         }
-        if (!runtime.runnable) {
-            return "`dartaotruntime` esta en ${runtime.path} pero NO se puede ejecutar (SELinux: " +
-                "`execute_no_trans` solo se permite en nativeLibraryDir). En la practica: estas usando " +
-                "un APK de la ABI '${FlutterToolchainPaths.deviceAbiName()}', que no empaqueta los " +
-                "ejecutables (solo la variante arm64-v8a lo hace)."
-        }
-        if (!FlutterToolchainPaths.genKernelSnapshot(context).isFile) {
-            return "Falta `bin/snapshots/gen_kernel_aot.dart.snapshot` en el toolchain (se extrae del .deb)."
-        }
+        // 2) Ejecutables: pieza concreta + causa concreta (SELinux/W^X o ausente).
+        executableBlockerReason(context, mode)?.let { return it }
+        // 3) Artefactos del engine / framework Dart.
         if (!FlutterEngineArtifacts.areArtifactsReady(context, mode)) {
             return "Faltan artefactos del engine para $mode (embedding, libflutter.so, patched sdk, " +
                 "framework Dart de pub o fuentes/shaders de assets): pulsa \"Instalar toolchain\"."
-        }
-        if (mode == FlutterBuildMode.RELEASE_AOT) {
-            FlutterToolchainPaths.aotBackendUnavailableReason(context)?.let { return it }
-            val genSnapshot = probeExecutable(context, FlutterToolchainPaths.PACKAGED_GEN_SNAPSHOT)
-            if (genSnapshot == null || !genSnapshot.runnable) {
-                return "El `gen_snapshot` propio no se puede ejecutar desde " +
-                    "${genSnapshot?.path ?: "(ninguna ruta)"}."
-            }
         }
         return ""
     }

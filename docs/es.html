@@ -37,14 +37,14 @@
 
   <!-- ============================================================ hero -->
   <section class="hero" style="border-top:none">
-    <div class="tag">● v7.0.10.0 · versionCode 167 · source-available</div>
+    <div class="tag">● v7.0.10.1 · versionCode 168 · source-available</div>
     <h1>Crea apps Android reales<br><span class="accent">desde tu móvil.</span></h1>
     <p class="lead">
       Sketchware Pro es un IDE de Android que funciona sobre Android: arrastra bloques, escribe Java o Kotlin,
       compila en el propio dispositivo y obtén un APK instalable — sin necesidad de ordenador.
     </p>
     <div class="btns">
-      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.0" target="_blank" rel="noopener">⬇ Descargar APK</a>
+      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.1" target="_blank" rel="noopener">⬇ Descargar APK</a>
       <a class="btn ghost" href="https://github.com/aurenox-global/Sketchware-Pro" target="_blank" rel="noopener">Ver el código en GitHub</a>
     </div>
 
@@ -134,12 +134,69 @@
       <span class="k">Hitos destacados</span>
       <p>
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.0">Flutter corriendo en el dispositivo, release/AOT incluido</a> &middot;
-        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.0">la vista previa de diseños arreglada, rondas 1 a 4</a> &middot;
-        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.0">la descarga del toolchain de Dart ahora la decides tú, y se encuentra fácil</a> &middot;
+        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.1">la vista previa de diseños arreglada, rondas 1 a 5</a> &middot;
+        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.1">la descarga del toolchain de Dart ahora la decides tú, y el toolchain ya no dice "no instalado"</a> &middot;
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.9">soporte de Kotlin en el IDE de la app</a>.
       </p>
     </div>
     <div class="log" id="change-log">
+      <div class="item done featured">
+        <span class="when">2026-09-24 · Flutter + vista previa</span>
+        <h3>El toolchain ya no dice "no instalado", y los nombres heredados de iconos  <span class="pill feat">destacado</span> <span class="pill ok">arreglado</span></h3>
+        <ul class="clean">
+          <li><strong>El "no instalado" era nuestra comprobación, no tu instalación.</strong> El instalador
+          verificaba el SDK de Dart <strong>ejecutando</strong>
+          <code>&lt;filesDir&gt;/flutter-toolchain/dart/bin/dart --version</code>, y SELinux prohíbe ejecutar un ELF que
+          vive en el directorio de datos de la app
+          (<code>execute_no_trans</code>, <code>error=13</code>, <code>untrusted_app</code>). La sonda devolvía
+          <code>null</code>, la instalación abortaba <strong>antes de bajar los artefactos del engine</strong> y la UI
+          acababa en <code>Toolchain de Flutter no instalado</code> después de 91 MB — un bug de nuestra
+          comprobación, con los datos del SDK ya en disco.</li>
+          <li><strong>Ahora "instalado" es un criterio de datos.</strong> Lo deciden el marcador
+          <code>installed.properties</code>, los snapshots AOT <code>gen_kernel_aot.dart.snapshot</code> y
+          <code>dartdev_aot.dart.snapshot</code> y <code>lib/_internal/vm_platform.dill</code>; un
+          <code>bin/dart</code> que no arranca ya no puede convertir una extracción correcta en "no instalado".
+          "Puede compilar" añade una sonda de <strong>ejecución real</strong> lanzada desde el directorio de
+          librerías nativas (<code>nativeLibraryDir/libdartaotruntime.so</code>), así que <code>bin/dart</code>
+          no se vuelve a ejecutar y todos los mensajes dicen <strong>la pieza, la ruta y la causa</strong>, además de
+          un estado intermedio honesto (<code>SDK Dart … extraido … pero NO listo para compilar</code>) en vez de culpar
+          a W^X.</li>
+          <li><strong>Un segundo bug, pre-existente, arreglado.</strong> Las dependencias de pub se extraían con el
+          prefijo <code>&lt;paquete&gt;-&lt;version&gt;/</code> que los tarballs de pub.dev <strong>no</strong> llevan,
+          así que se escribían 0 ficheros y la instalación moría con <em>El paquete characters 1.4.1 no se
+          extrajo bien</em>; ahora reintenta sin prefijo. El diálogo de consentimiento además avisa del espacio
+          real en disco: la descarga son ~307 MB, pero al extraerlo el toolchain ocupa ~800 MB.</li>
+          <li><strong>Verificado en un emulador arm64 API 34:</strong> la instalación completa acaba en
+          <code>Toolchain Flutter: instalado (Dart 3.13.4) · 813.7 MB</code> y el log del instalador muestra la app
+          ejecutando <code>nativeLibraryDir/lib/arm64/libdartaotruntime.so</code> dentro de su propio proceso.
+          <strong>Honesto:</strong> la compilación completa (pub get + build) dentro de la app no se pudo automatizar
+          en el emulador y no se afirma; lo que sí está probado es que el binario empaquetado se ejecuta en el
+          proceso de la app.</li>
+          <li><strong>Nombres heredados de iconos.</strong> <code>ic_tune_white</code> no existe en <strong>ninguna</strong>
+          fuente de este IDE — se volcaron 2.382 drawables y el equivalente actual es
+          <code>ic_tune_24</code>/<code>ic_mtrl_tune</code> —, así que la vista previa ahora resuelve esos nombres
+          viejos como <strong>último recurso</strong>, solo después de proyecto, assets, librerías e IDE,
+          normalizando prefijos (<code>ic_</code>, <code>img_</code>, <code>icon_</code>) y sufijos de color/tamaño;
+          si hay coincidencia <strong>única</strong> la usa y si hay varias lo considera ambiguo y sigue en rojo. Y
+          <strong>nada en silencio</strong>: grupo propio en el diálogo de detalle
+          (<code>Nombre heredado resuelto -&gt; @drawable/ic_tune_white -&gt; @drawable/ic_tune_24</code>), una
+          <strong>barra ámbar</strong> informativa cuando no hay fallos reales, y log.</li>
+          <li><strong>Medido:</strong> el caso real pasa de <strong>2 bloques rojos (2.080 px) a 1 (1.040 px)</strong> y la
+          barra dice <code>1 recurso no encontrado · 1 nombre heredado resuelto</code>; el detalle agrupado de la ronda
+          4 y todos los casos anteriores de la vista previa siguen bien. <strong>Pendiente honesto:</strong> cubre los
+          nombres cuyo concepto sigue existiendo (~19/44 de las familias probadas); typos, mipmaps y conceptos sin
+          icono actual siguen en rojo.</li>
+        </ul>
+        <p>
+          <img src="assets/flutter-toolchain-installed.png" alt="Ajustes del proyecto: la tarjeta Flutter (Dart) con Toolchain Flutter: instalado (Dart 3.13.4) · 813.7 MB" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)">
+          <img src="assets/preview-r5-before.png" alt="Antes: ic_tune_white y un nombre inexistente salen con marcador rojo, 2 recursos no encontrados" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)">
+          <img src="assets/preview-r5-after.png" alt="Después: ic_tune_white dibuja el icono tune del IDE y solo queda un marcador rojo" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)">
+        </p>
+        <p>Versión <strong>v7.0.10.1</strong> (versionCode 168). El detalle de la ronda 5 está al final de
+        <a href="preview-fix.md">docs/preview-fix.md</a>; el arreglo del estado/instalación del toolchain, en
+        <a href="flutter-consent.md">docs/flutter-consent.md</a>.</p>
+      </div>
+
       <div class="item done featured">
         <span class="when">2026-09-24 · Flutter + vista previa</span>
         <h3>La descarga de Dart que no encontrabas, y la ronda 4 de la vista previa  <span class="pill feat">destacado</span> <span class="pill ok">arreglado</span></h3>

@@ -4,6 +4,9 @@ Fecha: 2026-09-23 · Versión: **v7.0.9.0** (versionCode 166) · Repo: `Sketchwa
 
 Actualizado en **v7.0.10.0** (versionCode 167): el toolchain ya se encuentra sin buscar el flag (ver «Dónde está ahora»).
 
+Actualizado en **v7.0.10.1** (versionCode 168): el estado y la instalación del toolchain quedan arreglados
+(ver «6. v7.0.10.1: el estado y la instalación del toolchain (arreglado)»).
+
 Release: <https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.9.0>
 
 Antes, al compilar un proyecto Flutter (modo experimental, detrás del flag `FLUTTER_EXPERIMENTAL_ENABLE`) la app
@@ -99,3 +102,52 @@ adb install -r -d app/build/outputs/apk/debug/app-arm64-v8a-debug.apk
 # menú -> Flutter: estado del toolchain  ->  Descargar ahora / Borrar toolchain / Cancelar
 # Flutter: compilar y ejecutar -> Cancelar -> "Build abortado: no se ha autorizado la descarga del toolchain."
 ```
+
+## 6. v7.0.10.1: el estado y la instalación del toolchain (arreglado)
+
+En la **v7.0.10.1** (versionCode 168) se arregla el falso *"Toolchain de Flutter no instalado"* que aparecía **después**
+de descargar los 91 MB del `.deb` de Dart.
+
+**Qué pasaba.** El instalador comprobaba la instalación **ejecutando** `<filesDir>/flutter-toolchain/dart/bin/dart
+--version`. Ese ELF vive en el directorio de datos de la app (`app_data_file`) y SELinux **prohíbe ejecutarlo** en
+`targetSdk >= 29` en el dominio `untrusted_app`:
+
+```
+avc: denied { execute_no_trans } for path="/data/data/pro.sketchware/files/flutter-toolchain/dart/bin/dart"
+     scontext=u:r:untrusted_app:s0 tcontext=u:object_r:app_data_file:s0 tclass=file permissive=0
+java.io.IOException: Cannot run program "…/bin/dart": error=13, Permission denied
+```
+
+La sonda devolvía `null` y el instalador **abortaba antes de bajar los artefactos del engine**, así que la UI concluía
+*"Toolchain de Flutter no instalado"* cuando los datos del SDK **sí** estaban extraídos. Era un bug de comprobación
+nuestro. Nota: `adb shell run-as pro.sketchware …/bin/dart --version` **sí** funciona (acaba en el dominio `runas_app`),
+por eso esa vía no sirve como prueba — la sonda válida es la que ejecuta la propia app.
+
+**Qué se cambió.**
+
+- **"Instalado" pasa a ser un criterio de datos**: marcador `installed.properties`, `bin/snapshots/gen_kernel_aot.dart.snapshot`,
+  `bin/snapshots/dartdev_aot.dart.snapshot` y `lib/_internal/vm_platform.dill`. Un `bin/dart` que no arranca ya **no**
+  puede convertir una extracción correcta en "no instalado".
+- **"Puede compilar" añade una sonda de ejecución real** desde el directorio de librerías nativas
+  (`nativeLibraryDir/libdartaotruntime.so`, empaquetado en el APK arm64-v8a). **`bin/dart` ya no se ejecuta** en ningún
+  camino; si algo no se puede lanzar, el mensaje dice **qué pieza**, **dónde** y **por qué** (SELinux/W^X), y hay un
+  **estado intermedio honesto** (`SDK Dart … extraido … pero NO listo para compilar`) en lugar de culpar a W^X cuando lo
+  que falta son artefactos del engine.
+- **Segundo bug, pre-existente, arreglado:** la extracción de las dependencias de pub usaba el prefijo
+  `<paquete>-<version>/`, que los tarballs de pub.dev **no** llevan → 0 ficheros → *"El paquete characters 1.4.1 no se
+  extrajo bien"*. Ahora reintenta sin prefijo (`W/FlutterEngineArtifacts: characters-1.4.1.tar.gz: sin entradas con el
+  prefijo …; se reintenta sin prefijo`) y la instalación termina con "Dependencias de pub listas".
+- **El diálogo de consentimiento avisa del espacio real en disco:** la descarga son **~307 MB**, pero al extraerlo el
+  toolchain ocupa **~800 MB** (medido: **813.7 MB** con el SDK Dart + artefactos del engine).
+
+**Verificado en emulador** (arm64, API 34): instalación completa → `Toolchain Flutter: instalado (Dart 3.13.4) · 813.7 MB`,
+y el log del instalador imprime que ejecutó `nativeLibraryDir/lib/arm64/libdartaotruntime.so` →
+`Dart SDK version: 3.13.4 (stable) … on "android_arm64"`, es decir, la app lanzó su propio binario empaquetado dentro de
+su proceso (`untrusted_app`).
+
+![Ajustes del proyecto: la tarjeta Flutter (Dart) con Toolchain Flutter: instalado (Dart 3.13.4) · 813.7 MB](assets/flutter-toolchain-installed.png)
+
+**Pendiente honesto:** la **compilación completa** (pub get + build) disparada desde dentro de la app **no** se pudo
+automatizar en el emulador (el disparador del build no es fiable por `adb input tap` y la fase Java del pipeline falla
+allí por un problema de entorno ajeno a Flutter); lo que **sí** está probado es que el binario empaquetado **se ejecuta**
+en el proceso de la app, que es la premisa de ese camino. Tampoco se ha re-verificado `RELEASE_AOT` ni otras ABIs.

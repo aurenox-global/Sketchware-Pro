@@ -363,7 +363,8 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
                 sample += " [" + bean.id + "/" + bean.convert + "/" + (beanText == null ? "-" : beanText) + "]";
                 shown++;
             }
-            if (renderWarnings.isEmpty() && resourceResolver.getWarnings().isEmpty()) {
+            if (renderWarnings.isEmpty() && resourceResolver.getWarnings().isEmpty()
+                    && resourceResolver.getLegacyResolutions().isEmpty()) {
                 hidePreviewWarning();
                 debug("Preview OK · vistas: " + viewsById.size() + " · WebViews: " + webViewCount + sample);
             } else {
@@ -396,6 +397,7 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
         Map<ProjectResourceResolver.Kind, java.util.Set<String>> byKind = resourceResolver.getWarningsByKind();
         int resourceCount = resourceResolver.getWarnings().size();
         int viewCount = renderWarnings.size();
+        List<ProjectResourceResolver.LegacyResolution> legacy = resourceResolver.getLegacyResolutions();
 
         List<String> parts = new ArrayList<>();
         if (resourceCount > 0) {
@@ -404,13 +406,23 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
         if (viewCount > 0) {
             parts.add(viewCount + (viewCount == 1 ? " vista no instanciable" : " vistas no instanciables"));
         }
-        String summary = "Preview PARCIAL: " + android.text.TextUtils.join(" · ", parts);
+        if (!legacy.isEmpty()) {
+            parts.add(legacy.size() + (legacy.size() == 1 ? " nombre heredado resuelto" : " nombres heredados resueltos"));
+        }
+        // "PARCIAL" y rojo SOLO cuando algo ha fallado de verdad. Un nombre heredado que se ha
+        // podido mapear se explica, pero en tono informativo (no es un fallo).
+        boolean partial = resourceCount > 0 || viewCount > 0;
+        String summary = (partial ? "Preview PARCIAL: " : "Preview: ") + android.text.TextUtils.join(" · ", parts);
         binding.debugStatus.setVisibility(android.view.View.VISIBLE);
-        binding.debugStatus.setBackgroundColor(0xB3B00020);
-        binding.debugStatus.setText("⚠ " + summary);
+        binding.debugStatus.setBackgroundColor(partial ? 0xB3B00020 : 0xB3B26A00);
+        binding.debugStatus.setText((partial ? "⚠ " : "ℹ ") + summary);
         binding.debugStatus.setOnClickListener(v -> showPreviewWarningDetail());
         binding.debugStatus.setClickable(true);
-        android.util.Log.w(TAG, "warning: " + summary);
+        if (partial) {
+            android.util.Log.w(TAG, "warning: " + summary);
+        } else {
+            android.util.Log.i(TAG, "info: " + summary);
+        }
 
         // Detalle completo en el log, agrupado por causa (no depende del dialogo).
         android.util.Log.w(TAG, "warning: vistas dibujadas: " + views + " · WebViews: " + webViews);
@@ -418,6 +430,10 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
             for (String value : entry.getValue()) {
                 android.util.Log.w(TAG, "warning: [" + entry.getKey().label + "] " + value);
             }
+        }
+        for (ProjectResourceResolver.LegacyResolution resolution : legacy) {
+            android.util.Log.i(TAG, "info: [nombre heredado] " + resolution.original
+                    + " -> @drawable/" + resolution.resolved + " (" + resolution.rule + ")");
         }
         for (String className : renderWarnings) {
             android.util.Log.w(TAG, "warning: [vista no instanciable] " + className);
@@ -445,6 +461,16 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
         for (Map.Entry<ProjectResourceResolver.Kind, java.util.Set<String>> entry : byKind.entrySet()) {
             groups.put("Recursos no encontrados · " + entry.getKey().label, new ArrayList<>(entry.getValue()));
         }
+        // Distinto de "no encontrado": aqui SI se ha dibujado algo, con el nombre heredado mapeado
+        // a un icono actual. Se dice cual, para que no sea una sustitucion silenciosa.
+        List<ProjectResourceResolver.LegacyResolution> legacy = resourceResolver.getLegacyResolutions();
+        if (!legacy.isEmpty()) {
+            List<String> lines = new ArrayList<>();
+            for (ProjectResourceResolver.LegacyResolution resolution : legacy) {
+                lines.add(resolution.original + "  ->  @drawable/" + resolution.resolved);
+            }
+            groups.put("Nombres heredados resueltos -> icono actual", lines);
+        }
 
         final int maxPerGroup = 12;
         boolean first = true;
@@ -467,10 +493,16 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
         if (!searched.isEmpty()) {
             text.append("\nDrawables buscados en: ").append(searched);
         }
-        text.append("\n\nEl resto del diseno SI se ha dibujado; solo falta lo listado arriba,").append(" que se marca en rojo en el lienzo.");
+        boolean partial = !renderWarnings.isEmpty() || !resourceResolver.getWarnings().isEmpty();
+        if (partial) {
+            text.append("\n\nEl resto del diseno SI se ha dibujado; solo falta lo listado arriba,").append(" que se marca en rojo en el lienzo.");
+        }
+        if (!legacy.isEmpty()) {
+            text.append("\n\nLos nombres heredados de arriba SI se han dibujado, usando el icono actual").append(" del editor (la version vieja de Sketchware los llamaba de otra forma).");
+        }
 
         new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
-                .setTitle("Vista previa parcial")
+                .setTitle(partial ? "Vista previa parcial" : "Vista previa")
                 .setMessage(text.toString().trim())
                 .setPositiveButton(android.R.string.ok, null)
                 .show();

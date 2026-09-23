@@ -129,23 +129,61 @@ object FlutterToolchainInstaller {
         val vmPlatformStrong = FlutterToolchainPaths.vmPlatformStrongDill(context)
         vmPlatform.copyTo(vmPlatformStrong, overwrite = true)
 
+        // El chmod es **solo informativo**: un ELF en `filesDir` con bit x sigue sin poder
+        // ejecutarse en `targetSdk >= 29` (SELinux deniega `execute_no_trans` sobre
+        // `app_data_file`, dominio `untrusted_app`). Los que se ejecutan de verdad son los
+        // empaquetados en `nativeLibraryDir` (`libdartaotruntime.so` / `libfluttergensnapshot.so`).
         for (entry in EXECUTABLE_ENTRIES) {
             val file = File(dartDir, entry)
             if (!file.setExecutable(true, false)) {
-                progress("Aviso: no se pudo marcar como ejecutable ${file.absolutePath}")
+                Log.d(TAG, "No se pudo marcar x en ${file.absolutePath} (no se ejecuta desde ahi igualmente)")
             }
         }
 
         writeMarker(context, spec, extracted)
 
-        val version = runVersionCheck(context)
-        if (version == null) {
-            progress("El SDK se extrajo pero `dart --version` no se pudo ejecutar (ver limitacion W^X)")
-            return false
+        // Lo que define si el SDK esta INSTALADO son los DATOS extraidos (marcador + snapshots AOT
+        // + `vm_platform.dill`). Los ejecutables son otra cosa:
+        //  - `libdartaotruntime.so` / `libfluttergensnapshot.so` viajan en el APK y se lanzan desde
+        //    `nativeLibraryDir`;
+        //  - `bin/dart`, `bin/dartvm` y `bin/dartaotruntime` del `.deb` quedan en `filesDir` y SELinux
+        //    NO deja ejecutarlos (y la app no los necesita: los snapshots AOT —`gen_kernel`, `pub`—
+        //    los lanza `dartaotruntime`).
+        // Un `bin/dart` que no arranca NO puede convertir una extraccion correcta en "no instalado".
+        val runtime = probeDartRuntime(context)
+        if (runtime.runnable) {
+            progress(
+                "SDK Dart ${FlutterToolchainPaths.DART_VERSION} instalado: ${extracted.files} ficheros " +
+                    "(${formatMb(extracted.bytes)}) en ${dartDir.absolutePath}; runtime ejecutable: " +
+                    "${runtime.executable?.absolutePath} -> ${runtime.versionLine}"
+            )
+        } else {
+            progress(
+                "SDK Dart ${FlutterToolchainPaths.DART_VERSION} extraido (${extracted.files} ficheros, " +
+                    "${formatMb(extracted.bytes)}): los datos estan completos, pero NINGUN runtime de Dart " +
+                    "se puede ejecutar desde este APK. Detalle pieza a pieza:"
+            )
+            runtime.attempts.forEach { attempt -> progress("  - $attempt") }
+            if (!FlutterToolchainPaths.isDartAotRuntimePackaged(context)) {
+                progress(
+                    "  El APK instalado (ABI '${FlutterToolchainPaths.deviceAbiName()}') no empaqueta " +
+                        "`lib/${FlutterToolchainPaths.ABI_ARM64_V8A}/${FlutterToolchainPaths.PACKAGED_DART_AOT_RUNTIME}`; " +
+                        "la app solo puede ejecutar binarios de nativeLibraryDir. Instala la variante " +
+                        "arm64-v8a del APK (el .deb ya esta descargado: no se vuelve a bajar)."
+                )
+            }
         }
-        progress("Dart listo: $version")
+        // Estado intermedio real (p.ej. AOT en una ABI sin `libfluttergensnapshot.so`): aviso
+        // accionable, nunca un fallo silencioso.
+        FlutterToolchainPaths.aotBackendUnavailableReason(context)?.let { reason ->
+            progress("Aviso: el AOT on-device no esta disponible en esta instalacion. $reason")
+        }
         return true
     }
+
+    /** `123456789` -> `117.7 MB` (solo para los mensajes de progreso). */
+    private fun formatMb(bytes: Long): String =
+        String.format(java.util.Locale.US, "%.1f MB", bytes / 1024.0 / 1024.0)
 
     /** Descarga [url] a [dest] verificando tamaño y sha256. Devuelve si el fichero quedó válido. */
     @JvmStatic
@@ -574,49 +612,118 @@ object FlutterToolchainInstaller {
         FlutterToolchainPaths.dartMarkerFile(context).writeText(marker)
     }
 
-    /** Ejecuta `dart --version` y devuelve la primera línea, o `null` si no se pudo ejecutar. */
+    /**
+     * Version de Dart que reporta el runtime que **se puede ejecutar de verdad**
+     * ([probeDartRuntime]): `libdartaotruntime.so --version` desde `nativeLibraryDir`.
+     *
+     * NUNCA se lanza `bin/dart`: es el CLI del `.deb`, vive en `filesDir` y SELinux prohibe
+     * ejecutarlo (AVC `execute_no_trans` sobre `app_data_file` en el dominio `untrusted_app`); la app
+     * tampoco lo necesita, porque los snapshots AOT (`gen_kernel`, `dart pub`) los lanza
+     * `dartaotruntime`.
+     *
+     * Devuelve `null` solo si **ningun** runtime se puede ejecutar. Eso NO es un fallo de instalacion:
+     * los datos del SDK pueden estar completos (ver los motivos en [DartRuntimeProbe.attempts]).
+     */
     @JvmStatic
-    fun runVersionCheck(context: android.content.Context): String? {
-        val dart = FlutterToolchainPaths.dartExecutable(context)
-        if (!dart.isFile) return null
-        return try {
-            val process = ProcessBuilder(dart.absolutePath, "--version")
-                .redirectErrorStream(true)
-                .start()
-            val output = process.inputStream.bufferedReader().readText().trim()
-            val finished = process.waitFor(20, java.util.concurrent.TimeUnit.SECONDS)
-            if (!finished) {
-                process.destroyForcibly()
-                return null
-            }
-            if (process.exitValue() != 0) return null
-            output.lineSequence().firstOrNull()
-        } catch (e: Exception) {
-            Log.w(TAG, "dart --version fallo", e)
-            null
-        }
+    fun runVersionCheck(context: android.content.Context): String? =
+        probeDartRuntime(context).versionLine
+
+    /**
+     * Resultado de intentar **ejecutar** un runtime de Dart del toolchain.
+     *
+     * [runnable] no se deduce de los permisos del fichero: sale de una ejecucion real. Un ELF que la
+     * app escribe en `filesDir` existe, tiene bit `x` y **no** se ejecuta con `targetSdk >= 29`.
+     */
+    class DartRuntimeProbe(
+        /** Candidato que SI se ejecuto, o `null` si ninguno. */
+        @JvmField val executable: File?,
+        /** `true` si [executable] esta en `nativeLibraryDir` (empaquetado en el APK). */
+        @JvmField val packaged: Boolean,
+        /** Primera linea de `--version` del candidato ejecutado, o `null`. */
+        @JvmField val versionLine: String?,
+        /** Un motivo por candidato probado, en orden: QUE pieza y POR QUE no se puede ejecutar. */
+        @JvmField val attempts: List<String>,
+    ) {
+        val runnable: Boolean get() = versionLine != null
     }
 
     /**
-     * **Ejecuta** [executable] con [args] y devuelve la salida recortada, o `null` si no se pudo
-     * ejecutar (permiso denegado por SELinux, formato/ABI incorrectos, timeout…).
+     * Prueba, **ejecutando**, los runtimes de Dart disponibles, en orden de preferencia:
      *
-     * Es la comprobacion "de verdad" que usa [FlutterToolchainManager.isReady]: no basta con que el
-     * fichero exista, porque un ELF extraido en `filesDir` existe y **no** se puede ejecutar en
-     * `targetSdk >= 29` (ver la nota de la clase).
+     * 1. `nativeLibraryDir/libdartaotruntime.so` — el empaquetado en el APK, unica ubicacion
+     *    ejecutable para la app (variante `arm64-v8a`);
+     * 2. `<filesDir>/flutter-toolchain/dart/bin/dartaotruntime` — extraido del `.deb`: existe, pero en
+     *    `targetSdk >= 29` SELinux deniega `execute_no_trans` sobre `app_data_file`;
+     * 3. `<filesDir>/flutter-toolchain/dart/bin/dart` — el CLI del `.deb` (misma limitacion, y la app
+     *    no lo usa; se sondea solo para poder explicarlo en el log).
+     */
+    @JvmStatic
+    fun probeDartRuntime(context: android.content.Context): DartRuntimeProbe {
+        val nativeDir = FlutterToolchainPaths.nativeLibraryDir(context)
+        val candidates = mutableListOf<Pair<String, File>>()
+        val packaged = FlutterToolchainPaths.packagedExecutable(
+            context, FlutterToolchainPaths.PACKAGED_DART_AOT_RUNTIME
+        )
+        if (packaged != null) {
+            candidates.add(
+                "${FlutterToolchainPaths.PACKAGED_DART_AOT_RUNTIME} (nativeLibraryDir)" to packaged
+            )
+        } else {
+            candidates.add(
+                "dartaotruntime (filesDir; este APK —ABI " +
+                    "'${FlutterToolchainPaths.deviceAbiName()}'— no empaqueta " +
+                    "${FlutterToolchainPaths.PACKAGED_DART_AOT_RUNTIME})" to
+                    FlutterToolchainPaths.dartAotRuntime(context)
+            )
+        }
+        candidates.add("dart (filesDir, CLI del .deb) " to FlutterToolchainPaths.dartExecutable(context))
+
+        val attempts = mutableListOf<String>()
+        for ((label, file) in candidates) {
+            if (!file.isFile) {
+                attempts.add("$label: ${file.absolutePath} no existe")
+                continue
+            }
+            val result = probeExecutableResult(file)
+            if (result.output != null) {
+                return DartRuntimeProbe(
+                    executable = file,
+                    packaged = nativeDir != null &&
+                        file.absolutePath.startsWith(nativeDir.absolutePath, ignoreCase = false),
+                    versionLine = result.output.lineSequence().firstOrNull { it.isNotBlank() }?.trim(),
+                    attempts = attempts,
+                )
+            }
+            attempts.add("$label: ${file.absolutePath} no se pudo ejecutar (${result.failure})")
+        }
+        return DartRuntimeProbe(null, false, null, attempts)
+    }
+
+    /**
+     * Resultado de una sonda de ejecucion: la salida, o el motivo exacto del fallo.
+     *
+     * [failure] distingue "no existe" de "SELinux/W^X no deja ejecutarlo desde aqui"
+     * (`Permission denied`, `error=13`), que es lo que hay que poder contarle al usuario.
+     */
+    class ExecProbeResult(@JvmField val output: String?, @JvmField val failure: String?) {
+        val success: Boolean get() = output != null
+    }
+
+    /**
+     * **Ejecuta** [executable] con [args] y devuelve salida + motivo del fallo (nunca lanza).
      *
      * @param timeoutSeconds margen generoso: `--version` no toca disco y termina en milisegundos,
      *   pero un dispositivo cargado puede tardar; nunca se deja un proceso colgado.
      */
     @JvmStatic
     @JvmOverloads
-    fun probeExecutable(
+    fun probeExecutableResult(
         executable: File,
         args: List<String> = listOf("--version"),
         timeoutSeconds: Long = 20L,
-    ): String? {
+    ): ExecProbeResult {
         if (!executable.isFile) {
-            return null
+            return ExecProbeResult(null, "no existe")
         }
         var process: Process? = null
         return try {
@@ -628,21 +735,50 @@ object FlutterToolchainInstaller {
             if (!finished) {
                 process.destroyForcibly()
                 Log.w(TAG, "${executable.name} no termino en ${timeoutSeconds} s")
-                return null
+                return ExecProbeResult(null, "no termino en ${timeoutSeconds} s")
             }
             if (process.exitValue() != 0) {
                 Log.w(TAG, "${executable.name} salio con ${process.exitValue()}: ${output.take(200)}")
-                return null
+                return ExecProbeResult(
+                    null,
+                    "salio con codigo ${process.exitValue()}: ${output.take(160)}"
+                )
             }
-            output
+            ExecProbeResult(output, null)
         } catch (e: Exception) {
-            // Caso tipico: java.io.IOException: Cannot run program …: error=13, Permission denied
-            Log.w(TAG, "No se pudo ejecutar ${executable.absolutePath}: ${e.message}")
-            null
+            // Caso tipico (W^X): java.io.IOException: Cannot run program …: error=13, Permission denied
+            // AVC: denied { execute_no_trans } … scontext=u:r:untrusted_app tcontext=…:app_data_file
+            val message = e.message ?: e.javaClass.name
+            val reason = if (message.contains("Permission denied") || message.contains("error=13")) {
+                "SELinux/W^X: un ELF de filesDir no se puede ejecutar con targetSdk >= 29 " +
+                    "(AVC execute_no_trans sobre app_data_file, dominio untrusted_app); solo se ejecuta " +
+                    "desde nativeLibraryDir"
+            } else {
+                message
+            }
+            Log.w(TAG, "No se pudo ejecutar ${executable.absolutePath}: $reason")
+            ExecProbeResult(null, reason)
         } finally {
             process?.let { if (it.isAlive) it.destroyForcibly() }
         }
     }
+
+    /**
+     * **Ejecuta** [executable] con [args] y devuelve la salida recortada, o `null` si no se pudo
+     * ejecutar (permiso denegado por SELinux, formato/ABI incorrectos, timeout…).
+     *
+     * Es la comprobacion "de verdad" que usa [FlutterToolchainManager.isReady]: no basta con que el
+     * fichero exista, porque un ELF extraido en `filesDir` existe y **no** se puede ejecutar en
+     * `targetSdk >= 29` (ver la nota de la clase). Para el motivo del fallo, usar
+     * [probeExecutableResult].
+     */
+    @JvmStatic
+    @JvmOverloads
+    fun probeExecutable(
+        executable: File,
+        args: List<String> = listOf("--version"),
+        timeoutSeconds: Long = 20L,
+    ): String? = probeExecutableResult(executable, args, timeoutSeconds).output
 
     /** Primera linea no vacia de `--version` de un ejecutable del toolchain, o `null`. */
     @JvmStatic

@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.10.0-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.10.1-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -160,6 +160,34 @@ This repository is a personal fork. Every improvement is added here as it lands,
 - **Cost:** the two packed executables add **10.18 MB** to the `arm64-v8a` APK. Other ABIs have no AOT backend and
   say so instead of failing silently. The default mode is still **debug/JIT**, this stays experimental and there is
   still no hot reload.
+- **v7.0.10.1 (versionCode 168) — the toolchain no longer says "not installed", and the inherited icon names are told
+  apart.** The Flutter toolchain bug was ours, not yours: the app checked the installation by **running**
+  `<filesDir>/flutter-toolchain/dart/bin/dart --version`, and SELinux forbids executing an ELF that lives in the app's
+  data directory (`execute_no_trans`, `error=13`, `untrusted_app`), so the installer aborted **before** downloading the
+  engine and ended with **"Toolchain de Flutter no instalado"** after 91 MB. Now **"installed" is a data criterion**
+  (marker `installed.properties` + `gen_kernel_aot.dart.snapshot` + `dartdev_aot.dart.snapshot` +
+  `lib/_internal/vm_platform.dill`) and **"can compile" adds a runnable probe** executed from the native libraries
+  directory (`libdartaotruntime.so`), so `bin/dart` is never launched again and every message names the **piece, the
+  path and the cause**. Verified on an arm64 API 34 emulator: the full install (91 MB `.deb` + engine artifacts) now
+  ends at **"Toolchain Flutter: instalado (Dart 3.13.4) · 813.7 MB"**, and the intermediate state is honest too
+  (`SDK Dart 3.13.4 extraido … pero NO listo para compilar`) instead of a false "not installed". **A second, pre-existing
+  bug surfaced and was fixed:** the pub dependencies were extracted with a `<package>-<version>/` prefix that pub.dev
+  tarballs do **not** carry, so 0 files were written and the install died with *"El paquete characters 1.4.1 no se
+  extrajo bien"*; it now retries without the prefix. The consent dialog also warns about the real disk space (the
+  download is ~307 MB, but extracted it takes ~800 MB). Honest: the **full compile** (pub get + build) inside the app
+  could not be automated on the emulator, so it is not claimed; what **is** proven is that the packaged binary runs
+  inside the app's own process. **Inherited icon names:** `ic_tune_white` (and family) exists in **no** source of this
+  IDE — 2,382 drawables were dumped and the current equivalent is `ic_tune_24`/`ic_mtrl_tune` — so the design preview
+  now resolves those old names as a **last resort**, only after project, assets, libraries and the IDE, normalising
+  prefixes (`ic_`, `img_`, `icon_`) and colour/size suffixes; with a **single** match it draws it, with several it
+  calls it ambiguous and stays red. And **nothing happens silently**: its own group in the detail dialog
+  (`Nombre heredado resuelto -> @drawable/ic_tune_white -> @drawable/ic_tune_24`), an **amber info bar** when there is
+  no real failure, and the log. Measured: the real case goes from **2 red blocks (2,080 px) to 1 (1,040 px)** and the
+  bar reads `1 recurso no encontrado · 1 nombre heredado resuelto`; regression intact. Honest: it covers the names
+  whose concept still exists (~19/44 of the families tested); typos, mipmaps and concepts with no current icon stay
+  red. Release page: [v7.0.10.1](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.1). Full
+  write-ups (in Spanish): [docs/flutter-consent.md](docs/flutter-consent.md) (toolchain state/install) and
+  [docs/preview-fix.md](docs/preview-fix.md) (round 5).
 - **v7.0.10.0 (versionCode 167) — the Dart download you could not find, and preview round 4.** The complaint was that
   the toolchain was nowhere to be seen, so the `FLUTTER_EXPERIMENTAL_ENABLE` flag is now **on by default** (anyone who
   already changed it keeps their value), a **"Flutter (Dart)" card** in the project settings shows the real state

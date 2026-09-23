@@ -375,9 +375,18 @@ object FlutterToolchainPaths {
     @JvmStatic
     fun dartBinDir(context: Context): File = File(dartDir(context), "bin")
 
+    /**
+     * `<filesDir>/flutter-toolchain/dart/bin/dart`: **CLI del `.deb`**, solo para diagnostico.
+     *
+     * NO se puede ejecutar desde aqui con `targetSdk >= 29` (SELinux/W^X sobre `app_data_file`) y la
+     * app **no lo usa**: los snapshots AOT de `gen_kernel` y `dart pub` se lanzan con
+     * [dartAotRuntimeExecutable] (empaquetado en `nativeLibraryDir`). Ver
+     * [FlutterToolchainInstaller.probeDartRuntime].
+     */
     @JvmStatic
     fun dartExecutable(context: Context): File = File(dartBinDir(context), "dart")
 
+    /** `bin/dartvm` del `.deb`: dato de diagnostico, **no** ejecutable desde `filesDir` (W^X). */
     @JvmStatic
     fun dartVmExecutable(context: Context): File = File(dartBinDir(context), "dartvm")
 
