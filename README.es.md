@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.8.1-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.8.2-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -160,6 +160,23 @@ Este repositorio es un fork personal. Cada mejora se añade aquí según entra, 
 - **Coste:** los dos ejecutables empaquetados suman **10,18 MB** al APK `arm64-v8a`. Las otras ABIs no tienen
   backend AOT y lo dicen, en vez de fallar en silencio. El modo por defecto sigue siendo **debug/JIT**, esto
   continua siendo experimental y todavia no hay hot reload.
+- **v7.0.8.2 (versionCode 164) — la vista previa de diseños vuelve a pintar.** La vista previa de los diseños hechos
+  con elementos View (la de HTML/WebView siempre ha funcionado) mostraba la zona del diseño vacía — en blanco o en negro
+  según el tema — y solo se veían los widgets que se pintan solos (SeekBar, Switch, iconos) y el HTML del WebView. La
+  causa era un **centinela**: el modelo de datos del propio IDE guarda `0xffffff` como "sin color elegido"
+  (`TextBean.textColor`/`hintColor`, `LayoutBean.backgroundColor`), y `LayoutPreviewActivity` lo aplicaba como color
+  real — como `int`, `0xffffff` es `0x00FFFFFF` (alfa 0), así que dejaba el texto totalmente transparente y borraba el
+  fondo que el tema del widget habría pintado. `ViewPane` lo agravaba forzando un lienzo **blanco** en modo vista previa
+  mientras los widgets se inflaban con el tema del IDE: de ahí el contraste roto (blanco/negro) según el tema. Ahora
+  `0xffffff` (y cualquier color con alfa 0) significa "sin definir" y decide el tema, el lienzo de la vista previa usa el
+  `colorSurface` del mismo tema que infla las vistas, la raíz inflada mantiene las dimensiones declaradas en el XML y una
+  vista que el IDE no puede instanciar muestra un **marcador rojo** y un aviso de "preview parcial" en vez de un hueco
+  mudo. Verificado en un emulador arm64 API 34: el mismo diseño, en claro y en oscuro, ya pinta el botón (su zona era
+  255,255,255 con 0 glifos antes) y la vista previa con HTML/WebView sigue funcionando
+  (`Preview OK · vistas: 3 · WebViews: 1`). Dicho con honestidad: los componentes Material, los proyectos con Material3 y
+  los temas personalizados del proyecto **no** están verificados en pantalla, y nada se ha probado en móvil físico.
+  Página de la release: [v7.0.8.2](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.2). Todos los
+  detalles: [docs/preview-fix.md](docs/preview-fix.md).
 - **v7.0.8.1 (versionCode 163) — hotfix de la release minificada.** R8 (el minificado de release) rompía la
   compilación de **cualquier** proyecto dentro de la app: renombraba los campos de `javax.lang.model.SourceVersion`,
   luego la tabla `Messages` de ECJ y por último borraba las clases de `apksig` que firman el APK — tres fallos

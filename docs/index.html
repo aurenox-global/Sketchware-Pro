@@ -37,14 +37,14 @@
 
   <!-- ============================================================ hero -->
   <section class="hero" style="border-top:none">
-    <div class="tag">● v7.0.8.1 · versionCode 163 · source-available</div>
+    <div class="tag">● v7.0.8.2 · versionCode 164 · source-available</div>
     <h1>Build real Android apps<br><span class="accent">from your phone.</span></h1>
     <p class="lead">
       Sketchware Pro is an Android IDE that runs on Android itself: drag blocks, write Java or Kotlin,
       compile on the device and get an installable APK — no computer required.
     </p>
     <div class="btns">
-      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.1" target="_blank" rel="noopener">⬇ Download APK</a>
+      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.2" target="_blank" rel="noopener">⬇ Download APK</a>
       <a class="btn ghost" href="https://github.com/aurenox-global/Sketchware-Pro" target="_blank" rel="noopener">View source on GitHub</a>
     </div>
 
@@ -178,6 +178,39 @@
         editor's renderer, which returned an empty root when the layout name was not found in the project data.
         Now every layout is built with the real-views builder that works from the XML alone, with the native
         renderer as fallback and a visible message if both fail. Version <strong>v7.0.6.0</strong>.</p>
+      </div>
+
+      <div class="item done">
+        <span class="when">2026-09-23 · fix</span>
+        <h3>Design preview paints again <span class="pill ok">fixed</span></h3>
+        <ul class="clean">
+          <li><strong>The symptom.</strong> The preview of View-based designs (the HTML/WebView preview always worked)
+          showed the design area empty — white or black depending on the theme — with only the widgets that paint
+          themselves (SeekBar, Switch, icons) and the WebView HTML visible.</li>
+          <li><strong>The cause was a sentinel.</strong> The IDE's own data model stores <code>0xffffff</code> for "no
+          colour chosen" (<code>TextBean.textColor</code>/<code>hintColor</code>, <code>LayoutBean.backgroundColor</code>),
+          and <code>LayoutPreviewActivity</code> applied it as a real colour: as an <code>int</code>, <code>0xffffff</code>
+          is <code>0x00FFFFFF</code> — alpha 0 — so the text became fully transparent and the background the widget's own
+          theme would have painted was wiped instead. <code>ViewPane</code> made it worse by forcing a
+          <strong>white</strong> canvas in preview mode while the views were inflated with the IDE theme, which is why
+          the contrast flipped with the theme.</li>
+          <li><strong>The fix.</strong> <code>0xffffff</code> (and any zero-alpha colour) now means "not set" and the
+          theme decides; the preview canvas uses the <code>colorSurface</code> of the same theme that inflates the
+          views; the inflated root keeps the dimensions declared in the XML; and a view the IDE cannot instantiate shows
+          a <strong>red marker</strong> plus a "partial preview" notice instead of a silent gap.</li>
+          <li><strong>Verified</strong> on an arm64 API 34 emulator: the same layout, light and dark, now paints the
+          button — its area measured 255,255,255 with zero glyphs before — and HTML/WebView previews keep working
+          (<code>Preview OK · vistas: 3 · WebViews: 1</code>).</li>
+          <li><strong>Honest pending:</strong> Material components (MaterialButton, CardView), Material3 projects and
+          custom project themes are <strong>not</strong> verified on screen, and nothing has been tested on a physical
+          phone.</li>
+        </ul>
+        <p>
+          <img src="assets/preview-before.png" alt="Before: the button area is empty in the dark theme, only the WebView HTML shows" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)">
+          <img src="assets/preview-after.png" alt="After: the button is painted again next to the WebView HTML" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)">
+        </p>
+        <p>Version <strong>v7.0.8.2</strong> (versionCode 164). The root cause, the file-by-file fix and the measured
+        evidence are documented in <a href="preview-fix.md">docs/preview-fix.md</a>.</p>
       </div>
 
       <div class="item done">

@@ -37,14 +37,14 @@
 
   <!-- ============================================================ hero -->
   <section class="hero" style="border-top:none">
-    <div class="tag">● v7.0.8.1 · versionCode 163 · source-available</div>
+    <div class="tag">● v7.0.8.2 · versionCode 164 · source-available</div>
     <h1>Crea apps Android reales<br><span class="accent">desde tu móvil.</span></h1>
     <p class="lead">
       Sketchware Pro es un IDE de Android que funciona sobre Android: arrastra bloques, escribe Java o Kotlin,
       compila en el propio dispositivo y obtén un APK instalable — sin necesidad de ordenador.
     </p>
     <div class="btns">
-      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.1" target="_blank" rel="noopener">⬇ Descargar APK</a>
+      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.2" target="_blank" rel="noopener">⬇ Descargar APK</a>
       <a class="btn ghost" href="https://github.com/aurenox-global/Sketchware-Pro" target="_blank" rel="noopener">Ver el código en GitHub</a>
     </div>
 
@@ -181,6 +181,40 @@
         datos del proyecto. Ahora todos los layouts se construyen con el constructor de vistas reales (solo necesita
         el XML), con el renderizador nativo como reserva y un mensaje visible si ambos fallan. Version
         <strong>v7.0.6.0</strong>.</p>
+      </div>
+
+      <div class="item done">
+        <span class="when">2026-09-23 · arreglo</span>
+        <h3>La vista previa de diseños vuelve a pintar <span class="pill ok">arreglado</span></h3>
+        <ul class="clean">
+          <li><strong>El síntoma.</strong> La vista previa de los diseños hechos con elementos View (la de HTML/WebView
+          siempre ha funcionado) mostraba la zona del diseño vacía — en blanco o en negro según el tema — y solo se veían
+          los widgets que se pintan solos (SeekBar, Switch, iconos) y el HTML del WebView.</li>
+          <li><strong>La causa era un centinela.</strong> El modelo de datos del propio IDE guarda <code>0xffffff</code>
+          como "sin color elegido" (<code>TextBean.textColor</code>/<code>hintColor</code>,
+          <code>LayoutBean.backgroundColor</code>), y <code>LayoutPreviewActivity</code> lo aplicaba como color real:
+          como <code>int</code>, <code>0xffffff</code> es <code>0x00FFFFFF</code> — alfa 0 — así que dejaba el texto
+          totalmente transparente y borraba el fondo que el tema del widget habría pintado. <code>ViewPane</code> lo
+          agravaba forzando un lienzo <strong>blanco</strong> en modo vista previa mientras las vistas se inflaban con el
+          tema del IDE: de ahí el contraste roto según el tema.</li>
+          <li><strong>El arreglo.</strong> <code>0xffffff</code> (y cualquier color con alfa 0) ahora significa "sin
+          definir" y decide el tema; el lienzo de la vista previa usa el <code>colorSurface</code> del mismo tema que
+          infla las vistas; la raíz inflada mantiene las dimensiones declaradas en el XML; y una vista que el IDE no
+          puede instanciar muestra un <strong>marcador rojo</strong> y un aviso de "preview parcial" en vez de un hueco
+          mudo.</li>
+          <li><strong>Verificado</strong> en un emulador arm64 API 34: el mismo diseño, en claro y en oscuro, ya pinta el
+          botón — su zona medía 255,255,255 con 0 glifos antes — y la vista previa con HTML/WebView sigue funcionando
+          (<code>Preview OK · vistas: 3 · WebViews: 1</code>).</li>
+          <li><strong>Pendiente honesto:</strong> los componentes Material (MaterialButton, CardView), los proyectos con
+          Material3 y los temas personalizados del proyecto <strong>no</strong> están verificados en pantalla, y nada se
+          ha probado en móvil físico.</li>
+        </ul>
+        <p>
+          <img src="assets/preview-before.png" alt="Antes: la zona del botón sale vacía en tema oscuro, solo se ve el HTML del WebView" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)">
+          <img src="assets/preview-after.png" alt="Después: el botón vuelve a pintarse junto al HTML del WebView" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)">
+        </p>
+        <p>Versión <strong>v7.0.8.2</strong> (versionCode 164). La causa raíz, el arreglo fichero por fichero y la
+        evidencia medida están en <a href="preview-fix.md">docs/preview-fix.md</a>.</p>
       </div>
 
       <div class="item done">

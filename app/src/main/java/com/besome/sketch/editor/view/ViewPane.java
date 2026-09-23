@@ -231,10 +231,17 @@ public class ViewPane extends RelativeLayout {
         context = new ContextThemeWrapper(getContext(), viewEditorThemeOverlay);
         svgUtils = new SvgUtils(context);
         svgUtils.initImageLoader();
-        if (viewEditorThemeOverlay == R.style.ThemeOverlay_SketchwarePro_ViewEditor) {
+        // En la vista previa el lienzo DEBE usar el mismo tema con el que se inflan las vistas: los
+        // widgets sin color propio toman su texto por defecto de (?attr/colorOnSurface) del contexto
+        // de la Activity. Antes, para los proyectos sin Material3, el lienzo se forzaba a BLANCO: si
+        // el IDE estaba en tema oscuro, el texto por defecto era claro y quedaba invisible sobre el
+        // lienzo blanco (y al reves, texto oscuro sobre lienzo oscuro en los proyectos Material3 con
+        // tema oscuro): la vista previa parecia "vacia", en blanco o en negro segun el tema elegido.
+        // El editor de diseno (isPreviewMode=false) mantiene su aspecto de siempre.
+        if (isPreviewMode) {
+            setBackgroundColor(ThemeUtils.getColor(getContext(), R.attr.colorSurface));
+        } else if (viewEditorThemeOverlay == R.style.ThemeOverlay_SketchwarePro_ViewEditor) {
             setBackgroundColor(Color.WHITE);
-        } else if (isPreviewMode) {
-            setBackgroundColor(ThemeUtils.getColor(context, R.attr.colorSurface));
         } else {
             setBackground(AppCompatResources.getDrawable(context, R.drawable.bg_view_pane));
         }

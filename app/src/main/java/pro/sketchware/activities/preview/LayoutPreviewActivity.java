@@ -60,9 +60,66 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
     private boolean firstResume = true;
     private boolean rendering;
 
+    /**
+     * XML que nos pasa quien nos abre (el editor de XML de vistas envia el contenido que se esta
+     * editando). Si viene, se previsualiza ESE xml en lugar del guardado en el proyecto: permite ver
+     * cambios sin guardar y es tambien la via para reproducir/comprobar la vista previa con un XML
+     * exacto.
+     */
+    private String pendingXml;
+
+    /**
+     * Vistas que no se han podido crear en esta previsualizacion (p.ej. clases de librerias que el
+     * editor no tiene en su classpath). Se usa para avisar de forma visible en vez de dejar huecos
+     * mudos en el lienzo.
+     */
+    private final java.util.List<String> renderWarnings = new ArrayList<>();
+
+    private static final String TAG = "LayoutPreview";
+
     private void debug(String message) {
         binding.debugStatus.setVisibility(android.view.View.VISIBLE);
+        binding.debugStatus.setBackgroundColor(0xB3000000);
         binding.debugStatus.setText(message);
+        android.util.Log.i(TAG, "info: " + message);
+    }
+
+    /**
+     * Igual que {@link #debug} pero pintando la barra en rojo: aviso de que la previsualizacion es
+     * incompleta (nunca debe quedar una pantalla vacia sin explicacion).
+     */
+    private void debugWarning(String message) {
+        binding.debugStatus.setVisibility(android.view.View.VISIBLE);
+        binding.debugStatus.setBackgroundColor(0xB3B00020);
+        binding.debugStatus.setText("⚠ " + message);
+        android.util.Log.w(TAG, "warning: " + message);
+    }
+
+    /**
+     * Causa raiz del bug de los disenos "en blanco o en negro".
+     *
+     * Los ViewBean del IDE usan 0xffffff como CENTINELA de "este color no lo ha definido el
+     * usuario": es el valor por defecto de {@link com.besome.sketch.beans.TextBean#textColor},
+     * {@link com.besome.sketch.beans.TextBean#hintColor} y
+     * {@link com.besome.sketch.beans.LayoutBean#backgroundColor}, y el generador de XML
+     * (a.a.a.Ox) solo escribe los atributos android:textColor/android:background cuando el valor
+     * es DISTINTO de 0xffffff. Es decir: un layout sin colores propios genera un XML sin esos
+     * atributos, y el parser devuelve el centinela 0xffffff.
+     *
+     * Al aplicar ese centinela "tal cual" sobre la vista real:
+     * - setTextColor(0xffffff)  -> 0x00FFFFFF, es decir ALFA 0: texto transparente.
+     * - setBackgroundColor(0xffffff) -> fondo transparente, que ademas BORRA el fondo que el tema
+     *   habria dado al widget (un Button pintaba su colorPrimary; ahora pinta nada).
+     * Resultado: un LinearLayout + Button se ve como un rectangulo vacio (blanco sobre el lienzo
+     * blanco, o negro/oscuro sobre el lienzo oscuro segun el tema), mientras que los widgets que
+     * se pintan solos (SeekBar, ProgressBar...) y los HTML/WebView (pintan su propio contenido)
+     * seguian viendose. Exactamente el sintoma reportado.
+     *
+     * Por eso, igual que hace Ox, tratamos 0xffffff (y cualquier color con alfa 0) como "sin
+     * definir" y dejamos que decida el tema del widget.
+     */
+    private static boolean isColorNotSet(int color) {
+        return color == 0 || color == 0xffffff || (color & 0xFF000000) == 0;
     }
 
     @Override
@@ -88,12 +145,26 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
         resourceResolver = new ProjectResourceResolver(this, scId);
 
         pane = binding.pane;
-        pane.initialize(scId, true);
+        // ViewPane.initialize() construye el editor de colores del proyecto, y ese lee el campo estatico
+        // DesignActivity.sc_id (el proyecto abierto en el editor de diseno). Si la vista previa se abre
+        // sin pasar por el editor de diseno (proceso en frio, por ejemplo al recuperar la Activity de
+        // recientes) ese campo es null: jC.c(null) lanzaba NullPointerException y la Activity se
+        // cerraba sin ningun mensaje (pantalla muerta). Fijamos el proyecto en curso y, si aun asi
+        // fallara la preparacion del lienzo, lo mostramos en lugar de caernos.
+        com.besome.sketch.design.DesignActivity.sc_id = scId;
+        try {
+            pane.initialize(scId, true);
+        } catch (Throwable throwable) {
+            android.util.Log.e(TAG, "error: fallo al inicializar el lienzo de la vista previa", throwable);
+            SketchwareUtil.showAnErrorOccurredDialog(this, "No se pudo preparar la vista previa: " + throwable);
+        }
         pane.setVerticalScrollBarEnabled(true);
         pane.setResourceManager(jC.d(scId));
         UI.addSystemWindowInsetToPadding(binding.pane, false, false, false, true);
 
         layoutHistory.push(title);
+        // Si quien abre la vista previa nos da el XML (editor de XML de vistas), lo usamos tal cual.
+        pendingXml = getIntent().getStringExtra("xml");
         renderCurrentLayout();
     }
 
@@ -127,8 +198,14 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
 
         new Thread(() -> {
             try {
-                String xml = new yq(getApplicationContext(), scId)
-                        .getFileSrc(layoutName, jC.b(scId), jC.a(scId), jC.c(scId));
+                // Primero el XML que nos haya pasado quien nos abre (cambios sin guardar); si no,
+                // se genera desde los datos del proyecto.
+                String xml = pendingXml;
+                pendingXml = null;
+                if (xml == null || xml.trim().isEmpty()) {
+                    xml = new yq(getApplicationContext(), scId)
+                            .getFileSrc(layoutName, jC.b(scId), jC.a(scId), jC.c(scId));
+                }
                 if (xml == null || xml.trim().isEmpty()) {
                     runOnUiThread(() -> {
                         rendering = false;
@@ -180,7 +257,12 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
         // los datos internos del proyecto) y ya soportaba WebView/HTML. Antes, los layouts sin WebView iban
         // por el renderizador del editor de diseno, que si no encuentra el nombre del layout en los datos
         // del proyecto pinta una raiz vacia: de ahi las vistas previas en blanco.
+        renderWarnings.clear();
         if (!tryInflateRealLayout(layoutName, xml) && !renderWithViewPane(layoutName, xml)) {
+            // Nada de pantallas mudas: motivo visible en la barra de estado y toast.
+            String motivo = binding.debugStatus.getText() == null ? "" : binding.debugStatus.getText().toString();
+            debugWarning("No se pudo previsualizar " + layoutName + (
+                    motivo.isEmpty() ? "" : " · " + motivo));
             SketchwareUtil.toastError("No se pudo generar la vista previa de este layout");
         }
     }
@@ -199,12 +281,17 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
 
             final Map<String, View> viewsById = new HashMap<>();
             viewIdNames.clear();
+            renderWarnings.clear();
             for (ViewBean bean : beans) {
                 View view = createRealView(bean);
                 if (view != null) {
                     viewsById.put(bean.id, view);
                     viewIdNames.put(view, bean.id);
                 }
+            }
+            if (viewsById.isEmpty()) {
+                debugWarning("Preview FAIL: no se pudo crear ninguna vista del layout");
+                return false;
             }
 
             View rootView = null;
@@ -229,8 +316,11 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
             }
 
             pane.removeAllViews();
-            pane.addView(rootView, new ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            // Respetamos las dimensiones declaradas de la raiz (los layouts suelen ser
+            // match_parent x match_parent). Antes se forzaba WRAP_CONTENT en alto: en un layout raiz
+            // match_parent con hijos con peso/match_parent, el contenido colapsaba a 0 px y parecia
+            // "vacio" aunque las vistas existieran.
+            pane.addView(rootView, rootLayoutParams(beans));
 
             wireNavigation(rootView, layoutName);
             int webViewCount = setupWebViews(rootView, layoutName);
@@ -244,13 +334,42 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
                 sample += " [" + bean.id + "/" + bean.convert + "/" + (beanText == null ? "-" : beanText) + "]";
                 shown++;
             }
-            debug("Preview OK · vistas: " + viewsById.size() + " · WebViews: " + webViewCount + sample);
+            if (renderWarnings.isEmpty()) {
+                debug("Preview OK · vistas: " + viewsById.size() + " · WebViews: " + webViewCount + sample);
+            } else {
+                // Degradacion visible (requisito: nunca un lienzo mudo sin motivo).
+                debugWarning("Preview PARCIAL · vistas: " + viewsById.size() + " · no disponibles: "
+                        + android.text.TextUtils.join(", ", renderWarnings));
+            }
             return true;
         } catch (Throwable throwable) {
             pane.removeAllViews();
-            debug("Preview FAIL: " + throwable.getMessage());
+            debugWarning("Preview FAIL: " + throwable);
             return false;
         }
+    }
+
+    /**
+     * Dimensiones con las que colgamos la raiz inflada del lienzo: usamos las declaradas en el XML
+     * del proyecto (MATCH_PARENT/WRAP_CONTENT o dp) para que el resultado se parezca a la app.
+     */
+    private ViewGroup.LayoutParams rootLayoutParams(ArrayList<ViewBean> beans) {
+        com.besome.sketch.beans.LayoutBean layout = beans.get(0).layout;
+        int width = ViewGroup.LayoutParams.MATCH_PARENT;
+        int height = ViewGroup.LayoutParams.MATCH_PARENT;
+        if (layout != null) {
+            if (layout.width == com.besome.sketch.beans.LayoutBean.LAYOUT_WRAP_CONTENT) {
+                width = ViewGroup.LayoutParams.WRAP_CONTENT;
+            } else if (layout.width != com.besome.sketch.beans.LayoutBean.LAYOUT_MATCH_PARENT) {
+                width = dp(layout.width);
+            }
+            if (layout.height == com.besome.sketch.beans.LayoutBean.LAYOUT_WRAP_CONTENT) {
+                height = ViewGroup.LayoutParams.WRAP_CONTENT;
+            } else if (layout.height != com.besome.sketch.beans.LayoutBean.LAYOUT_MATCH_PARENT) {
+                height = dp(layout.height);
+            }
+        }
+        return new ViewGroup.LayoutParams(width, height);
     }
 
     private View createRealView(ViewBean bean) {
@@ -260,11 +379,75 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
         }
         View view = pro.sketchware.utility.InvokeUtil.createView(this, className);
         if (view == null) {
-            return null;
+            // La clase no se puede instanciar en el editor (normalmente una libreria/widat que el
+            // IDE no incluye, o una vista propia del proyecto). Antes se saltaba en silencio, asi que
+            // el layout aparecia "vacio" sin explicacion: ahora pintamos un marcador visible y lo
+            // anotamos para avisar en la barra de estado.
+            renderWarnings.add(className);
+            android.util.Log.w(TAG, "warning: no se pudo crear la vista " + className + " (id=" + bean.id + ")");
+            return createMissingViewPlaceholder(className);
         }
         view.setId(android.view.View.generateViewId());
         applyBeanAppearance(view, bean);
         return view;
+    }
+
+    /**
+     * Marcador visible que sustituye a una vista que el editor no sabe inflar. Mantiene el hueco en
+     * la jerarquia (para no romper el layout del resto) y explica que falta.
+     */
+    private View createMissingViewPlaceholder(String className) {
+        android.widget.TextView placeholder = new android.widget.TextView(this);
+        String shortName = className.contains(".")
+                ? className.substring(className.lastIndexOf('.') + 1)
+                : className;
+        placeholder.setText("⚠ " + shortName + ": no disponible en el editor");
+        placeholder.setTextSize(11f);
+        placeholder.setTextColor(0xFFB00020);
+        placeholder.setPadding(dp(6), dp(6), dp(6), dp(6));
+        android.graphics.drawable.GradientDrawable border = new android.graphics.drawable.GradientDrawable();
+        border.setColor(0x14B00020);
+        border.setStroke(dp(1), 0xFFB00020);
+        placeholder.setBackground(border);
+        return placeholder;
+    }
+
+    /**
+     * Fondo de una vista del layout.
+     *
+     * Ojo con el orden y con los centinelas:
+     * - Cuando el XML pide un fondo por RECURSO (`android:background="@color/..."` o `"?attr/..."`),
+     *   ViewBeanFactory.applyBackground() guarda el nombre en layout.backgroundResColor y marca
+     *   layout.backgroundColor = 0xFFFFFFFF (blanco opaco) como "pendiente de resolver". La vista
+     *   previa pintaba ese blanco y NUNCA miraba backgroundResColor: un fondo de color del proyecto
+     *   se veia blanco. Ahora se resuelve primero el recurso (colors.xml del proyecto, o ?attr/ del
+     *   tema) y luego el drawable.
+     * - 0xffffff (y cualquier color con alfa 0) es el centinela de "sin fondo definido"; aplicarlo
+     *   borraba el fondo que el tema da al widget y lo dejaba invisible (ver isColorNotSet()).
+     */
+    private void applyBeanBackground(View view, com.besome.sketch.beans.LayoutBean layout) {
+        String resColor = layout.backgroundResColor;
+        if (resColor != null && !resColor.isEmpty()) {
+            int color = resourceResolver.resolveColor(view,
+                    resColor.startsWith("#") || resColor.startsWith("@") || resColor.startsWith("?")
+                            ? resColor : "@color/" + resColor, 0);
+            if (!isColorNotSet(color)) {
+                view.setBackgroundColor(color);
+                return;
+            }
+        }
+        String resDrawable = layout.backgroundResource;
+        if (resDrawable != null && !resDrawable.isEmpty() && !"NONE".equalsIgnoreCase(resDrawable)) {
+            android.graphics.drawable.Drawable drawable = resourceResolver.resolveDrawable(
+                    resDrawable.startsWith("@") ? resDrawable : "@drawable/" + resDrawable);
+            if (drawable != null) {
+                view.setBackground(drawable);
+                return;
+            }
+        }
+        if (!isColorNotSet(layout.backgroundColor)) {
+            view.setBackgroundColor(layout.backgroundColor);
+        }
     }
 
     private void applyBeanAppearance(View view, ViewBean bean) {
@@ -273,9 +456,7 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
             return;
         }
         view.setPadding(dp(layout.paddingLeft), dp(layout.paddingTop), dp(layout.paddingRight), dp(layout.paddingBottom));
-        if (layout.backgroundColor != 0) {
-            view.setBackgroundColor(layout.backgroundColor);
-        }
+        applyBeanBackground(view, layout);
         if (view instanceof android.widget.LinearLayout linearLayout) {
             linearLayout.setOrientation(layout.orientation == com.besome.sketch.beans.LayoutBean.ORIENTATION_HORIZONTAL
                     ? android.widget.LinearLayout.HORIZONTAL
@@ -311,7 +492,7 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
                 }
                 textView.setTextSize(text.textSize);
                 int textColor = resourceResolver.resolveColor(textView, text.resTextColor, text.textColor);
-                if (textColor != 0) {
+                if (!isColorNotSet(textColor)) {
                     textView.setTextColor(textColor);
                 }
                 if (text.textType == 1) {
@@ -321,7 +502,7 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
                 if (view instanceof android.widget.EditText editText && text.hint != null && !text.hint.isEmpty()) {
                     editText.setHint(text.hint);
                     int hintColor = resourceResolver.resolveColor(editText, text.resHintColor, text.hintColor);
-                    if (hintColor != 0) {
+                    if (!isColorNotSet(hintColor)) {
                         editText.setHintTextColor(hintColor);
                     }
                 }
@@ -339,7 +520,7 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
                         String value = pair.second;
                         if (value.startsWith("#") || value.startsWith("@color/") || value.startsWith("?attr/")) {
                             int color = resourceResolver.resolveColor(view, value, 0);
-                            if (color != 0) {
+                            if (!isColorNotSet(color)) {
                                 view.setBackgroundColor(color);
                             }
                         } else {
@@ -352,14 +533,14 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
                     }
                     case "android:backgroundTint": {
                         int color = resourceResolver.resolveColor(view, pair.second, 0);
-                        if (color != 0) {
+                        if (!isColorNotSet(color)) {
                             view.setBackgroundTintList(android.content.res.ColorStateList.valueOf(color));
                         }
                         break;
                     }
                     case "android:textColor": {
                         int color = resourceResolver.resolveColor(view, pair.second, 0);
-                        if (color != 0 && view instanceof android.widget.TextView textView) {
+                        if (!isColorNotSet(color) && view instanceof android.widget.TextView textView) {
                             textView.setTextColor(color);
                         }
                         break;

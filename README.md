@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.8.1-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.8.2-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -160,6 +160,22 @@ This repository is a personal fork. Every improvement is added here as it lands,
 - **Cost:** the two packed executables add **10.18 MB** to the `arm64-v8a` APK. Other ABIs have no AOT backend and
   say so instead of failing silently. The default mode is still **debug/JIT**, this stays experimental and there is
   still no hot reload.
+- **v7.0.8.2 (versionCode 164) — the layout preview paints again.** The preview of View-based designs (the
+  HTML/WebView one always worked) showed an empty area — white or black depending on the theme — with only the widgets
+  that paint themselves (SeekBar, Switch, icons) and the WebView HTML visible. The cause was a **sentinel**: the IDE's
+  own data model stores `0xffffff` for "no colour chosen" (`TextBean.textColor`/`hintColor`, `LayoutBean.backgroundColor`),
+  and `LayoutPreviewActivity` applied it as a real colour — so `0x00FFFFFF` (alpha 0) made the text fully transparent and
+  wiped the background the widget's own theme would have painted. `ViewPane` made it worse by forcing a **white** canvas
+  in preview mode while the widgets were inflated with the IDE theme, which is why the contrast flipped with the theme.
+  Now `0xffffff` (and any zero-alpha colour) means "not set" and the theme decides, the preview canvas uses the
+  `colorSurface` of the same theme that inflates the views, the inflated root keeps the dimensions declared in the XML,
+  and a view the IDE cannot instantiate shows a **red marker** plus a "partial preview" notice instead of a silent gap.
+  Verified on an arm64 API 34 emulator: the same layout in light and dark now paints the button (its area was
+  255,255,255 with zero glyphs before) and HTML/WebView previews keep working (`Preview OK · vistas: 3 · WebViews: 1`).
+  Stated honestly: Material components, Material3 projects and custom project themes are **not** verified on screen, and
+  none of it has been tested on a physical phone. Release page:
+  [v7.0.8.2](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.2). Full write-up (in Spanish):
+  [docs/preview-fix.md](docs/preview-fix.md).
 - **v7.0.8.1 (versionCode 163) — hotfix for the minified release.** R8 (release shrinking) broke the in-app
   compilation of **any** project: it renamed the `javax.lang.model.SourceVersion` fields, then the ECJ `Messages`
   table, then dropped the `apksig` classes used to sign the APK — three chained failures, all reached through
