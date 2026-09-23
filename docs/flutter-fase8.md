@@ -196,3 +196,31 @@ Se han resuelto **las tres limitaciones técnicas** que la fase 7 declaró (AOT,
 - Dart SDK para Android: paquetes **Termux** (`dart 3.13.4`); árbol del SDK: `dart.googlesource.com/sdk` (BSD).
 - Engine y framework: **Flutter 3.47.5**, `flutter_infra_release` (BSD). Gramática TextMate de Dart: **Dart-Code** (MIT).
 - Sin dependencias nuevas: el códec/base64/JSON/gzip de los assets son propios y los dos ejecutables van como `.so`.
+
+---
+
+## 12. Hotfix v7.0.8.1 (versionCode 163)
+
+La release **minificada** (R8) rompía la compilación de **cualquier** proyecto dentro de la app, con
+`ExceptionInInitializerError` en `javax.lang.model.SourceVersion.<clinit>` y en
+`com.itsaky.androidide.config.JavacConfigProvider.<clinit>`. Eran **tres** fallos encadenados, todos por acceso
+por reflexión invisible para R8, y cada uno solo aparecía al arreglar el anterior:
+
+1. **`javax.lang.model.SourceVersion`.** R8 renombraba los campos del enum (`RELEASE_17/11/8`), que
+   `JavacConfigProvider` busca por nombre con `getDeclaredField`; el `IllegalStateException` resultante reventaba
+   el compilador Java (ECJ) del IDE. Fix: `-keep class javax.lang.model.SourceVersion { *; }`, más una regla de
+   seguridad para los enums de `javax.lang.model`.
+2. **`org.eclipse.jdt.internal.compiler.util.Messages`.** R8 renombraba sus campos y los mensajes de ECJ salían
+   como `MessageFormat.format(null)`. Fix: keep de esa clase, más red de seguridad para las tablas de mensajes
+   de ECJ.
+3. **`apksig`.** R8 borraba el constructor vacío que el firmador usa por reflexión y el **firmado del APK**
+   fallaba. Fix: keep de `com.android.apksig.**` y `com.android.apksigner.**`.
+
+Todo son reglas `keep` en `app/proguard-rules.pro` (+46 líneas); no se tocó código. **Verificado en
+dispositivo**: en el emulador arm64 API 34 la app compila un proyecto real (ECJ 663 ms → dx → empaquetado → APK
+firmado V3.0) y `JavacConfigProvider` / `ExceptionInInitializerError` aparecen **0 veces** en logcat; la app
+arranca y el editor y el drawer siguen bien. APK arm64 sha256
+`0a490b19ef9d07d0d320a2eb737a21946cd3c41b283a638fcc93b93dc35b850e`.
+
+**Pendientes honestos:** solo emulador arm64 (sin móvil físico), y la prueba de compilación fue con un proyecto
+Java vacío — no se probó Flutter, Kotlin ni las demás ABIs.

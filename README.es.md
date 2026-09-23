@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.8.0-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.8.1-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -160,6 +160,13 @@ Este repositorio es un fork personal. Cada mejora se añade aquí según entra, 
 - **Coste:** los dos ejecutables empaquetados suman **10,18 MB** al APK `arm64-v8a`. Las otras ABIs no tienen
   backend AOT y lo dicen, en vez de fallar en silencio. El modo por defecto sigue siendo **debug/JIT**, esto
   continua siendo experimental y todavia no hay hot reload.
+- **v7.0.8.1 (versionCode 163) — hotfix de la release minificada.** R8 (el minificado de release) rompía la
+  compilación de **cualquier** proyecto dentro de la app: renombraba los campos de `javax.lang.model.SourceVersion`,
+  luego la tabla `Messages` de ECJ y por último borraba las clases de `apksig` que firman el APK — tres fallos
+  encadenados, todos alcanzados por reflexión que R8 no puede ver. Se arregla con tres reglas `keep` en
+  `app/proguard-rules.pro`; verificado en un emulador arm64 API 34 (ECJ → dx → empaquetado → APK firmado V3.0,
+  `ExceptionInInitializerError` 0 veces en logcat). Página de la release:
+  [v7.0.8.1](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.1).
 - Version **v7.0.8.0** (versionCode 162), pagina de la release:
   [v7.0.8.0](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.0). Todos los detalles, los
   comandos, los numeros medidos y lo que queda pendiente: [docs/flutter-fase8.md](docs/flutter-fase8.md).

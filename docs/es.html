@@ -37,14 +37,14 @@
 
   <!-- ============================================================ hero -->
   <section class="hero" style="border-top:none">
-    <div class="tag">● v7.0.8.0 · versionCode 162 · source-available</div>
+    <div class="tag">● v7.0.8.1 · versionCode 163 · source-available</div>
     <h1>Crea apps Android reales<br><span class="accent">desde tu móvil.</span></h1>
     <p class="lead">
       Sketchware Pro es un IDE de Android que funciona sobre Android: arrastra bloques, escribe Java o Kotlin,
       compila en el propio dispositivo y obtén un APK instalable — sin necesidad de ordenador.
     </p>
     <div class="btns">
-      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.0" target="_blank" rel="noopener">⬇ Descargar APK</a>
+      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.1" target="_blank" rel="noopener">⬇ Descargar APK</a>
       <a class="btn ghost" href="https://github.com/aurenox-global/Sketchware-Pro" target="_blank" rel="noopener">Ver el código en GitHub</a>
     </div>
 
@@ -225,6 +225,12 @@
         <p><img src="assets/flutter-aot-release.png" alt="App Flutter en modo release/AOT en el dispositivo, contador en 3 y sin cinta DEBUG" style="width:100%;max-width:300px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)"></p>
         <p>Version <strong>v7.0.8.0</strong> (versionCode 162). Los comandos, los numeros medidos y lo que queda
         pendiente estan en <a href="flutter-fase8.md">docs/flutter-fase8.md</a>.</p>
+        <p><strong>Hotfix v7.0.8.1 (versionCode 163).</strong> La release minificada rompía la compilación de
+        <strong>cualquier</strong> proyecto dentro de la app: R8 renombraba los campos de <code>SourceVersion</code>
+        y la tabla <code>Messages</code> de ECJ, y borraba las clases de <code>apksig</code> que firman el APK —
+        tres fallos encadenados, todos alcanzados por reflexión. Se arregla con tres reglas <code>keep</code> en
+        <code>app/proguard-rules.pro</code> y se verificó en un emulador arm64 API 34: un proyecto real compila y
+        se firma, con <code>ExceptionInInitializerError</code> ya ausente del logcat.</p>
       </div>
 
       <div class="item done">

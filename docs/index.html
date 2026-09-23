@@ -37,14 +37,14 @@
 
   <!-- ============================================================ hero -->
   <section class="hero" style="border-top:none">
-    <div class="tag">● v7.0.8.0 · versionCode 162 · source-available</div>
+    <div class="tag">● v7.0.8.1 · versionCode 163 · source-available</div>
     <h1>Build real Android apps<br><span class="accent">from your phone.</span></h1>
     <p class="lead">
       Sketchware Pro is an Android IDE that runs on Android itself: drag blocks, write Java or Kotlin,
       compile on the device and get an installable APK — no computer required.
     </p>
     <div class="btns">
-      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.0" target="_blank" rel="noopener">⬇ Download APK</a>
+      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.1" target="_blank" rel="noopener">⬇ Download APK</a>
       <a class="btn ghost" href="https://github.com/aurenox-global/Sketchware-Pro" target="_blank" rel="noopener">View source on GitHub</a>
     </div>
 
@@ -220,6 +220,12 @@
         <p><img src="assets/flutter-aot-release.png" alt="Flutter app running a release/AOT build on the device, counter at 3 and no DEBUG banner" style="width:100%;max-width:300px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)"></p>
         <p>Version <strong>v7.0.8.0</strong> (versionCode 162). The commands, the measured numbers and the honest
         pending work are documented in <a href="flutter-fase8.md">docs/flutter-fase8.md</a>.</p>
+        <p><strong>Hotfix v7.0.8.1 (versionCode 163).</strong> The minified release broke the compilation of
+        <strong>any</strong> project inside the app: R8 renamed the <code>SourceVersion</code> fields and the ECJ
+        <code>Messages</code> table, and dropped the <code>apksig</code> classes that sign the APK — three chained
+        failures, all reached through reflection. Fixed with three <code>keep</code> rules in
+        <code>app/proguard-rules.pro</code> and verified on an arm64 API 34 emulator: a real project compiles and
+        signs, with <code>ExceptionInInitializerError</code> gone from logcat.</p>
       </div>
 
       <div class="item done">
