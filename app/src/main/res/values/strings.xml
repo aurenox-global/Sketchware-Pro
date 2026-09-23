@@ -2293,5 +2293,23 @@ Please try again later"</string>
     <string name="attr_already_exist">This attribute already exists</string>
     <string name="link_sw_assist">https://play.google.com/store/apps/details?id=com.w3wide.swassist</string>
 
+    <!-- Fase 7: soporte Flutter (carril B2) -->
+    <string name="flutter_menu_build_and_run">Flutter: compilar y ejecutar</string>
+    <string name="flutter_menu_toolchain_status">Flutter: estado del toolchain</string>
+    <string name="flutter_menu_project_info">Flutter: información del proyecto</string>
+    <string name="flutter_build_mode_title">Modo de compilación</string>
+    <string name="flutter_build_mode_debug_jit">Debug (JIT)</string>
+    <string name="flutter_build_mode_release_aot">Release (AOT)</string>
+    <string name="flutter_build_in_progress">Compilando proyecto Flutter…</string>
+    <string name="flutter_build_starting">Preparando la compilación…</string>
+    <string name="flutter_build_success">Compilación completada</string>
+    <string name="flutter_build_failure">La compilación ha fallado</string>
+    <string name="flutter_build_error_log_title">Registro de error Flutter</string>
+    <string name="flutter_toolchain_install">Instalar/actualizar toolchain</string>
+    <string name="flutter_toolchain_not_ready">Toolchain de Flutter no instalado</string>
+    <string name="flutter_toolchain_ready">Toolchain de Flutter listo</string>
+    <string name="flutter_metadata_not_available">El proyecto Flutter no tiene metadatos válidos</string>
+    <string name="flutter_error_prefix">Error: %s</string>
+
 
 </resources>

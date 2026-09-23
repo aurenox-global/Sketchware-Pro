@@ -44,6 +44,7 @@ import a.a.a.yq;
 import kellinwood.security.zipsigner.ZipSigner;
 import kellinwood.security.zipsigner.optional.CustomKeySigner;
 import kellinwood.security.zipsigner.optional.LoadKeystoreException;
+import mod.hey.studios.compiler.flutter.FlutterCompilerBridge;
 import mod.hey.studios.compiler.kotlin.KotlinCompilerBridge;
 import mod.hey.studios.project.proguard.ProguardHandler;
 import mod.hey.studios.project.stringfog.StringfogHandler;
@@ -554,6 +555,14 @@ public class ExportProjectActivity extends BaseAppCompatActivity {
                 }
 
                 builder.buildBuiltInLibraryInformation();
+
+                /* Flutter (carril C, Fase 7): compila el Dart on-device y deja flutter_assets
+                 * en yq.assetsPath antes de que AAPT2 los enlace con -A. */
+                FlutterCompilerBridge.compileFlutterCodeIfPossible(activity.get(), builder);
+                if (canceled) {
+                    cancel(true);
+                    return;
+                }
 
                 publishProgress("AAPT2 is running...");
                 builder.compileResources();

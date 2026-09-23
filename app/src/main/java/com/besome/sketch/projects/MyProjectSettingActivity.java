@@ -53,6 +53,9 @@ import pro.sketchware.activities.iconcreator.IconCreatorActivity;
 import pro.sketchware.control.VersionDialog;
 import pro.sketchware.databinding.MyprojectSettingBinding;
 import pro.sketchware.featureflags.FeatureFlags;
+import pro.sketchware.flutter.FlutterProject;
+import pro.sketchware.flutter.FlutterProjectStore;
+import pro.sketchware.flutter.FlutterScaffoldInitializer;
 import pro.sketchware.kmp.KmpProject;
 import pro.sketchware.kmp.KmpProjectSerializer;
 import pro.sketchware.kmp.KmpScaffoldInitResult;
@@ -564,6 +567,7 @@ public class MyProjectSettingActivity extends BaseAppCompatActivity implements V
                 projectSettings.setValue(ProjectSettings.SETTING_ENABLE_VIEWBINDING, ProjectSettings.SETTING_GENERIC_VALUE_TRUE);
 
                 maybeInitializeKmpScaffold();
+                maybeInitializeFlutterScaffold();
 
             }
             try {
@@ -606,6 +610,44 @@ public class MyProjectSettingActivity extends BaseAppCompatActivity implements V
                 FileUtil.writeFile(projectJsonFile.getAbsolutePath(), KmpProjectSerializer.toJson(project));
             } catch (Exception e) {
                 Log.e(TAG, "Unexpected error while initializing KMP scaffold for sc_id=" + sc_id, e);
+            }
+        }
+
+        private void maybeInitializeFlutterScaffold() {
+            if (!FeatureFlags.isEnabled(getApplicationContext(), FeatureFlags.Key.FLUTTER_EXPERIMENTAL_ENABLE)) {
+                return;
+            }
+
+            try {
+                String projectRootPath = wq.b(sc_id);
+                File projectFilesDirectory = new File(projectRootPath, "files");
+                File flutterRootDirectory = FlutterProjectStore.rootDirectory(projectFilesDirectory);
+
+                String packageName = Helper.getText(binding.etPackageName).trim();
+                String projectName = Helper.getText(binding.etProjectName).trim();
+                if (packageName.isEmpty()) {
+                    packageName = "pro.sketchware.flutter";
+                }
+                if (projectName.isEmpty()) {
+                    projectName = "FlutterProject";
+                }
+
+                boolean success = FlutterScaffoldInitializer.initialize(
+                        flutterRootDirectory,
+                        sc_id,
+                        projectName,
+                        packageName
+                );
+
+                if (!success) {
+                    Log.w(TAG, "Flutter scaffold initialization failed for sc_id=" + sc_id);
+                    return;
+                }
+
+                FlutterProject project = FlutterProject.createDefault(sc_id, projectName, packageName);
+                FlutterProjectStore.save(projectFilesDirectory, project);
+            } catch (Exception e) {
+                Log.e(TAG, "Unexpected error while initializing Flutter scaffold for sc_id=" + sc_id, e);
             }
         }
 

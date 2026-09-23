@@ -59,6 +59,7 @@ import mod.agus.jcoderz.dx.merge.DexMerger;
 import mod.agus.jcoderz.editor.library.ExtLibSelected;
 import mod.agus.jcoderz.editor.manage.library.locallibrary.ManageLocalLibrary;
 import mod.hey.studios.build.BuildSettings;
+import mod.hey.studios.compiler.flutter.FlutterCompilerBridge;
 import mod.hey.studios.compiler.incremental.JavaIncrementalBuildAnalyzer;
 import mod.hey.studios.compiler.kotlin.KotlinCompilerBridge;
 import mod.hey.studios.compiler.tooling.GradleToolingBridge;
@@ -315,6 +316,9 @@ public class ProjectBuilder {
          * since there might be compiled Kotlin files for ecj to use classpath as.
          */
         KotlinCompilerBridge.maybeAddKotlinFilesToClasspath(classpath, yq);
+
+        /* Adds the Flutter embedding jar (carril C, Fase 7) if the project is a Flutter one */
+        FlutterCompilerBridge.maybeAddFlutterEmbeddingToClasspath(classpath, yq);
 
         /* Add android.jar */
         classpath.append(androidJarPath);

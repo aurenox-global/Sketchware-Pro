@@ -46,6 +46,7 @@ staxApi = "1.0-2"
 swiperefreshlayout = "1.1.0"
 viewpager = "1.1.0"
 woodstoxCore = "7.1.1"
+xz = "1.10"
 zipalignJava = "1.2.2"
 
 [libraries]
@@ -120,6 +121,8 @@ sdklib = { module = "com.android.tools:sdklib", version.ref = "sdklib" }
 stax-api = { module = "javax.xml.stream:stax-api", version.ref = "staxApi" }
 
 woodstox-core = { module = "com.fasterxml.woodstox:woodstox-core", version.ref = "woodstoxCore" }
+
+xz = { module = "org.tukaani:xz", version.ref = "xz" }
 
 zipalign-java = { module = "com.github.Iyxan23:zipalign-java", version.ref = "zipalignJava" }
 

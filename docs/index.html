@@ -37,14 +37,14 @@
 
   <!-- ============================================================ hero -->
   <section class="hero" style="border-top:none">
-    <div class="tag">● v7.0.6.0 · versionCode 160 · source-available</div>
+    <div class="tag">● v7.0.7.0 · versionCode 161 · source-available</div>
     <h1>Build real Android apps<br><span class="accent">from your phone.</span></h1>
     <p class="lead">
       Sketchware Pro is an Android IDE that runs on Android itself: drag blocks, write Java or Kotlin,
       compile on the device and get an installable APK — no computer required.
     </p>
     <div class="btns">
-      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.6.0" target="_blank" rel="noopener">⬇ Download APK</a>
+      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.7.0" target="_blank" rel="noopener">⬇ Download APK</a>
       <a class="btn ghost" href="https://github.com/aurenox-global/Sketchware-Pro" target="_blank" rel="noopener">View source on GitHub</a>
     </div>
 
@@ -178,6 +178,37 @@
         editor's renderer, which returned an empty root when the layout name was not found in the project data.
         Now every layout is built with the real-views builder that works from the XML alone, with the native
         renderer as fallback and a visible message if both fail. Version <strong>v7.0.6.0</strong>.</p>
+      </div>
+
+      <div class="item done">
+        <span class="when">2026-09-23 · Flutter (experimental)</span>
+        <h3>Flutter support: Dart editor and builds on the device <span class="pill info">experimental</span></h3>
+        <ul class="clean">
+          <li><strong>The editor understands Dart.</strong> <code>.dart</code> files get the TextMate Dart grammar
+          (from the Dart-Code project, MIT), its language configuration, bracket matching and Dart completions, plus a
+          Flutter icon in the menus.</li>
+          <li><strong>A Flutter project type.</strong> Behind the <code>FLUTTER_EXPERIMENTAL_ENABLE</code> flag
+          (<strong>off by default</strong>, in Settings › Feature flags), saving a project seeds
+          <code>files/flutter/</code> with <code>pubspec.yaml</code>, a Material 3 <code>lib/main.dart</code> counter app,
+          <code>assets/</code> and <code>android/</code>. The editor then offers a Flutter menu to build and run, check the
+          toolchain status or read the project info.</li>
+          <li><strong>The toolchain is downloaded to the phone</strong> (Dart SDK for Android 3.13.4 and the Flutter 3.47.5
+          engine artifacts) and everything runs on the device: the only network use is that first download. There is no
+          cloud service and Gradle is not involved.</li>
+          <li><strong>Honest limitation: release/AOT on the device is blocked.</strong> The Dart SDK's
+          <code>gen_snapshot</code> is built <strong>without compressed pointers</strong> while the official engine
+          requires them (<em>Snapshot not compatible: the snapshot requires arm64 android no-compressed-pointers but the
+          VM has compressed-pointers</em>), and a compatible <code>gen_snapshot</code> is only published for
+          linux-x64/darwin-x64/windows-x64 hosts (404 for arm64/android). <strong>Only debug/JIT is usable today</strong>,
+          and the UI says so. There is also no hot reload, no real pub resolution and no plugins.</li>
+          <li><strong>Proven on a real device.</strong> In an arm64 Android 14 emulator the phone's own Dart compiled the
+          kernel and an APK packed by hand with <code>aapt2</code> + <code>d8</code> + <code>zipalign</code> +
+          <code>apksigner</code> started: the Flutter activity came up RESUMED, Material UI rendered and the counter moved
+          on real taps. It has not been tested on a physical phone or on ABIs other than <code>arm64-v8a</code>.</li>
+        </ul>
+        <p><img src="assets/flutter-e2e.png" alt="Flutter app built and run on the device, with the counter at 3" style="width:100%;max-width:300px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)"></p>
+        <p>Version <strong>v7.0.7.0</strong> (versionCode 161). The measured numbers, the raw commands and the pending work
+        are documented in <a href="flutter-fase7.md">docs/flutter-fase7.md</a>.</p>
       </div>
 
       <div class="item done">
@@ -376,6 +407,7 @@
           <tr><td>In-app IDE: quick fixes over diagnostics (phase 5)</td><td><span class="pill ok">done</span></td></tr>
           <tr><td>In-app IDE: Kotlin support (phase 6)</td><td><span class="pill ok">done</span></td></tr>
           <tr><td>In-app IDE: Kotlin diagnostics (phase 7)</td><td><span class="pill warn">next</span></td></tr>
+          <tr><td>Flutter support, experimental: Dart editor and on-device build (debug/JIT only)</td><td><span class="pill info">experimental</span></td></tr>
           <tr><td>R8 running in CI (blocked by the <code>bundletool</code> jar)</td><td><span class="pill warn">blocked</span></td></tr>
           <tr><td>ABI splits (one APK per architecture)</td><td><span class="pill ok">done</span></td></tr>
           <tr><td>Translations, deprecated APIs, test coverage</td><td><span class="pill info">planned</span></td></tr>

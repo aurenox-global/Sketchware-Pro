@@ -47,4 +47,25 @@
         android:title="KMP compatibility inspector"
         app:showAsAction="never" />
 
+    <item
+        android:id="@+id/menu_logic_flutter_build"
+        android:icon="@drawable/ic_flutter"
+        android:orderInCategory="120"
+        android:title="@string/flutter_menu_build_and_run"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/menu_logic_flutter_toolchain"
+        android:icon="@drawable/ic_mtrl_download"
+        android:orderInCategory="121"
+        android:title="@string/flutter_menu_toolchain_status"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/menu_logic_flutter_info"
+        android:icon="@drawable/ic_mtrl_info"
+        android:orderInCategory="122"
+        android:title="@string/flutter_menu_project_info"
+        app:showAsAction="never" />
+
 </menu>

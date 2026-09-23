@@ -134,6 +134,31 @@ Requisitos:
 Este repositorio es un fork personal. Cada mejora se añade aquí según entra, y el
 [sitio web](https://aurenox-global.github.io/Sketchware-Pro/es.html) se actualiza a la vez.
 
+### 2026-09-23 — soporte de Flutter, experimental: ficheros Dart y compilacion en el dispositivo (fase 7)
+
+- **El editor ya entiende Dart.** Los ficheros `.dart` reciben la gramatica TextMate de Dart (del proyecto
+  Dart-Code, licencia MIT), su configuracion de lenguaje, el emparejado de llaves y el **autocompletado de Dart**,
+  ademas de un icono de Flutter en los menus.
+- **Un tipo de proyecto: Flutter.** Detras del flag `FLUTTER_EXPERIMENTAL_ENABLE` — **apagado por defecto**, en
+  Ajustes › Feature flags — al guardar el proyecto se siembra `files/flutter/` con `pubspec.yaml`, un `lib/main.dart`
+  Material 3 con contador, `assets/`, `.gitignore` y `android/`. El editor muestra entonces un **menu Flutter**:
+  compilar y ejecutar, estado del toolchain e informacion del proyecto.
+- **El toolchain se descarga al propio movil.** El Dart SDK para Android (paquete `dart 3.13.4` de Termux, un `.deb`
+  que se abre con el codigo ar/XZ/tar propio de la app) y los artefactos del engine de Flutter 3.47.5. Todo se
+  ejecuta en el dispositivo; la unica red que se usa es esa primera descarga.
+- **Limitacion honesta: el release/AOT en el dispositivo esta bloqueado.** El `gen_snapshot` del SDK de Dart esta
+  compilado **sin compressed pointers** y el engine oficial los exige (`Snapshot not compatible ... the snapshot
+  requires 'arm64 android no-compressed-pointers' but the VM has '... compressed-pointers'`), y un `gen_snapshot`
+  compatible solo se publica para hosts linux-x64/darwin-x64/windows-x64 (404 para arm64/android). **Hoy el unico
+  modo usable es debug/JIT**, y la interfaz lo dice.
+- **Probado en un dispositivo real.** En un emulador Android 14 arm64 el Dart del propio telefono compilo el kernel
+  (`kernel_blob.bin`, 4,2 s) y un APK armado a mano (`aapt2` + `d8` + `zipalign` + `apksigner`) **arranco**:
+  FlutterActivity en RESUMED, UI Material renderizada y el contador respondiendo a toques reales. **No** se ha
+  probado en movil fisico, ni con ABIs distintas de `arm64-v8a`, ni con hot reload, ni con resolucion real de pub.
+- Version **v7.0.7.0** (versionCode 161), pagina de la release:
+  [v7.0.7.0](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.7.0). Todos los detalles, los numeros
+  medidos, los comandos y lo que queda pendiente: [docs/flutter-fase7.md](docs/flutter-fase7.md).
+
 ### 2026-09-22 — arreglada la vista previa de layouts con elementos View
 
 - **La vista previa ya no sale en blanco.** Los disenos hechos con elementos View (AndroidX, widgets) iban por el
@@ -312,6 +337,7 @@ Este repositorio es un fork personal. Cada mejora se añade aquí según entra, 
 | Reducción de recursos (`res/raw/keep.xml`) | bloqueado |
 | Traducciones, APIs deprecadas, cobertura de tests | planificado |
 | Vista previa en blanco con disenos hechos con View | arreglado |
+| Soporte de Flutter, experimental (editor Dart y compilacion en el dispositivo; solo debug/JIT) | experimental |
 
 Bloqueos conocidos, con detalle:
 

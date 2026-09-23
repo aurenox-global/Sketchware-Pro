@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fase 7: icono de Flutter/Dart para el editor y los menus. Trazado del logotipo oficial
+     de Flutter (simple-icons, CC0), adaptado a vector drawable de Android. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#42A5F5"
+        android:pathData="M14.314 0L2.3 12 6 15.7 21.684 0.013h-7.357z" />
+    <path
+        android:fillColor="#1976D2"
+        android:pathData="M14.328 11.072L7.857 17.53l6.47 6.47H21.7l-6.46-6.468 6.46-6.46h-7.372z" />
+</vector>

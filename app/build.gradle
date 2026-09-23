@@ -68,8 +68,8 @@ android {
         namespace = "pro.sketchware"
       targetSdk = 35
         minSdk = 26
-        versionCode = 160
-        versionName = "v7.0.6.0"
+        versionCode = 161
+        versionName = "v7.0.7.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "GIT_HASH", "\"${gitCommitHash}\"")
@@ -275,6 +275,10 @@ dependencies {
     implementation libs.markwon
 
     implementation libs.bundles.networking
+
+    // Carril C (Fase 7, soporte Flutter): descompresion XZ de los data.tar.xz de los .deb de
+    // Termux sin depender de binarios externos (el parser ar/tar si es propio).
+    implementation libs.xz
 
     implementation libs.ecj
     implementation libs.stax.api

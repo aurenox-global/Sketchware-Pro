@@ -44,6 +44,12 @@
 
     <SwitchPreferenceCompat
         app:iconSpaceReserved="false"
+        app:key="FLUTTER_EXPERIMENTAL_ENABLE"
+        app:summary="Enable Flutter (Dart) project model, scaffold, and build entry points."
+        app:title="Flutter Experimental Enable" />
+
+    <SwitchPreferenceCompat
+        app:iconSpaceReserved="false"
         app:key="LOCAL_AI_MULTI_ACTIVITY_GENERATION"
         app:summary="Enable Local AI generation of multiple editable activities from screens."
         app:title="Local AI Multi-Activity Generation" />

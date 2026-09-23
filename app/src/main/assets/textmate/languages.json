@@ -17,6 +17,12 @@
       "name": "xml",
       "scopeName": "text.xml",
       "languageConfiguration": "textmate/xml/language-configuration.json"
+    },
+    {
+      "grammar": "textmate/dart/syntaxes/dart.tmLanguage.json",
+      "name": "dart",
+      "scopeName": "source.dart",
+      "languageConfiguration": "textmate/dart/language-configuration.json"
     }
   ]
 }

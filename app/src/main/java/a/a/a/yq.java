@@ -474,6 +474,17 @@ public class yq {
     }
 
     /**
+     * Flutter (carril C, Fase 7): raiz del proyecto Flutter dentro del proyecto generado.
+     *
+     * <p>Mismo arbol que {@link yq#projectMyscPath}: {@code <mysc>/files/flutter}. Se centraliza
+     * aqui (junto a {@link yq#androidManifestPath} y {@link yq#assetsPath}) para que ni el bridge
+     * ni el orquestador dupliquen la ruta.
+     */
+    public File getFlutterRootDirectory() {
+        return new File(projectMyscPath + "files" + File.separator + "flutter");
+    }
+
+    /**
      * Initialize project metadata
      */
     public void a(iC projectLibraryManager, hC projectFileManager, eC projectDataManager) {

@@ -71,6 +71,7 @@ import mod.hey.studios.util.Helper;
 import mod.jbk.code.CodeEditorColorSchemes;
 import mod.jbk.code.CodeEditorLanguages;
 import mod.jbk.code.JavaDiagnosticsAnalyzer;
+import mod.jbk.code.ProjectDartLanguage;
 import mod.jbk.code.ProjectJavaLanguage;
 import mod.jbk.code.ProjectKotlinLanguage;
 import pro.sketchware.lsp.LocalSymbolNavigationProvider;
@@ -178,6 +179,11 @@ public class SrcCodeEditor extends BaseAppCompatActivity {
             case 2:
                 ed.setEditorLanguage(CodeEditorLanguages.loadTextMateLanguage(CodeEditorLanguages.SCOPE_NAME_XML));
                 languageId = 2;
+                break;
+
+            case 3:
+                ed.setEditorLanguage(new ProjectDartLanguage(currentScId));
+                languageId = 3;
                 break;
         }
 
@@ -305,7 +311,8 @@ public class SrcCodeEditor extends BaseAppCompatActivity {
         CharSequence[] languagesList = {
                 "Java",
                 "Kotlin",
-                "XML"
+                "XML",
+                "Dart"
         };
 
         new MaterialAlertDialogBuilder(activity)
@@ -378,6 +385,11 @@ public class SrcCodeEditor extends BaseAppCompatActivity {
                 binding.editor.setColorScheme(CodeEditorColorSchemes.loadTextMateColorScheme(CodeEditorColorSchemes.THEME_GITHUB));
             }
             languageId = 2;
+        } else if (title.endsWith(".dart")) {
+            // Fase 7: Dart/Flutter usa TextMate propio (source.dart) con el tema Dracula, igual que Kotlin.
+            binding.editor.setEditorLanguage(new ProjectDartLanguage(currentScId));
+            binding.editor.setColorScheme(CodeEditorColorSchemes.loadTextMateColorScheme(CodeEditorColorSchemes.THEME_DRACULA));
+            languageId = 3;
         }
 
         loadCESettings(this, binding.editor, "act", true);
@@ -730,6 +742,8 @@ public class SrcCodeEditor extends BaseAppCompatActivity {
             return "kotlin";
         } else if (filename.endsWith(".xml")) {
             return "xml";
+        } else if (filename.endsWith(".dart")) {
+            return "dart";
         }
         return "java";
     }

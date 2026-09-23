@@ -12,6 +12,8 @@ import pro.sketchware.SketchApplication;
 public class CodeEditorLanguages {
     public static final String SCOPE_NAME_KOTLIN = "source.kotlin";
     public static final String SCOPE_NAME_XML = "text.xml";
+    /** Scope de la gramatica TextMate de Dart (Fase 7, soporte Flutter). */
+    public static final String SCOPE_NAME_DART = "source.dart";
     private static final String TAG = "CodeEditorLanguages";
 
     static {

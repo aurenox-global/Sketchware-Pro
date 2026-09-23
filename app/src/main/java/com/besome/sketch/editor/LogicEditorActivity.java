@@ -43,6 +43,7 @@ import android.widget.Toast;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.content.FileProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -132,6 +133,13 @@ import pro.sketchware.blocks.typing.TypedBlockTypeCheckResult;
 import pro.sketchware.databinding.ImagePickerItemBinding;
 import pro.sketchware.databinding.SearchWithRecyclerViewBinding;
 import pro.sketchware.featureflags.FeatureFlags;
+import pro.sketchware.flutter.FlutterBuildMode;
+import pro.sketchware.flutter.FlutterBuildOrchestrator;
+import pro.sketchware.flutter.FlutterProjectDefaults;
+import pro.sketchware.flutter.FlutterBuildResult;
+import pro.sketchware.flutter.FlutterProject;
+import pro.sketchware.flutter.FlutterProjectStore;
+import pro.sketchware.flutter.FlutterToolchainManager;
 import pro.sketchware.kmp.KmpBlockCompatibilityValidator;
 import pro.sketchware.kmp.KmpCompatibilityInspectorFormatter;
 import pro.sketchware.kmp.KmpCompatibilityInspectorSummary;
@@ -142,6 +150,7 @@ import pro.sketchware.kmp.KmpProjectParseResult;
 import pro.sketchware.kmp.KmpProjectSerializer;
 import pro.sketchware.kmp.KmpTarget;
 import pro.sketchware.menu.ExtraMenuBean;
+import pro.sketchware.metrics.FlutterBuildPerformanceMetricsStore;
 import pro.sketchware.utility.FilePathUtil;
 import pro.sketchware.utility.FileUtil;
 import pro.sketchware.utility.SvgUtils;
@@ -193,6 +202,8 @@ public class LogicEditorActivity extends BaseAppCompatActivity implements View.O
     private int lastKmpTargetCompatibilityCount = -1;
     private long lastKmpCompatibilityToastAtMs = 0L;
     private KmpTarget selectedKmpEditorTarget;
+    private FlutterProject cachedFlutterProject;
+    private boolean flutterProjectLoadAttempted = false;
     private String defaultToolbarSubtitle = "";
     private final ArrayList<String> lastKmpTargetCompatibilityMessages = new ArrayList<>();
 
@@ -2056,6 +2067,8 @@ public class LogicEditorActivity extends BaseAppCompatActivity implements View.O
             kmpInspectorMenuItem.setEnabled(kmpEditorContextAvailable);
         }
 
+        applyFlutterMenuVisibility(menu);
+
         return true;
     }
 
@@ -2080,6 +2093,15 @@ public class LogicEditorActivity extends BaseAppCompatActivity implements View.O
             return true;
         } else if (itemId == R.id.menu_logic_kmp_inspector) {
             showKmpCompatibilityInspector();
+            return true;
+        } else if (itemId == R.id.menu_logic_flutter_build) {
+            showFlutterBuildModeDialog();
+            return true;
+        } else if (itemId == R.id.menu_logic_flutter_toolchain) {
+            showFlutterToolchainStatusDialog();
+            return true;
+        } else if (itemId == R.id.menu_logic_flutter_info) {
+            showFlutterProjectInfoDialog();
             return true;
         }
 
@@ -2756,6 +2778,350 @@ public class LogicEditorActivity extends BaseAppCompatActivity implements View.O
         selectedKmpEditorTarget = project.enabledTargets.get(0);
         new ProjectSettings(scId).setValue(ProjectSettings.SETTING_KMP_EDITOR_TARGET, selectedKmpEditorTarget.name());
         return selectedKmpEditorTarget;
+    }
+
+    // ------------------------------------------------------------------
+    // Fase 7 - Soporte Flutter (carril B2): cache + dialogos del editor.
+    // Todo el codigo de aqui asume el contrato congelado del carril C
+    // (FlutterBuildOrchestrator / FlutterToolchainManager) y esta envuelto
+    // en try/catch para no romper el editor de bloques.
+    // ------------------------------------------------------------------
+
+    /** Directorio `files` del proyecto (padre de `files/java`). */
+    private File getFlutterProjectFilesDirectory() {
+        File javaDirectory = new File(fpu.getPathJava(scId));
+        return javaDirectory.getParentFile();
+    }
+
+    /**
+     * Gate del editor Flutter: el flag experimental debe estar activo y el proyecto debe
+     * tener `flutter/pubspec.yaml`. Nunca lanza.
+     */
+    private boolean isFlutterEditorContext() {
+        try {
+            if (!FeatureFlags.isEnabled(getApplicationContext(), FeatureFlags.Key.FLUTTER_EXPERIMENTAL_ENABLE)) {
+                return false;
+            }
+
+            File filesDirectory = getFlutterProjectFilesDirectory();
+            return filesDirectory != null && FlutterProjectStore.isFlutterProject(filesDirectory);
+        } catch (Exception e) {
+            android.util.Log.d("SketchwarePro", "LogicEditorActivity: Flutter context detection failed", e);
+            return false;
+        }
+    }
+
+    private void applyFlutterMenuVisibility(Menu menu) {
+        boolean flutterEditorContextAvailable = isFlutterEditorContext();
+
+        MenuItem flutterBuildMenuItem = menu.findItem(R.id.menu_logic_flutter_build);
+        if (flutterBuildMenuItem != null) {
+            flutterBuildMenuItem.setVisible(flutterEditorContextAvailable);
+            flutterBuildMenuItem.setEnabled(flutterEditorContextAvailable);
+        }
+
+        MenuItem flutterToolchainMenuItem = menu.findItem(R.id.menu_logic_flutter_toolchain);
+        if (flutterToolchainMenuItem != null) {
+            flutterToolchainMenuItem.setVisible(flutterEditorContextAvailable);
+            flutterToolchainMenuItem.setEnabled(flutterEditorContextAvailable);
+        }
+
+        MenuItem flutterInfoMenuItem = menu.findItem(R.id.menu_logic_flutter_info);
+        if (flutterInfoMenuItem != null) {
+            flutterInfoMenuItem.setVisible(flutterEditorContextAvailable);
+            flutterInfoMenuItem.setEnabled(flutterEditorContextAvailable);
+        }
+    }
+
+    /** Cache del [FlutterProject] (patron de [loadKmpProjectForCompatibility]). */
+    private FlutterProject loadFlutterProjectForEditor() {
+        if (flutterProjectLoadAttempted) {
+            return cachedFlutterProject;
+        }
+        flutterProjectLoadAttempted = true;
+
+        try {
+            File filesDirectory = getFlutterProjectFilesDirectory();
+            if (filesDirectory == null) {
+                return null;
+            }
+            cachedFlutterProject = FlutterProjectStore.load(filesDirectory);
+        } catch (Exception e) {
+            android.util.Log.d("SketchwarePro", "LogicEditorActivity: failed to load Flutter project", e);
+        }
+
+        return cachedFlutterProject;
+    }
+
+    private TextView createFlutterLogView(String initialText) {
+        TextView logView = new TextView(this);
+        logView.setTextSize(12f);
+        logView.setTypeface(Typeface.MONOSPACE);
+        logView.setTextIsSelectable(true);
+        logView.setPadding(24, 24, 24, 24);
+        logView.setText(initialText);
+        return logView;
+    }
+
+    private ScrollView createFlutterScrollableLog(String log) {
+        ScrollView scrollView = new ScrollView(this);
+        scrollView.addView(createFlutterLogView(log == null ? "" : log));
+        return scrollView;
+    }
+
+    private void appendFlutterProgressLog(TextView logView, ScrollView scrollView, String log) {
+        runOnUiThread(() -> {
+            try {
+                logView.setText(log);
+                scrollView.post(() -> scrollView.fullScroll(View.FOCUS_DOWN));
+            } catch (Exception ignored) {
+                // El dialogo ya puede estar cerrado; se ignora.
+            }
+        });
+    }
+
+    private String safeFlutterMessage(Throwable throwable) {
+        if (throwable == null || throwable.getMessage() == null) {
+            return "error desconocido";
+        }
+        return throwable.getMessage();
+    }
+
+    private void showFlutterBuildModeDialog() {
+        try {
+            FlutterProject project = loadFlutterProjectForEditor();
+            FlutterBuildMode defaultMode = project == null ? FlutterProjectDefaults.DEFAULT_MODE : project.getMode();
+
+            String[] labels = new String[]{
+                    getString(R.string.flutter_build_mode_debug_jit),
+                    getString(R.string.flutter_build_mode_release_aot)
+            };
+            final FlutterBuildMode[] modes = new FlutterBuildMode[]{
+                    FlutterBuildMode.DEBUG_JIT,
+                    FlutterBuildMode.RELEASE_AOT
+            };
+            int checkedIndex = defaultMode == FlutterBuildMode.DEBUG_JIT ? 0 : 1;
+
+            new MaterialAlertDialogBuilder(this)
+                    .setTitle(R.string.flutter_build_mode_title)
+                    .setSingleChoiceItems(labels, checkedIndex, (dialog, which) -> {
+                        dialog.dismiss();
+                        startFlutterBuild(modes[which]);
+                    })
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show();
+        } catch (Exception e) {
+            Toast.makeText(this, getString(R.string.flutter_error_prefix, safeFlutterMessage(e)), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void startFlutterBuild(final FlutterBuildMode mode) {
+        final TextView logView = createFlutterLogView(getString(R.string.flutter_build_starting));
+        final ScrollView scrollView = new ScrollView(this);
+        scrollView.addView(logView);
+
+        final AlertDialog progressDialog;
+        try {
+            progressDialog = new MaterialAlertDialogBuilder(this)
+                    .setTitle(R.string.flutter_build_in_progress)
+                    .setView(scrollView)
+                    .setCancelable(false)
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .create();
+            progressDialog.show();
+        } catch (Exception e) {
+            Toast.makeText(this, getString(R.string.flutter_error_prefix, safeFlutterMessage(e)), Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        final Context applicationContext = getApplicationContext();
+        final String buildScId = scId;
+
+        new Thread(() -> {
+            final StringBuilder logBuffer = new StringBuilder();
+            FlutterBuildResult result;
+            try {
+                result = FlutterBuildOrchestrator.build(applicationContext, buildScId, mode, message -> {
+                    logBuffer.append(message).append('\n');
+                    appendFlutterProgressLog(logView, scrollView, logBuffer.toString());
+                    return kotlin.Unit.INSTANCE;
+                });
+            } catch (Throwable throwable) {
+                logBuffer.append(getString(R.string.flutter_error_prefix, safeFlutterMessage(throwable))).append('\n');
+                result = null;
+            }
+
+            final FlutterBuildResult finalResult = result;
+            final String finalLog = logBuffer.toString();
+
+            runOnUiThread(() -> {
+                try {
+                    progressDialog.dismiss();
+                } catch (Exception ignored) {
+                    // Nada que hacer.
+                }
+                showFlutterBuildResultDialog(finalResult, finalLog, mode);
+            });
+        }, "flutter-build").start();
+    }
+
+    private void showFlutterBuildResultDialog(FlutterBuildResult result, String progressLog, FlutterBuildMode mode) {
+        try {
+            boolean success = result != null && result.getSuccess();
+            long durationMs = result == null ? 0L : result.getDurationMs();
+            String apkPath = result == null ? null : result.getApkPath();
+
+            String log = progressLog;
+            if ((log == null || log.isEmpty()) && result != null && result.getLog() != null) {
+                log = result.getLog();
+            }
+
+            FlutterBuildPerformanceMetricsStore.record(
+                    getApplicationContext(),
+                    mode,
+                    success,
+                    durationMs,
+                    apkPath
+            );
+
+            MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(this);
+            if (success) {
+                StringBuilder message = new StringBuilder(getString(R.string.flutter_build_success));
+                if (apkPath != null && !apkPath.isEmpty()) {
+                    message.append("\n\n").append(apkPath);
+                }
+                builder.setTitle(R.string.flutter_build_success)
+                        .setMessage(message.toString())
+                        .setPositiveButton(android.R.string.ok, null);
+            } else {
+                builder.setTitle(R.string.flutter_build_failure)
+                        .setView(createFlutterScrollableLog(log))
+                        .setPositiveButton(android.R.string.ok, null);
+            }
+            builder.show();
+        } catch (Exception e) {
+            Toast.makeText(this, getString(R.string.flutter_error_prefix, safeFlutterMessage(e)), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void showFlutterToolchainStatusDialog() {
+        try {
+            Context applicationContext = getApplicationContext();
+            String dartVersion = FlutterToolchainManager.installedDartVersion(applicationContext);
+            boolean ready = FlutterToolchainManager.isReady(applicationContext);
+            String toolchainPath = FlutterToolchainManager.toolchainDir(applicationContext).getAbsolutePath();
+
+            StringBuilder message = new StringBuilder();
+            message.append(ready ? getString(R.string.flutter_toolchain_ready) : getString(R.string.flutter_toolchain_not_ready));
+            message.append("\n\n");
+            message.append("Dart: ").append(dartVersion == null || dartVersion.isEmpty() ? "-" : dartVersion);
+            message.append("\n");
+            message.append("Directorio: ").append(toolchainPath);
+
+            new MaterialAlertDialogBuilder(this)
+                    .setTitle(R.string.flutter_menu_toolchain_status)
+                    .setMessage(message.toString())
+                    .setPositiveButton(R.string.flutter_toolchain_install, (dialog, which) -> startFlutterToolchainInstall())
+                    .setNegativeButton(android.R.string.ok, null)
+                    .show();
+        } catch (Exception e) {
+            Toast.makeText(this, getString(R.string.flutter_error_prefix, safeFlutterMessage(e)), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void startFlutterToolchainInstall() {
+        final TextView logView = createFlutterLogView(getString(R.string.flutter_build_starting));
+        final ScrollView scrollView = new ScrollView(this);
+        scrollView.addView(logView);
+
+        final AlertDialog progressDialog;
+        try {
+            progressDialog = new MaterialAlertDialogBuilder(this)
+                    .setTitle(R.string.flutter_toolchain_install)
+                    .setView(scrollView)
+                    .setCancelable(false)
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .create();
+            progressDialog.show();
+        } catch (Exception e) {
+            Toast.makeText(this, getString(R.string.flutter_error_prefix, safeFlutterMessage(e)), Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        final Context applicationContext = getApplicationContext();
+
+        new Thread(() -> {
+            final StringBuilder logBuffer = new StringBuilder();
+            boolean installed;
+            try {
+                installed = FlutterToolchainManager.ensureInstalled(applicationContext, message -> {
+                    logBuffer.append(message).append('\n');
+                    appendFlutterProgressLog(logView, scrollView, logBuffer.toString());
+                    return kotlin.Unit.INSTANCE;
+                });
+            } catch (Throwable throwable) {
+                logBuffer.append(getString(R.string.flutter_error_prefix, safeFlutterMessage(throwable))).append('\n');
+                installed = false;
+            }
+
+            final boolean finalInstalled = installed;
+            final String finalLog = logBuffer.toString();
+
+            runOnUiThread(() -> {
+                try {
+                    progressDialog.dismiss();
+                } catch (Exception ignored) {
+                    // Nada que hacer.
+                }
+
+                try {
+                    new MaterialAlertDialogBuilder(LogicEditorActivity.this)
+                            .setTitle(finalInstalled ? R.string.flutter_toolchain_ready : R.string.flutter_toolchain_not_ready)
+                            .setView(createFlutterScrollableLog(finalLog))
+                            .setPositiveButton(android.R.string.ok, null)
+                            .show();
+                } catch (Exception e) {
+                    Toast.makeText(LogicEditorActivity.this, getString(R.string.flutter_error_prefix, safeFlutterMessage(e)), Toast.LENGTH_LONG).show();
+                }
+            });
+        }, "flutter-toolchain").start();
+    }
+
+    private void showFlutterProjectInfoDialog() {
+        try {
+            File filesDirectory = getFlutterProjectFilesDirectory();
+            FlutterProject project = loadFlutterProjectForEditor();
+
+            StringBuilder message = new StringBuilder();
+            if (project == null) {
+                message.append(getString(R.string.flutter_metadata_not_available));
+            } else {
+                message.append("Nombre: ").append(project.getProjectName()).append("\n");
+                message.append("scId: ").append(project.getScId()).append("\n");
+                message.append("Paquete: ").append(project.getPackageName()).append("\n");
+                message.append("Modo: ").append(project.getMode().name());
+            }
+
+            if (filesDirectory != null) {
+                File rootDirectory = FlutterProjectStore.rootDirectory(filesDirectory);
+                message.append("\n\n");
+                message.append("Directorio: ").append(rootDirectory.getAbsolutePath());
+                message.append("\n");
+                message.append("pubspec.yaml: ").append(new File(rootDirectory, "pubspec.yaml").exists() ? "si" : "no");
+                message.append("\n");
+                message.append("lib/main.dart: ").append(new File(rootDirectory, "lib/main.dart").exists() ? "si" : "no");
+            }
+
+            message.append("\n\n").append(FlutterBuildPerformanceMetricsStore.snapshot(getApplicationContext()));
+
+            new MaterialAlertDialogBuilder(this)
+                    .setTitle(R.string.flutter_menu_project_info)
+                    .setView(createFlutterScrollableLog(message.toString()))
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show();
+        } catch (Exception e) {
+            Toast.makeText(this, getString(R.string.flutter_error_prefix, safeFlutterMessage(e)), Toast.LENGTH_LONG).show();
+        }
     }
 
     private String formatKmpTargetLabel(KmpTarget target) {

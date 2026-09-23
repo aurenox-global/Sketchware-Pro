@@ -99,6 +99,7 @@ import mod.agus.jcoderz.editor.manage.permission.ManagePermissionActivity;
 import mod.agus.jcoderz.editor.manage.resource.ManageResourceActivity;
 import mod.hey.studios.activity.managers.assets.ManageAssetsActivity;
 import mod.hey.studios.activity.managers.java.ManageJavaActivity;
+import mod.hey.studios.compiler.flutter.FlutterCompilerBridge;
 import mod.hey.studios.compiler.kotlin.KotlinCompilerBridge;
 import mod.hey.studios.project.custom_blocks.CustomBlocksDialog;
 import mod.hey.studios.project.proguard.ManageProguardActivity;
@@ -1206,6 +1207,13 @@ public class DesignActivity extends BaseAppCompatActivity implements View.OnClic
 
                 onProgress("Extracting built-in libraries...", 3);
                 BuiltInLibraries.extractCompileAssets(this);
+                if (canceled) {
+                    return;
+                }
+
+                /* Flutter (carril C, Fase 7): compila el Dart on-device y deja flutter_assets
+                 * en yq.assetsPath antes de que AAPT2 los enlace con -A. */
+                FlutterCompilerBridge.compileFlutterCodeIfPossible(getActivity(), builder);
                 if (canceled) {
                     return;
                 }
