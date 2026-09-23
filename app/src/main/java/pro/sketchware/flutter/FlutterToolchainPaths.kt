@@ -35,6 +35,38 @@ object FlutterToolchainPaths {
     const val ABI_ARM64_V8A = "arm64-v8a"
     const val ABI_X86_64 = "x86_64"
 
+    /* -------------------------------------------------------------------------------------- */
+    /* Ejecutables empaquetados en jniLibs (carril I, Fase 8)                                   */
+    /* -------------------------------------------------------------------------------------- */
+
+    /**
+     * **Por que los ejecutables van en `jniLibs`**: con `targetSdk >= 29` SELinux deniega
+     * `execute_no_trans` sobre `app_data_file` (todo lo que la app escribe en `filesDir`), asi que
+     * un ELF extraido del `.deb` **no se puede ejecutar** desde ahi. Solo `nativeLibraryDir`
+     * (`/data/app/…/lib/<abi>/`, etiqueta `apk_data_file`) es ejecutable para la app.
+     *
+     * Evidencia (emulador arm64 API 34, informe AOT §6.1): un binario empaquetado como
+     * `lib/<abi>/libgensnapshot.so` se ejecuta con `exit=0` desde la propia app (uid de app,
+     * dominio `untrusted_app`); la misma copia en `filesDir` da `error=13, Permission denied`.
+     */
+    const val PACKAGED_DART_AOT_RUNTIME = "libdartaotruntime.so"
+
+    /**
+     * Nuestro `gen_snapshot` (build `--arch arm64c --mode product`, compressed pointers), que es
+     * **el unico** que produce un `libapp.so` que el engine release oficial acepta (informe AOT §2).
+     */
+    const val PACKAGED_GEN_SNAPSHOT = "libfluttergensnapshot.so"
+
+    /** `bin/dartaotruntime` del `dart_3.13.4_aarch64.deb`: 5.684.384 B (ELF aarch64, stripped). */
+    const val PACKAGED_DART_AOT_RUNTIME_SIZE = 5_684_384L
+    const val PACKAGED_DART_AOT_RUNTIME_SHA256 =
+        "e2ea1775e28bc92ce738c5df3b4ac4f95103ee2b13aefee87d90972dad3d1eb1"
+
+    /** `gen_snapshot_arm64c_android_product`: 4.991.592 B sha256 `9921983f…` (informe AOT §7.1). */
+    const val PACKAGED_GEN_SNAPSHOT_SIZE = 4_991_592L
+    const val PACKAGED_GEN_SNAPSHOT_SHA256 =
+        "9921983f8765fe10e45e2010b73c6599d6a3ed13ea564f96190ba00587354233"
+
     private const val TERMUX_DART_POOL =
         "https://packages.termux.dev/apt/termux-main/pool/main/d/dart/"
 
@@ -341,9 +373,95 @@ object FlutterToolchainPaths {
     @JvmStatic
     fun dartAotRuntime(context: Context): File = File(dartBinDir(context), "dartaotruntime")
 
-    /** `bin/utils/gen_snapshot`: produce `libapp.so` (`app-aot-elf`). */
+    /**
+     * Copia **de datos** de `bin/utils/gen_snapshot` dentro de `filesDir` (NO ejecutable por
+     * SELinux; se conserva porque el `.deb` la trae y sirve de diagnostico/compatibilidad). Para
+     * ejecutar AOT se usa [genSnapshotExecutable].
+     */
     @JvmStatic
     fun genSnapshot(context: Context): File = File(File(dartBinDir(context), "utils"), "gen_snapshot")
+
+    /* -------------------------------------------------------------------------------------- */
+    /* Ejecutables: nativeLibraryDir primero, filesDir como respaldo                            */
+    /* -------------------------------------------------------------------------------------- */
+
+    /**
+     * `context.applicationInfo.nativeLibraryDir` (p. ej. `/data/app/~~xxx/pkg-1/lib/arm64`).
+     *
+     * Es el **unico** directorio desde el que la app puede `execve()` (ver
+     * [PACKAGED_DART_AOT_RUNTIME]). Devuelve `null` si el sistema no lo publica.
+     */
+    @JvmStatic
+    fun nativeLibraryDir(context: Context): File? {
+        val path = context.applicationInfo?.nativeLibraryDir
+        return if (path.isNullOrEmpty()) null else File(path)
+    }
+
+    /**
+     * Ejecutable empaquetado en `nativeLibraryDir` (`lib<algo>.so` en `jniLibs/<abi>/`), o `null`.
+     *
+     * Solo la ABI [ABI_ARM64_V8A] lleva los ejecutables empaquetados: los APK por ABI generados
+     * por `splits.abi` (`armeabi-v7a`, `x86`, `x86_64`) **no** los incluyen, y ahi el respaldo es la
+     * copia de `filesDir` (que en `targetSdk >= 29` no se puede ejecutar: se documenta y se
+     * detecta en [FlutterToolchainManager.isReady]).
+     */
+    @JvmStatic
+    fun packagedExecutable(context: Context, name: String): File? {
+        val dir = nativeLibraryDir(context) ?: return null
+        val file = File(dir, name)
+        return if (file.isFile) file else null
+    }
+
+    /** `nativeLibraryDir/libdartaotruntime.so` si esta empaquetado, y si no el de `filesDir`. */
+    @JvmStatic
+    fun dartAotRuntimeExecutable(context: Context): File =
+        packagedExecutable(context, PACKAGED_DART_AOT_RUNTIME) ?: dartAotRuntime(context)
+
+    /** `nativeLibraryDir/libfluttergensnapshot.so` si esta empaquetado, y si no el de `filesDir`. */
+    @JvmStatic
+    fun genSnapshotExecutable(context: Context): File =
+        packagedExecutable(context, PACKAGED_GEN_SNAPSHOT) ?: genSnapshot(context)
+
+    /** `true` si el APK que se esta ejecutando trae el `dartaotruntime` en `nativeLibraryDir`. */
+    @JvmStatic
+    fun isDartAotRuntimePackaged(context: Context): Boolean =
+        packagedExecutable(context, PACKAGED_DART_AOT_RUNTIME) != null
+
+    /** `true` si el APK que se esta ejecutando trae nuestro `gen_snapshot` en `nativeLibraryDir`. */
+    @JvmStatic
+    fun isGenSnapshotPackaged(context: Context): Boolean =
+        packagedExecutable(context, PACKAGED_GEN_SNAPSHOT) != null
+
+    /**
+     * Motivo por el que el backend AOT **no** esta disponible, o `null` si lo esta.
+     *
+     * Solo la variante `arm64-v8a` del APK empaqueta `libfluttergensnapshot.so`; en cualquier otra
+     * ABI el AOT on-device no se puede hacer (no existe `gen_snapshot` oficial para Android y el del
+     * `dart` de Termux produce snapshots sin compressed pointers, incompatibles con el engine).
+     */
+    @JvmStatic
+    fun aotBackendUnavailableReason(context: Context): String? {
+        if (isGenSnapshotPackaged(context)) {
+            return null
+        }
+        val abi = resolveSupportedAbi() ?: deviceAbiName()
+        if (abi != ABI_ARM64_V8A) {
+            return "El AOT on-device necesita el `gen_snapshot` propio empaquetado como " +
+                "`lib/$ABI_ARM64_V8A/$PACKAGED_GEN_SNAPSHOT`, y esta instalado un APK de la ABI " +
+                "'$abi' (los APK por ABI de `splits.abi` no lo incluyen). Compila/instala la " +
+                "variante arm64-v8a, o usa el modo DEBUG_JIT."
+        }
+        return "Falta `$PACKAGED_GEN_SNAPSHOT` en ${nativeLibraryDir(context)?.absolutePath ?: "nativeLibraryDir"} " +
+            "(no se empaqueto en `app/src/main/jniLibs/$ABI_ARM64_V8A/`). Sin ese binario no se puede " +
+            "generar un `libapp.so` compatible con el engine release: usa el modo DEBUG_JIT."
+    }
+
+    /** Nombre de la ABI tal y como la reporta el sistema (`arm64-v8a`, `x86_64`…) o `desconocida`. */
+    @JvmStatic
+    fun deviceAbiName(): String {
+        val supported = Build.SUPPORTED_ABIS
+        return if (supported.isNullOrEmpty()) "desconocida" else supported[0]
+    }
 
     /** `bin/snapshots/gen_kernel_aot.dart.snapshot`. */
     @JvmStatic
@@ -448,6 +566,63 @@ object FlutterToolchainPaths {
     fun patchedSdkPlatformDill(context: Context): File =
         File(patchedSdkRoot(context), "platform_strong.dill")
 
+    /* -------------------------------------------------------------------------------------- */
+    /* flutter_patched_sdk_product (AOT): el front-end DEBE ser el product                        */
+    /* -------------------------------------------------------------------------------------- */
+
+    /**
+     * `flutter_patched_sdk_product.zip` (4.108.252 B; HTTP 200 comprobado el 2026-09-23).
+     *
+     * El AOT del informe (carril K) uso exactamente esta plataforma
+     * (`--platform=patched_sdk_product/flutter_patched_sdk_product/platform_strong.dill`) para
+     * producir el `.dill` que consume el `gen_snapshot` product. Usar la plataforma no-product con
+     * `-Ddart.vm.product=true` tambien funciono, pero el camino probado y el que replica
+     * `flutter build` es el product.
+     */
+    @JvmStatic
+    fun patchedSdkProductArtifact(): RemoteArtifact = RemoteArtifact(
+        "$FLUTTER_INFRA_RELEASE/$ENGINE_VERSION/flutter_patched_sdk_product.zip",
+        PATCHED_SDK_PRODUCT_ZIP_SIZE,
+    )
+
+    @JvmStatic
+    fun patchedSdkProductZip(context: Context): File =
+        File(engineDir(context), "flutter_patched_sdk_product.zip")
+
+    @JvmStatic
+    fun patchedSdkProductExtractDir(context: Context): File =
+        File(engineDir(context), "flutter_patched_sdk_product_extracted")
+
+    /** Dentro del zip: `flutter_patched_sdk_product/{platform_strong.dill,…}`. */
+    @JvmStatic
+    fun patchedSdkProductRoot(context: Context): File =
+        File(patchedSdkProductExtractDir(context), "flutter_patched_sdk_product")
+
+    @JvmStatic
+    fun patchedSdkProductPlatformDill(context: Context): File =
+        File(patchedSdkProductRoot(context), "platform_strong.dill")
+
+    /**
+     * `--platform` de `gen_kernel` segun el modo: el **product** en RELEASE_AOT (lo probo el carril K)
+     * y el normal en DEBUG_JIT.
+     */
+    @JvmStatic
+    fun patchedSdkPlatformDillForMode(context: Context, mode: FlutterBuildMode): File =
+        if (mode == FlutterBuildMode.RELEASE_AOT) {
+            patchedSdkProductPlatformDill(context)
+        } else {
+            patchedSdkPlatformDill(context)
+        }
+
+    /** Directorio `flutter_patched_sdk*` que se pasa a `gen_kernel` para [mode]. */
+    @JvmStatic
+    fun patchedSdkRootForMode(context: Context, mode: FlutterBuildMode): File =
+        if (mode == FlutterBuildMode.RELEASE_AOT) {
+            patchedSdkProductPlatformDill(context).parentFile ?: patchedSdkRoot(context)
+        } else {
+            patchedSdkRoot(context)
+        }
+
     /**
      * Directorio **opcional** con las fuentes Dart del framework Flutter (`package:flutter…`).
      * Si no existe, `FlutterDartCompiler` falla con un diagnóstico claro: los artefactos del
@@ -522,4 +697,241 @@ object FlutterToolchainPaths {
     @JvmStatic
     fun compilerLogFile(flutterRoot: File): File =
         File(stagingDir(flutterRoot), "flutter_compile.log")
+
+    /* -------------------------------------------------------------------------------------- */
+    /* Resolucion pub REAL (carril P, Fase 8)                                                   */
+    /* -------------------------------------------------------------------------------------- */
+
+    /**
+     * `<toolchain>/pub-cache`: el `PUB_CACHE` dentro del almacenamiento privado de la app.
+     *
+     * Evidencia (emulador arm64 API 34, 2026-09-23): un `dart pub get` con
+     * `PUB_CACHE=/data/local/tmp/carrilP/pubcache` descargo 13 paquetes (14 MB) y genero un
+     * `.dart_tool/package_config.json` con rutas `file:///…/hosted/pub.dev/<name>-<version>`.
+     */
+    @JvmStatic
+    fun pubCacheDir(context: Context): File = File(toolchainDir(context), "pub-cache")
+
+    /**
+     * `<toolchain>/pub-home`: `HOME` falso para pub (escribe ahi telemetria/credenciales y, en
+     * algunos casos, `.dart_tool/pub`). Nunca el HOME real del usuario.
+     */
+    @JvmStatic
+    fun pubHomeDir(context: Context): File = File(toolchainDir(context), "pub-home")
+
+    /**
+     * `<toolchain>/tmp`: `TMPDIR` de pub. En Android `Directory.systemTemp` apunta a `/data/local/tmp`
+     * (escribible por shell, no por la app); sin `TMPDIR` el cliente de pub puede fallar al
+     * descomprimir las descargas.
+     */
+    @JvmStatic
+    fun pubTempDir(context: Context): File = File(toolchainDir(context), "tmp")
+
+    /**
+     * `bin/snapshots/dartdev_aot.dart.snapshot`: es el cliente de `dart pub`.
+     *
+     * Comprobado con `ar`/`tar -tJf` sobre `dart_3.13.4_aarch64.deb`: el paquete de Termux **si**
+     * trae el cliente (16.384.904 B) y `bin/dart` lo despacha: `./bin/dart pub get` funciona en el
+     * dispositivo. No hace falta descargar nada extra.
+     */
+    @JvmStatic
+    fun dartDevSnapshot(context: Context): File =
+        File(File(dartBinDir(context), "snapshots"), "dartdev_aot.dart.snapshot")
+
+    /**
+     * `<engine>/flutter-root`: **Flutter SDK sintetico** que `dart pub` necesita como `FLUTTER_ROOT`
+     * para resolver `flutter: {sdk: flutter}`.
+     *
+     * Estructura minima (toda verificada en el emulador; sin ella pub responde
+     * "the Flutter SDK is not available"):
+     * ```
+     * flutter-root/
+     *   version                            <- "3.47.5"
+     *   bin/cache/flutter.version.json      <- IMPRESCINDIBLE: si falta, pub da el SDK por ausente
+     *   bin/cache/pkg/sky_engine/{pubspec.yaml,lib/ui/ui.dart}   <- `sky_engine sdk:flutter`
+     *   packages/flutter/{pubspec.yaml,lib}  <- copia del framework (fuentes reales)
+     *   packages/{flutter_test,flutter_web_plugins,flutter_localizations,…}/pubspec.yaml
+     * ```
+     */
+    @JvmStatic
+    fun syntheticFlutterRoot(context: Context): File = File(engineDir(context), "flutter-root")
+
+    @JvmStatic
+    fun syntheticFlutterPackagesDir(context: Context): File =
+        File(syntheticFlutterRoot(context), "packages")
+
+    /** `flutter-root/packages/flutter` (framework: `package:flutter/…`). */
+    @JvmStatic
+    fun syntheticFlutterFrameworkDir(context: Context): File =
+        File(syntheticFlutterPackagesDir(context), "flutter")
+
+    @JvmStatic
+    fun syntheticFlutterBinCacheDir(context: Context): File =
+        File(File(syntheticFlutterRoot(context), "bin"), "cache")
+
+    /**
+     * `flutter-root/bin/cache/flutter.version.json`.
+     *
+     * Evidencia cruda (emulador): sin este fichero `dart pub get` imprimia
+     * `FINE: Could not open flutter version file at …/bin/cache/flutter.version.json` y terminaba en
+     * `Because <app> depends on flutter from sdk which doesn't exist (the Flutter SDK is not
+     * available)`. Con el fichero (frameworkVersion+channel) el mismo comando resolvio 16 paquetes.
+     */
+    @JvmStatic
+    fun flutterVersionJsonFile(context: Context): File =
+        File(syntheticFlutterBinCacheDir(context), "flutter.version.json")
+
+    /** `flutter-root/version`. */
+    @JvmStatic
+    fun syntheticFlutterVersionFile(context: Context): File =
+        File(syntheticFlutterRoot(context), "version")
+
+    /** `flutter-root/bin/cache/pkg/sky_engine`: paquete `sky_engine` (`sdk: flutter`). */
+    @JvmStatic
+    fun syntheticSkyEngineDir(context: Context): File =
+        File(File(syntheticFlutterBinCacheDir(context), "pkg"), "sky_engine")
+
+    /** `pubspec.lock` del proyecto del usuario (lo escribe pub). */
+    @JvmStatic
+    fun pubLockFile(flutterRoot: File): File = File(flutterRoot, "pubspec.lock")
+
+    /** `.dart_tool/package_graph.json` (grafo completo, incluye dev_dependencies). */
+    @JvmStatic
+    fun packageGraphFile(flutterRoot: File): File =
+        File(dartToolDir(flutterRoot), "package_graph.json")
+
+    /** `<flutterRoot>/build/pub_get.log`: salida cruda de `dart pub get`. */
+    @JvmStatic
+    fun pubLogFile(flutterRoot: File): File = File(stagingDir(flutterRoot), "pub_get.log")
+
+    /**
+     * `.dart_tool/flutter_pub_get.done`: marca de que `package_config.json` lo genero **pub**
+     * (contiene el hash del `pubspec.yaml` + el `pubspec.lock` con el que se resolvio).
+     */
+    @JvmStatic
+    fun pubGenerationMarker(flutterRoot: File): File =
+        File(dartToolDir(flutterRoot), "flutter_pub_get.done")
+
+    /** `.dart_tool/flutter_build/`: salidas auxiliares (registrantes, wrapper de entrada). */
+    @JvmStatic
+    fun flutterBuildDir(flutterRoot: File): File = File(dartToolDir(flutterRoot), "flutter_build")
+
+    /** `.dart_tool/flutter_build/dart_plugin_registrant.dart` (`_registerPlugins()`). */
+    @JvmStatic
+    fun dartPluginRegistrantFile(flutterRoot: File): File =
+        File(flutterBuildDir(flutterRoot), "dart_plugin_registrant.dart")
+
+    /** `.dart_tool/flutter_build/GeneratedPluginRegistrant.java` (Java/Kotlin, registro nativo). */
+    @JvmStatic
+    fun generatedPluginRegistrantFile(flutterRoot: File, packagePath: String): File =
+        File(File(flutterBuildDir(flutterRoot), packagePath), "GeneratedPluginRegistrant.java")
+
+    /**
+     * `.dart_tool/flutter_build/entrypoint.dart`: wrapper que registra los plugins Dart y llama al
+     * `main()` del usuario. Es el fichero que se le pasa a `gen_kernel` cuando hay plugins con
+     * `dartPluginClass` (el equivalente Flutter es el `--dart-plugin-registrant` del frontend).
+     */
+    @JvmStatic
+    fun pluginEntrypointFile(flutterRoot: File): File =
+        File(flutterBuildDir(flutterRoot), "entrypoint.dart")
+
+    /**
+     * `pubspec.yaml` minimos de los paquetes `sdk: flutter` que pub tiene que encontrar en
+     * `FLUTTER_ROOT/packages/<nombre>/pubspec.yaml`.
+     *
+     * Se copian tal cual del tag 3.47.5 quitando `resolution: workspace` y `dev_dependencies:`: el
+     * `resolution: workspace` solo funciona dentro del monorepo de Flutter (necesita el pubspec raiz
+     * con `workspace:`), y las dev_dependencies de una dependencia no participan en la resolucion del
+     * proyecto del usuario. Los `dependencies:` **si** se conservan: son las que pub resuelve contra
+     * pub.dev (verificado: `dart pub get` en el dispositivo resolvio characters/collection/
+     * material_color_utilities/meta/vector_math/test_api/matcher/fake_async… para estos paquetes).
+     */
+    @JvmStatic
+    fun flutterSdkPackagePubspec(name: String): String? = when (name) {
+        "flutter_web_plugins" -> """
+            name: flutter_web_plugins
+            description: Library to register Flutter Web plugins
+            homepage: https://flutter.dev
+
+            environment:
+              sdk: '>=3.11.0 <4.0.0'
+
+            dependencies:
+              flutter:
+                sdk: flutter
+        """.trimIndent() + "\n"
+
+        "flutter_test" -> """
+            name: flutter_test
+
+            environment:
+              sdk: '>=3.11.0 <4.0.0'
+
+            dependencies:
+              flutter:
+                sdk: flutter
+              test_api: 0.7.12
+              matcher: 0.12.20
+              path: ^1.9.1
+              fake_async: ^1.3.3
+              clock: ^1.1.2
+              stack_trace: ^1.12.1
+              vector_math: ^2.4.0
+              leak_tracker_flutter_testing: ^3.0.10
+              collection: ^1.19.1
+              meta: ^1.18.3
+              stream_channel: ^2.1.4
+        """.trimIndent() + "\n"
+
+        "flutter_localizations" -> """
+            name: flutter_localizations
+
+            environment:
+              sdk: '>=3.11.0 <4.0.0'
+
+            dependencies:
+              flutter:
+                sdk: flutter
+              intl: ^0.20.3
+              path: ^1.9.1
+        """.trimIndent() + "\n"
+
+        "sky_engine" -> """
+            name: sky_engine
+            version: 0.0.99
+            environment:
+              sdk: '>=2.12.0 <4.0.0'
+        """.trimIndent() + "\n"
+
+        else -> null
+    }
+
+    /**
+     * `{frameworkVersion, channel, …}` de `flutter-root/bin/cache/flutter.version.json`.
+     *
+     * `frameworkVersion` y `channel` son los unicos campos que pub necesita; el resto se escribe
+     * para que el fichero sea el mismo que produce `flutter --version --machine`.
+     */
+    @JvmStatic
+    fun flutterVersionJson(): String = """
+        {
+          "frameworkVersion": "$FLUTTER_VERSION",
+          "channel": "stable",
+          "repositoryUrl": "https://github.com/flutter/flutter.git",
+          "frameworkCommitDate": "2026-09-01T00:00:00.000Z",
+          "engineRevision": "$ENGINE_VERSION",
+          "dartSdkVersion": "$DART_VERSION",
+          "flutterVersion": "$FLUTTER_VERSION"
+        }
+    """.trimIndent() + "\n"
+
+    /** `sky_engine/lib/ui/ui.dart`: stub. El `dart:ui` real viaja en `platform_strong.dill`. */
+    @JvmStatic
+    fun skyEngineStubDart(): String =
+        "// Stub de sky_engine (carril P): el dart:ui real esta en platform_strong.dill.\n"
+
+    /** `bin/internal/engine.version` del Flutter SDK sintetico. */
+    @JvmStatic
+    fun syntheticEngineVersionFile(context: Context): File =
+        File(File(syntheticFlutterRoot(context), "bin/internal"), "engine.version")
 }

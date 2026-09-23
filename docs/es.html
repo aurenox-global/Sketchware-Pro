@@ -37,14 +37,14 @@
 
   <!-- ============================================================ hero -->
   <section class="hero" style="border-top:none">
-    <div class="tag">● v7.0.7.0 · versionCode 161 · source-available</div>
+    <div class="tag">● v7.0.8.0 · versionCode 162 · source-available</div>
     <h1>Crea apps Android reales<br><span class="accent">desde tu móvil.</span></h1>
     <p class="lead">
       Sketchware Pro es un IDE de Android que funciona sobre Android: arrastra bloques, escribe Java o Kotlin,
       compila en el propio dispositivo y obtén un APK instalable — sin necesidad de ordenador.
     </p>
     <div class="btns">
-      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.7.0" target="_blank" rel="noopener">⬇ Descargar APK</a>
+      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.0" target="_blank" rel="noopener">⬇ Descargar APK</a>
       <a class="btn ghost" href="https://github.com/aurenox-global/Sketchware-Pro" target="_blank" rel="noopener">Ver el código en GitHub</a>
     </div>
 
@@ -181,6 +181,50 @@
         datos del proyecto. Ahora todos los layouts se construyen con el constructor de vistas reales (solo necesita
         el XML), con el renderizador nativo como reserva y un mensaje visible si ambos fallan. Version
         <strong>v7.0.6.0</strong>.</p>
+      </div>
+
+      <div class="item done">
+        <span class="when">2026-09-23 · Flutter (experimental)</span>
+        <h3>Release/AOT en el dispositivo, assets completos y pub real <span class="pill info">experimental</span></h3>
+        <ul class="clean">
+          <li><strong>El release/AOT en el dispositivo esta desbloqueado.</strong> El Dart SDK para Android se compilo
+          para este fork con <strong>compressed pointers</strong> — el flag lo activa el <strong>nombre de la
+          arquitectura</strong> (<code>arm64c</code>), no una opcion de linea de comandos — y en modo
+          <strong>product</strong>, porque el primer token del feature string del snapshot se decide en tiempo de
+          compilacion (<code>product</code>, no <code>release</code>). Su <code>gen_snapshot</code> (4.991.592 B,
+          sha256 <code>9921983f…</code>) va empaquetado dentro del APK y con el <strong>el propio telefono genera un
+          <code>libapp.so</code> que el engine oficial acepta</strong>. Probado: un APK <strong>release</strong> arranca
+          en un emulador arm64 Android 14, el contador pasa de 0 a 3 con toques reales y <strong>no hay cinta
+          DEBUG</strong>. Control A/B: el mismo APK con el <code>gen_snapshot</code> del SDK de Termux falla con
+          <em>the snapshot requires 'no-compressed-pointers' but the VM has 'compressed-pointers'</em>; solo faltaban
+          los compressed pointers.</li>
+          <li><strong>La app puede ejecutar sus propias herramientas.</strong> Con <code>targetSdk 34</code> SELinux
+          deniega <code>execute_no_trans</code> para los binarios de <code>filesDir</code> y de
+          <code>/data/local/tmp</code>, pero <strong><code>nativeLibraryDir</code> si funciona</strong>: el runtime y el
+          <code>gen_snapshot</code> van empaquetados como <code>lib/arm64-v8a/libdartaotruntime.so</code> y
+          <code>libfluttergensnapshot.so</code>. La app hizo el AOT completo desde su propio proceso, como app sin
+          privilegios y sin root, en 3,9 s y con el mismo sha256.</li>
+          <li><strong>El bundle de assets esta completo.</strong> Fuente Material (el pin real es
+          <code>bin/internal/material_fonts.version</code> → <code>fonts.zip</code>, no un artefacto del engine), los
+          shaders <code>ink_sparkle.frag</code> y <code>stretch_effect.frag</code> precompilados en el host y
+          embebidos, <code>AssetManifest.bin</code> (<code>StandardMessageCodec</code>), <code>FontManifest.json</code>
+          y <code>NOTICES.Z</code>. Verificado en el dispositivo: el icono <code>+</code> se dibuja y el error del
+          shader desaparece.</li>
+          <li><strong>pub real.</strong> <code>dart pub get</code> ya corre en el dispositivo (el cliente de pub viene
+          en el propio SDK) y resuelve paquetes de pub.dev de verdad, y el kernel se compila con el
+          <code>package_config.json</code> autentico resultante.</li>
+          <li><strong>Plugins: a medias, y se dice.</strong> El fork tiene compilador de plugins Kotlin/Java propio
+          (ECJ mas el <code>K2JVMCompiler</code> del fork) que genera el <code>GeneratedPluginRegistrant</code>,
+          fusiona manifests y resuelve dependencias AAR; <strong>todavia no se ha compilado ni arrancado ningun plugin
+          en un dispositivo</strong> — es el primer pendiente.</li>
+          <li><strong>Coste y limites.</strong> Los dos ejecutables empaquetados suman <strong>10,18 MB</strong> al APK
+          <code>arm64-v8a</code>; las otras ABIs no tienen backend AOT y lo dicen, en vez de fallar en silencio. El
+          modo por defecto sigue siendo <strong>debug/JIT</strong>, esto continua siendo experimental y todavia no hay
+          hot reload.</li>
+        </ul>
+        <p><img src="assets/flutter-aot-release.png" alt="App Flutter en modo release/AOT en el dispositivo, contador en 3 y sin cinta DEBUG" style="width:100%;max-width:300px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)"></p>
+        <p>Version <strong>v7.0.8.0</strong> (versionCode 162). Los comandos, los numeros medidos y lo que queda
+        pendiente estan en <a href="flutter-fase8.md">docs/flutter-fase8.md</a>.</p>
       </div>
 
       <div class="item done">
@@ -411,7 +455,7 @@
           <tr><td>IDE dentro de la app: quick fixes sobre los diagnosticos (fase 5)</td><td><span class="pill ok">hecho</span></td></tr>
           <tr><td>IDE dentro de la app: soporte de Kotlin (fase 6)</td><td><span class="pill ok">hecho</span></td></tr>
           <tr><td>IDE dentro de la app: diagnosticos de Kotlin (fase 7)</td><td><span class="pill warn">siguiente</span></td></tr>
-          <tr><td>Soporte de Flutter, experimental: editor Dart y compilacion en el dispositivo (solo debug/JIT)</td><td><span class="pill info">experimental</span></td></tr>
+          <tr><td>Soporte de Flutter, experimental: editor Dart, compilacion en el dispositivo y release/AOT (arm64-v8a)</td><td><span class="pill info">experimental</span></td></tr>
           <tr><td>R8 funcionando en CI (bloqueado por el jar de <code>bundletool</code>)</td><td><span class="pill warn">bloqueado</span></td></tr>
           <tr><td>ABI splits (un APK por arquitectura)</td><td><span class="pill ok">hecho</span></td></tr>
           <tr><td>Traducciones, APIs deprecadas, cobertura de tests</td><td><span class="pill info">planificado</span></td></tr>

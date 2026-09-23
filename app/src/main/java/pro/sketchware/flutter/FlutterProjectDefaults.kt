@@ -17,10 +17,11 @@ object FlutterProjectDefaults {
     /**
      * Modo por defecto: **DEBUG_JIT**.
      *
-     * Es el unico modo demostrado end-to-end en el dispositivo (informe E2E: engine debug +
-     * `kernel_blob.bin` compilado en el movil -> la app arranca y responde a los toques).
-     * `RELEASE_AOT` esta bloqueado a proposito en `FlutterDartCompiler`: el `gen_snapshot` del SDK
-     * Dart de Termux no tiene compressed pointers y el engine oficial los exige.
+     * Es el modo con mas camino recorrido (informe E2E: engine debug + `kernel_blob.bin` compilado
+     * en el movil -> la app arranca y responde a los toques). `RELEASE_AOT` esta **desbloqueado**
+     * desde la Fase 8 (carril I) para la variante arm64-v8a del APK (usa el `gen_snapshot` propio
+     * empaquetado en `jniLibs/arm64-v8a/libfluttergensnapshot.so`), pero se sigue dejando como
+     * opcion explicita del proyecto: el AOT on-device tarda mas y solo esta probado en arm64.
      */
     @JvmField
     val DEFAULT_MODE: FlutterBuildMode = FlutterBuildMode.DEBUG_JIT

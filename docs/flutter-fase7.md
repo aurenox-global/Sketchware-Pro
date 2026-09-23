@@ -79,6 +79,12 @@ llamado **antes** de `compileResources()` (los assets de Flutter tienen que exis
 
 ## 3. La limitación honesta: el AOT en el dispositivo está bloqueado
 
+> **Nota (fase 8):** esta limitación **ya no aplica**. En la fase 8 se construyó un `gen_snapshot` arm64/Android con
+> compressed pointers (`--arch arm64c --mode product`) y el dispositivo genera con él un `libapp.so` que el engine
+> oficial acepta; el APK release arranca sin cinta DEBUG. El AOT on-device pasa a estar disponible (el modo por
+> defecto sigue siendo Debug/JIT). Los detalles y los comandos están en
+> [docs/flutter-fase8.md](flutter-fase8.md). El texto de abajo se conserva como registro de la causa raíz.
+
 **Hoy el único modo usable es DEBUG/JIT.** El modo RELEASE/AOT no se puede cerrar en el propio móvil.
 
 Causa técnica exacta: el `gen_snapshot` (y el VM) del **Dart SDK para Android** está compilado **sin compressed

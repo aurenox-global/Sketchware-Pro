@@ -19,11 +19,14 @@ import java.util.zip.ZipInputStream
  * engine debug y el release no son intercambiables:
  *
  * - `DEBUG_JIT` -> `flutter_embedding_debug` + jar de nativas `<abi>_debug` (engine **debug**,
- *   395 MB de `libflutter.so`). Es el unico camino que hoy funciona end-to-end en el dispositivo:
- *   el jar debug hace que `FlutterLoader` cargue `kernel_blob.bin` (JIT) y el engine debug lo
- *   acepta. Demostrado en el informe E2E (§4.6, §5.5).
- * - `RELEASE_AOT` -> `flutter_embedding_release` + jar de nativas `<abi>_release`. Se mantiene la
- *   especificacion por si algun dia se desbloquea el AOT (ver `FlutterDartCompiler`).
+ *   395 MB de `libflutter.so`). Es el camino con mas recorrido: el jar debug hace que
+ *   `FlutterLoader` cargue `kernel_blob.bin` (JIT) y el engine debug lo acepta. Demostrado en el
+ *   informe E2E (§4.6, §5.5).
+ * - `RELEASE_AOT` -> `flutter_embedding_release` + jar de nativas `<abi>_release` (165 MB de
+ *   `libflutter.so`) **y** la plataforma `flutter_patched_sdk_product`. Desbloqueado en la Fase 8
+ *   (carril I) con el `gen_snapshot` propio (informe AOT §5): el engine release acepta el
+ *   `libapp.so` generado en el dispositivo, siempre que la variante del APK sea `arm64-v8a`
+ *   (es la unica que empaqueta el binario).
  *
  * Ademas de los artefactos del engine hace falta el **framework Dart** (`package:flutter…`):
  * ni el jar del embedding ni `flutter_patched_sdk.zip` lo incluyen. Se trae del tarball del tag
@@ -38,6 +41,15 @@ import java.util.zip.ZipInputStream
  *
  * Todos los tamaños se verifican con `content-length` (HTTP 200 comprobado con `curl -sI`), salvo
  * el tarball del framework: GitHub no publica `content-length` (chunked) y por eso va con tamaño 0.
+ *
+ * **Fase 8 / carril A2 — ASSETS del bundle.** Ademas de lo anterior se exigen ahora las **fuentes de
+ * los assets** que faltaban (`FlutterBundleAssets`): el artefacto `material_fonts` del SDK
+ * (`fonts.zip` -> `MaterialIcons-Regular.otf`, sin el los iconos Material salen como caja vacia) y
+ * los **shaders precompilados** (`shaders/ink_sparkle.frag`, sin el el ripple del FAB registra
+ * `Asset 'shaders/ink_sparkle.frag' not found`). Se descargan/cachean en `<engine>/asset-sources`.
+ * Lo unico que cambia de esta clase es un paso extra en [ensureArtifacts] y un termino mas en
+ * [areArtifactsReady]; **las firmas que usa el resto del codigo no cambian**
+ * (`ensureArtifacts(context, mode, progress)` sigue igual).
  */
 object FlutterEngineArtifacts {
 
@@ -49,13 +61,18 @@ object FlutterEngineArtifacts {
      * `icudtl.dat` **no** se exige: el engine 3.47.5 no lo publica (ver cabecera).
      * El framework si se exige: sin el, `package:flutter…` no compila (es el fallo que se
      * documentaba como "ESTADO HONESTO" del carril C).
+     *
+     * El **patched sdk depende del modo** (Fase 8 / carril I): RELEASE_AOT necesita
+     * `flutter_patched_sdk_product` (`--platform` del front-end AOT), DEBUG_JIT el normal.
      */
     @JvmStatic
     fun areArtifactsReady(context: Context, mode: FlutterBuildMode): Boolean {
         return FlutterToolchainPaths.embeddingJar(context, mode).isFile &&
                 FlutterToolchainPaths.libFlutterSo(context, mode).isFile &&
-                FlutterToolchainPaths.patchedSdkPlatformDill(context).isFile &&
-                isFrameworkReady(context)
+                FlutterToolchainPaths.patchedSdkPlatformDillForMode(context, mode).isFile &&
+                isFrameworkReady(context) &&
+                // Fase 8 / A2: fuente Material + shaders precompilados (ver cabecera).
+                FlutterBundleAssets.areAssetSourcesReady(context)
     }
 
     /** Variante con el modo por defecto ([FlutterProjectDefaults.DEFAULT_MODE]). */
@@ -117,29 +134,20 @@ object FlutterEngineArtifacts {
             return false
         }
 
-        // 3) Patched SDK (plataforma Dart para --target=flutter).
-        val sdkDir = FlutterToolchainPaths.patchedSdkExtractDir(context)
-        val platformDill = FlutterToolchainPaths.patchedSdkPlatformDill(context)
-        if (!platformDill.isFile) {
-            val sdkSpec = FlutterToolchainPaths.patchedSdkArtifact()
-            val zip = FlutterToolchainPaths.patchedSdkZip(context)
-            progress("Descargando flutter_patched_sdk.zip (${sdkSpec.sizeBytes / 1024} KB)...")
-            if (!FlutterToolchainInstaller.download(sdkSpec.url, zip, sdkSpec.sizeBytes, "", progress)) {
-                return false
-            }
-            FlutterToolchainInstaller.deleteRecursively(sdkDir)
-            sdkDir.mkdirs()
-            if (!unzip(zip, sdkDir, progress)) {
-                return false
-            }
-            if (!platformDill.isFile) {
-                progress("flutter_patched_sdk.zip no contiene flutter_patched_sdk/platform_strong.dill")
-                return false
-            }
+        // 3) Patched SDK (plataforma Dart para --target=flutter). Depende del modo: el front-end AOT
+        //    consume `flutter_patched_sdk_product` (carril K); el JIT, el normal.
+        if (!ensurePatchedSdk(context, mode, progress)) {
+            return false
         }
 
         // 4) Framework Dart + dependencias de pub (lo que no trae ningun artefacto del engine).
         if (!ensureFramework(context, progress)) {
+            return false
+        }
+
+        // 5) ASSETS del bundle (Fase 8 / carril A2): material_fonts + shaders precompilados.
+        //    Sin esto el .otf de los iconos y `shaders/ink_sparkle.frag` nunca llegan al APK.
+        if (!FlutterBundleAssets.ensureAssetSources(context, progress)) {
             return false
         }
 
@@ -260,6 +268,52 @@ object FlutterEngineArtifacts {
         }
 
         return isFrameworkReady(context)
+    }
+
+    /** Descarga y extrae el patched SDK que corresponde a [mode] (product en AOT). Bloqueante. */
+    @JvmStatic
+    fun ensurePatchedSdk(context: Context, mode: FlutterBuildMode, progress: (String) -> Unit): Boolean {
+        val platformDill = FlutterToolchainPaths.patchedSdkPlatformDillForMode(context, mode)
+        if (platformDill.isFile) {
+            return true
+        }
+        val product = mode == FlutterBuildMode.RELEASE_AOT
+        val sdkDir = if (product) {
+            FlutterToolchainPaths.patchedSdkProductExtractDir(context)
+        } else {
+            FlutterToolchainPaths.patchedSdkExtractDir(context)
+        }
+        val zip = if (product) {
+            FlutterToolchainPaths.patchedSdkProductZip(context)
+        } else {
+            FlutterToolchainPaths.patchedSdkZip(context)
+        }
+        val spec = if (product) {
+            FlutterToolchainPaths.patchedSdkProductArtifact()
+        } else {
+            FlutterToolchainPaths.patchedSdkArtifact()
+        }
+
+        progress("Descargando ${zip.name} (${spec.sizeBytes / 1024} KB)...")
+        if (!FlutterToolchainInstaller.download(spec.url, zip, spec.sizeBytes, "", progress)) {
+            return false
+        }
+        FlutterToolchainInstaller.deleteRecursively(sdkDir)
+        if (!sdkDir.mkdirs() && !sdkDir.isDirectory) {
+            progress("No se pudo crear ${sdkDir.absolutePath}")
+            return false
+        }
+        if (!unzip(zip, sdkDir, progress)) {
+            return false
+        }
+        if (!platformDill.isFile) {
+            progress(
+                "${zip.name} no contiene " +
+                    "${platformDill.parentFile?.name}/platform_strong.dill"
+            )
+            return false
+        }
+        return true
     }
 
     /** Descarga el jar de nativas de [abi]/[mode] y extrae `libflutter.so` (+ `icudtl.dat` si existiera). */

@@ -75,8 +75,10 @@ object FlutterBuildOrchestrator {
             }
 
             emit("Compilando Dart ($mode)...")
-            // Nota: en RELEASE_AOT esto devuelve un fallo honesto y documentado, sin llegar a
-            // ejecutar gen_snapshot (ver FlutterDartCompiler.RELEASE_AOT_BLOCKED_MESSAGE).
+            // RELEASE_AOT usa nuestro `gen_snapshot` product + compressed pointers (Fase 8, carril I).
+            // Si esta instalada una ABI distinta de arm64-v8a (variante del APK sin los ejecutables
+            // empaquetados), `compile` falla con un mensaje claro en vez de generar un libapp.so
+            // incompatible con el engine.
             val compileResult = FlutterDartCompiler.compile(context, flutterRoot, mode, progress = { message -> emit(message) })
             log.append(compileResult.log)
             if (!compileResult.success) {

@@ -2,6 +2,7 @@ package pro.sketchware.flutter
 
 import android.content.Context
 import android.util.Log
+import pro.sketchware.flutter.FlutterToolchainPaths.RemoteArtifact
 import java.io.File
 import java.io.FileOutputStream
 import java.util.zip.ZipInputStream
@@ -217,6 +218,115 @@ object FlutterPackagingSupport {
         flutterAssetsDir.copyRecursively(destination, overwrite = true)
         Log.d(TAG, "flutter_assets copiados a ${destination.absolutePath}")
         return true
+    }
+
+    /** Variante release (compatibilidad). */
+    @JvmStatic
+    fun androidArtifactsArtifact(abi: String?): RemoteArtifact? =
+        FlutterToolchainPaths.androidArtifactsArtifact(abi, FlutterBuildMode.RELEASE_AOT)
+    // NOTA (carril I): el import y la calificacion faltaban. `RemoteArtifact` es una clase anidada
+    // de `FlutterToolchainPaths` y `androidArtifactsArtifact(abi, mode)` es miembro **de ella**:
+    // sin `FlutterToolchainPaths.` la llamada se resolvia sobre la propia funcion de 1 argumento y
+    // el fichero no compilaba (`too many arguments`). Lo detecto el type-check del carril I (el
+    // carril que lo escribio no incluia este fichero en el suyo).
+
+    /* -------------------------------------------------------------------------------------- */
+    /* Manifests de plugins (carril I, Fase 8)                                                  */
+    /* -------------------------------------------------------------------------------------- */
+
+    /**
+     * Fusiona los manifests de los plugins en el manifest ya generado del proyecto.
+     *
+     * Copia **solo** lo que un plugin Android aporta de verdad y no rompe nada:
+     * - fuera de `<application>`: `<uses-permission>`, `<permission>`, `<uses-feature>`;
+     * - dentro de `<application>`: `<provider>`, `<service>`, `<receiver>`, `<meta-data>`;
+     *
+     * deduplicando por `android:name` (y, si no lo hubiera, por el texto del bloque). Las
+     * `<activity>` de los plugins **no** se copian a proposito: las activities de un plugin se
+     * invocan por su propio `Intent` y anadir una al launcher crearia un segundo icono.
+     *
+     * Es una fusion **minima** y honesta (no un merger real de AGP): no resuelve `tools:node`, ni
+     * placeholders `${applicationId}`, ni herencia de atributos de `<application>`. Para el caso que
+     * probo el carril P (`shared_preferences_android`: un manifest vacio) es suficiente.
+     *
+     * @return numero de entradas nuevas anadidas (0 si no habia nada que fusionar).
+     */
+    @JvmStatic
+    fun mergePluginManifests(manifestFile: File, pluginManifests: List<File>): Int {
+        if (!manifestFile.isFile || pluginManifests.isEmpty()) {
+            return 0
+        }
+        val original = manifestFile.readText()
+        var manifest = original
+        var added = 0
+
+        val applicationOpen = Regex("<application\\b[^>]*>").find(manifest)
+        val applicationClose = manifest.lastIndexOf("</application>")
+
+        for (pluginManifest in pluginManifests) {
+            if (!pluginManifest.isFile) {
+                continue
+            }
+            val content = pluginManifest.readText()
+
+            // 1) Elementos que van al nivel raiz (hermanos de <application>).
+            for (tag in ROOT_LEVEL_TAGS) {
+                for (block in extractSelfClosingOrBlocks(content, tag)) {
+                    if (manifest.contains(block)) {
+                        continue
+                    }
+                    val anchor = applicationOpen?.range?.first ?: -1
+                    if (anchor < 0) {
+                        continue
+                    }
+                    manifest = manifest.substring(0, anchor) + block + "\n" + manifest.substring(anchor)
+                    added++
+                }
+            }
+
+            // 2) Elementos que van dentro de <application>.
+            for (tag in APPLICATION_LEVEL_TAGS) {
+                for (block in extractSelfClosingOrBlocks(content, tag)) {
+                    if (manifest.contains(block)) {
+                        continue
+                    }
+                    val close = manifest.lastIndexOf("</application>")
+                    if (close < 0) {
+                        continue
+                    }
+                    manifest = manifest.substring(0, close) + block + "\n" + manifest.substring(close)
+                    added++
+                }
+            }
+        }
+
+        if (added == 0 || manifest == original) {
+            return 0
+        }
+        return try {
+            manifestFile.writeText(manifest)
+            Log.d(TAG, "Manifests de plugins fusionados ($added entradas)")
+            added
+        } catch (e: Exception) {
+            Log.e(TAG, "No se pudo fusionar el manifest de los plugins", e)
+            0
+        }
+    }
+
+    /** Tags que cuelgan de `<manifest>` (hermanos de `<application>`). */
+    private val ROOT_LEVEL_TAGS = listOf("uses-permission", "permission", "uses-feature")
+
+    /** Tags que cuelgan de `<application>`. */
+    private val APPLICATION_LEVEL_TAGS = listOf("provider", "service", "receiver", "meta-data")
+
+    /**
+     * Extrae bloques `<tag …/>` o `<tag …>…</tag>` de un manifest (regex tolerante, sin parser XML:
+     * los manifests de plugins son generados a maquina y no llevan CDATA ni comentarios raros).
+     */
+    private fun extractSelfClosingOrBlocks(content: String, tag: String): List<String> {
+        val selfClosing = Regex("<$tag\\b[^>]*/>").findAll(content).map { it.value }
+        val withBody = Regex("<$tag\\b[^>]*>[\\s\\S]*?</$tag>").findAll(content).map { it.value }
+        return (selfClosing + withBody).map { it.trim() }.distinct().toList()
     }
 
     /* -------------------------------------------------------------------------------------- */

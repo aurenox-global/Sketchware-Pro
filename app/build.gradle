@@ -68,8 +68,8 @@ android {
         namespace = "pro.sketchware"
       targetSdk = 35
         minSdk = 26
-        versionCode = 161
-        versionName = "v7.0.7.0"
+        versionCode = 162
+        versionName = "v7.0.8.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "GIT_HASH", "\"${gitCommitHash}\"")
@@ -143,6 +143,12 @@ android {
 
     packagingOptions {
       jniLibs.useLegacyPackaging = true
+      // Ejecutables de Flutter (carril I, Fase 8): `libdartaotruntime.so` y
+      // `libfluttergensnapshot.so` son ELF ARM64 que la app EJECUTA desde nativeLibraryDir
+      // (SELinux solo permite execve ahi). Se piden sin strip para no tocar los binarios
+      // verificados por sha256 (jniLibs/arm64-v8a/, ya stripped en origen).
+      jniLibs.keepDebugSymbols.add("**/libdartaotruntime.so")
+      jniLibs.keepDebugSymbols.add("**/libfluttergensnapshot.so")
         resources.excludes += "license/*"
         resources.excludes += "META-INF/DEPENDENCIES"
         resources.pickFirsts += "api_database/*"

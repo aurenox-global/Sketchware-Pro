@@ -14,7 +14,13 @@ object FlutterScaffoldTemplates {
         val displayName = FlutterProjectDefaults.normalizeProjectName(projectName)
 
         return """
-            # Pubspec minimo generado por Sketchware-Pro (soporte Flutter experimental).
+            # Pubspec generado por Sketchware-Pro (soporte Flutter experimental).
+            #
+            # Las dependencias que anadas aqui se resuelven EN EL DISPOSITIVO con `dart pub get`
+            # (carril P). La PRIMERA resolucion necesita conexion a internet: los paquetes se
+            # descargan a la cache privada de la app (<filesDir>/flutter-toolchain/pub-cache) y a
+            # partir de ahi el proyecto compila sin red. Si no hay red, pub lo dice y el editor lo
+            # avisa; el proyecto sigue compilando mientras no anadas dependencias nuevas.
             name: $packageName
             description: $displayName
             publish_to: "none"
@@ -35,6 +41,8 @@ object FlutterScaffoldTemplates {
 
             flutter:
               uses-material-design: true
+              # Los assets declarados aqui entran en el manifiesto del bundle
+              # (AssetManifest.json) y se copian a flutter_assets/ automaticamente.
               assets:
                 - assets/
         """.trimIndent() + "\n"

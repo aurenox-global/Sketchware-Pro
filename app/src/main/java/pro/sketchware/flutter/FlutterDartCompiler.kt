@@ -28,16 +28,27 @@ class FlutterDartCompileResult(
 /**
  * Compilador Dart on-device (carril C): `gen_kernel` + `gen_snapshot` del propio `.deb` de Termux.
  *
- * Pipeline (idéntico al que se reprodujo en el dispositivo durante el spike):
- * - [FlutterBuildMode.DEBUG_JIT] (**único modo que funciona hoy**):
- *   `dartaotruntime gen_kernel_aot.dart.snapshot --target=flutter
+ * Pipeline (identico al que se reprodujo en el dispositivo durante el spike):
+ * - [FlutterBuildMode.DEBUG_JIT]:
+ *   `libdartaotruntime.so gen_kernel_aot.dart.snapshot --target=flutter
  *    --platform=<patched_sdk>/platform_strong.dill --packages=<pkgcfg>
  *    -Ddart.vm.product=false -Ddart.vm.profile=false -o kernel_blob.bin main.dart`
  *   y el APK se arma con el engine **debug** (sin `libapp.so`).
- * - [FlutterBuildMode.RELEASE_AOT] (**bloqueado a proposito**, ver [RELEASE_AOT_BLOCKED_MESSAGE]).
+ * - [FlutterBuildMode.RELEASE_AOT]: **desbloqueado en la Fase 8 (carril I)**. Front-end con
+ *   `--aot --tfa --target-os=android -Ddart.vm.product=true` y la plataforma
+ *   `flutter_patched_sdk_product`, back-end con **nuestro** `gen_snapshot` product + compressed
+ *   pointers (`libfluttergensnapshot.so`). Evidencia: informe AOT §4-§5 (libapp.so aceptado por el
+ *   engine release, la app arranca sin banner DEBUG). Si esa variante del APK no lleva el binario
+ *   (cualquier ABI que no sea `arm64-v8a`), se falla con un mensaje claro en vez de generar un
+ *   `libapp.so` incompatible.
  *
- * Además monta `flutter_assets/` con `AssetManifest.json`, `FontManifest.json`, `icudtl.dat`
- * (si existiera) y (`DEBUG_JIT`) el `kernel_blob.bin`.
+ * Los dos ejecutables se lanzan desde `nativeLibraryDir` (unica ubicacion ejecutable para la app
+ * con `targetSdk >= 29`), con respaldo en `filesDir` para el resto de ABIs:
+ * [FlutterToolchainPaths.dartAotRuntimeExecutable] / [FlutterToolchainPaths.genSnapshotExecutable].
+ *
+ * Además monta `flutter_assets/` (delegando los manifiestos en el carril A2) y compila la parte
+ * Android de los plugins del proyecto ([FlutterPluginCompiler.kt] + fuentes de
+ * `.dart_tool/flutter_build` completo).
  *
  * Las flags de `gen_kernel` son **las exactas** de la prueba E2E (informe §4.2 y §4.6): ese
  * `gen_kernel` no acepta `--sdk-root`, `--output-dill` ni `--component-name` (`Unrecognized
@@ -51,28 +62,26 @@ object FlutterDartCompiler {
     const val DEFAULT_TIMEOUT_MS = 15L * 60L * 1000L
 
     /**
-     * Escotilla de salida consciente para reintentar AOT on-device en el futuro.
-     *
-     * Con esto en `true` se genera un `libapp.so` con el `gen_snapshot` **del SDK de Termux**, que
-     * esta compilado sin compressed pointers: el engine oficial aborta al arrancar
-     * (`CreateRootIsolate failed: Snapshot not compatible`). Riesgo explicito: se produce un APK
-     * que compila pero crashea al abrir. No activar sin antes cambiar el `gen_snapshot`.
+     * Mensaje del bloqueo **historico** de AOT (se conserva como referencia/documentacion; ya **no**
+     * se usa para fallar el build: el carril K demostro que un `gen_snapshot` propio con compressed
+     * pointers si produce un `libapp.so` que el engine release acepta).
      */
-    const val ALLOW_EXPERIMENTAL_RELEASE_AOT = false
+    const val RELEASE_AOT_HISTORICAL_NOTE =
+        "El `gen_snapshot` del SDK Dart de Termux (${FlutterToolchainPaths.DART_VERSION}) esta " +
+            "construido SIN compressed pointers y el engine oficial de Flutter " +
+            "${FlutterToolchainPaths.FLUTTER_VERSION} EXIGE el perfil 'arm64 android compressed-pointers'. " +
+            "Por eso el AOT se hace con el `gen_snapshot` propio (build `--arch arm64c --mode product`)."
 
-    /** Mensaje honesto del bloqueo de AOT (se usa como fallo, nunca para generar un `libapp.so`). */
-    const val RELEASE_AOT_BLOCKED_MESSAGE =
-        "RELEASE_AOT no es viable compilando en el dispositivo: el `gen_snapshot` del SDK Dart de " +
-            "Termux (${FlutterToolchainPaths.DART_VERSION}) esta construido SIN compressed pointers " +
-            "(ni acepta la flag: `Unrecognized flags: compressed_pointers`) y el engine oficial de " +
-            "Flutter ${FlutterToolchainPaths.FLUTTER_VERSION} EXIGE el perfil 'arm64 android " +
-            "compressed-pointers', asi que aborta al crear el isolate raiz con " +
-            "`CreateRootIsolate failed: Snapshot not compatible ...`. El unico gen_snapshot valido " +
-            "es el del propio engine, que solo se publica para host linux-x64/darwin-x64/windows-x64 " +
-            "(no hay binario android/arm64). Generar un libapp.so con el gen_snapshot del SDK (lo que " +
-            "se hacia antes) solo produce un APK que crashea al arrancar: peor que este error. " +
-            "Usa el modo DEBUG_JIT (engine debug + kernel_blob.bin), que esta demostrado que arranca " +
-            "y responde a los toques. Detalles y vias de solucion: docs/flutter-fase7.md."
+    /**
+     * Mensaje cuando el APK instalado no lleva el backend AOT (cualquier ABI != `arm64-v8a`).
+     * Se prefiere fallar claro antes que producir un `libapp.so` que crashea al arrancar.
+     */
+    const val AOT_BACKEND_MISSING_MESSAGE =
+        "RELEASE_AOT no esta disponible en esta instalacion: el `gen_snapshot` propio (product + " +
+            "compressed pointers) solo viaja en la variante arm64-v8a del APK, empaquetado como " +
+            "`lib/arm64-v8a/${FlutterToolchainPaths.PACKAGED_GEN_SNAPSHOT}` en `jniLibs` (SELinux solo " +
+            "permite ejecutar desde nativeLibraryDir). Compila e instala la variante arm64-v8a, o usa " +
+            "el modo DEBUG_JIT. Detalles: informe AOT (§2, §6, §7)."
 
     private const val ASSET_MANIFEST_FILE = "AssetManifest.json"
     private const val FONT_MANIFEST_FILE = "FontManifest.json"
@@ -99,23 +108,40 @@ object FlutterDartCompiler {
             )
         }
 
-        // Bloqueo honesto del AOT on-device (ver RELEASE_AOT_BLOCKED_MESSAGE y docs/flutter-fase7.md).
-        // Se falla ANTES de tocar `gen_snapshot`: generar un libapp.so incompatible es peor que un
-        // error claro, porque el APK se instala y crashea sin explicacion.
-        if (mode == FlutterBuildMode.RELEASE_AOT && !ALLOW_EXPERIMENTAL_RELEASE_AOT) {
-            return fail(RELEASE_AOT_BLOCKED_MESSAGE)
+        // AOT: solo se puede si el APK instalado trae nuestro `gen_snapshot` (arm64-v8a). En
+        // cualquier otra ABI se falla ANTES de tocar nada: un libapp.so sin compressed pointers es
+        // un APK que se instala y crashea sin explicacion (informe AOT §5.3).
+        if (mode == FlutterBuildMode.RELEASE_AOT) {
+            val reason = FlutterToolchainPaths.aotBackendUnavailableReason(context)
+            if (reason != null) {
+                return fail(reason + "\n" + AOT_BACKEND_MISSING_MESSAGE)
+            }
         }
 
-        val dartAotRuntime = FlutterToolchainPaths.dartAotRuntime(context)
+        val dartAotRuntime = FlutterToolchainPaths.dartAotRuntimeExecutable(context)
         val genKernelSnapshot = FlutterToolchainPaths.genKernelSnapshot(context)
-        val genSnapshot = FlutterToolchainPaths.genSnapshot(context)
-        val platformDill = FlutterToolchainPaths.patchedSdkPlatformDill(context)
-        val sdkRoot = FlutterToolchainPaths.patchedSdkRoot(context)
+        val genSnapshot = FlutterToolchainPaths.genSnapshotExecutable(context)
+        // En RELEASE_AOT el front-end usa la plataforma **product** (la que probo el carril K); en
+        // DEBUG_JIT, la normal.
+        val platformDill = FlutterToolchainPaths.patchedSdkPlatformDillForMode(context, mode)
+        val sdkRoot = FlutterToolchainPaths.patchedSdkRootForMode(context, mode)
 
-        val missing = listOf(dartAotRuntime, genKernelSnapshot, genSnapshot, platformDill, sdkRoot)
-            .filter { !it.exists() }
+        val required = mutableListOf(dartAotRuntime, genKernelSnapshot, platformDill, sdkRoot)
+        if (mode == FlutterBuildMode.RELEASE_AOT) {
+            required.add(genSnapshot)
+        }
+        val missing = required.filter { !it.exists() }
         if (missing.isNotEmpty()) {
             return fail("Toolchain incompleto, faltan: " + missing.joinToString { it.absolutePath })
+        }
+
+        log.append("[info] dartaotruntime: ").append(dartAotRuntime.absolutePath)
+            .append(if (FlutterToolchainPaths.isDartAotRuntimePackaged(context)) " (empaquetado)" else " (filesDir)")
+            .append('\n')
+        if (mode == FlutterBuildMode.RELEASE_AOT) {
+            log.append("[info] gen_snapshot: ").append(genSnapshot.absolutePath)
+                .append(if (FlutterToolchainPaths.isGenSnapshotPackaged(context)) " (empaquetado, product+compressed-pointers)" else " (filesDir)")
+                .append('\n')
         }
 
         val entryPoint = File(flutterRoot, "lib/main.dart")
@@ -144,9 +170,15 @@ object FlutterDartCompiler {
         assetsDir.mkdirs()
 
         try {
-            writePackageConfig(flutterRoot, frameworkDir, FlutterToolchainPaths.pubDepsDir(context))
-            log.append("[ok] package_config.json generado en ")
+            val source = ensurePackageConfig(context, flutterRoot, frameworkDir, progress, log)
+            log.append("[ok] package_config.json (").append(source.name).append(") en ")
                 .append(FlutterToolchainPaths.packageConfigFile(flutterRoot).absolutePath).append('\n')
+            if (source == PackageConfigSource.SYNTHETIC) {
+                log.append(
+                    "[warn] resolucion SINTETICA (carril C, Fase 7): solo vale para proyectos sin " +
+                        "dependencias externas. Ejecuta 'dart pub get' para resolver de verdad.\n"
+                )
+            }
         } catch (e: Exception) {
             return fail("No se pudo escribir package_config.json: ${e.message}")
         }
@@ -158,8 +190,12 @@ object FlutterDartCompiler {
         } else {
             log.append("[warn] falta icudtl.dat en el toolchain\n")
         }
-        writeAssetManifest(flutterRoot, File(assetsDir, ASSET_MANIFEST_FILE), log)
-        File(assetsDir, FONT_MANIFEST_FILE).writeText("[]\n")
+        // Manifiestos + fuentes + shaders: los escribe el carril A2 ([FlutterBundleAssets]);
+        // el manifiesto del carril P es solo respaldo (ver [writeBundleAssets]).
+        writeBundleAssets(context, flutterRoot, assetsDir, progress, log)
+
+        // Plugins (carril P): registrantes Dart/Java y wrapper de entrada si hacen falta.
+        val entrypoint = FlutterPluginSupport.prepareEntrypoint(context, flutterRoot, progress, log)
 
         val outputDill = if (mode == FlutterBuildMode.DEBUG_JIT) {
             FlutterToolchainPaths.kernelBlobFile(flutterRoot)
@@ -183,7 +219,7 @@ object FlutterDartCompiler {
         genKernelArgs.add("-Ddart.vm.profile=false")
         genKernelArgs.add("-o")
         genKernelArgs.add(outputDill.absolutePath)
-        genKernelArgs.add(entryPoint.absolutePath)
+        genKernelArgs.add(entrypoint.absolutePath)
 
         progress("Compilando Dart (${mode.name}): gen_kernel...")
         val genKernelResult = runCommand(
@@ -370,28 +406,329 @@ object FlutterDartCompiler {
         return null
     }
 
-    /** `AssetManifest.json` a partir de `<flutterRoot>/assets…*`. */
+    /**
+     * Monta `flutter_assets/` delegando **en el carril A2** ([FlutterBundleAssets.populateFlutterAssets],
+     * dueno de los manifiestos: `AssetManifest.bin` + `.json`, `FontManifest.json`, fuentes Material,
+     * shaders y `NOTICES.Z`) y dejando [writeAssetManifest] **solo como respaldo** para cuando A2 no
+     * esta disponible en esa build o no puede montar el bundle (p. ej. sin fuentes Material
+     * descargadas). Asi no hay dos escritores del mismo manifiesto.
+     *
+     * @return claves de asset del bundle (las que A2 puso en el manifiesto).
+     */
     @JvmStatic
-    fun writeAssetManifest(flutterRoot: File, destination: File, log: StringBuilder) {
-        val manifest = JsonObject()
-        val assetsRoot = File(flutterRoot, "assets")
-        var count = 0
-        if (assetsRoot.isDirectory) {
-            assetsRoot.walkTopDown()
-                .filter { it.isFile }
-                .sortedBy { it.absolutePath }
-                .forEach { file ->
-                    val relative = file.relativeTo(assetsRoot).invariantSeparatorsPath
-                    val key = "assets/$relative"
-                    val variants = JsonArray()
-                    variants.add(key)
-                    manifest.add(key, variants)
-                    count++
-                }
+    fun writeBundleAssets(
+        context: Context,
+        flutterRoot: File,
+        assetsDir: File,
+        progress: (String) -> Unit,
+        log: StringBuilder,
+    ): List<String> {
+        val declared = readDeclaredAssets(File(flutterRoot, "pubspec.yaml"))
+        try {
+            val result = FlutterBundleAssets.populateFlutterAssets(context, assetsDir, flutterRoot, progress)
+            log.append("[ok] bundle de assets (carril A2): ").append(result).append('\n')
+            if (result.success) {
+                // A2 resolvio los assets declarados en el pubspec; se devuelven sus claves.
+                return FlutterBundleAssets.collectAssetEntries(flutterRoot, declared).keys.toList()
+            }
+            log.append("[warn] A2 no pudo montar flutter_assets (")
+                .append(result.assetEntryCount).append(" assets); respaldo del carril P\n")
+            log.append(result.log)
+        } catch (e: Throwable) {
+            log.append("[warn] FlutterBundleAssets no disponible en esta build: ")
+                .append(e.javaClass.simpleName).append(": ").append(e.message).append('\n')
         }
-        destination.writeText(manifest.toString())
-        log.append("[ok] AssetManifest.json con ").append(count).append(" assets\n")
+        val keys = writeAssetManifest(flutterRoot, File(assetsDir, ASSET_MANIFEST_FILE), log)
+        File(assetsDir, FONT_MANIFEST_FILE).writeText("[]\n")
+        return keys
     }
+
+    /**
+     * `AssetManifest.json` a partir de los `assets:` **declarados en el pubspec.yaml** (carril P).
+     *
+     * Es lo que hace el tool de Flutter: solo entran los assets declarados, con la ruta tal cual
+     * (`assets/img/logo.png`). Ademas de escribir el manifiesto, **copia cada fichero a
+     * `flutter_assets/<ruta>`**, que es donde el engine los busca en tiempo de ejecucion (antes solo
+     * se copiaban los que ya estuvieran en `flutter_assets`, y el scaffold no copiaba ninguno).
+     *
+     * Soporta las tres formas de declararlo que acepta Flutter:
+     * - fichero suelto: `assets/logo.png`
+     * - carpeta completa (recursiva): `assets/` o `assets/img/`
+     * - comodin de un nivel: la carpeta mas un asterisco y la extension (por ejemplo
+     *   `assets/img/` + `*.png`); el doble asterisco de Flutter se trata como carpeta completa, no se
+     *   implementa el matching completo de `package:glob`
+     *
+     * Si el pubspec no declara `assets:`, se mantiene el comportamiento de la Fase 7 (recorrer
+     * `<flutterRoot>/assets`) para no romper proyectos hechos antes.
+     *
+     * @return lista de rutas de asset escritas en el manifiesto (claves del JSON).
+     */
+    @JvmStatic
+    fun writeAssetManifest(flutterRoot: File, destination: File, log: StringBuilder): List<String> {
+        val declared = readDeclaredAssets(File(flutterRoot, "pubspec.yaml"))
+        val manifest = JsonObject()
+        val written = mutableListOf<String>()
+        val assetsOutputDir = destination.parentFile
+
+        fun add(relativePath: String, source: File) {
+            val key = relativePath.removePrefix("/")
+            if (manifest.has(key)) {
+                return
+            }
+            val variants = JsonArray()
+            variants.add(key)
+            manifest.add(key, variants)
+            written.add(key)
+            if (assetsOutputDir != null) {
+                val target = File(assetsOutputDir, key)
+                try {
+                    target.parentFile?.mkdirs()
+                    source.copyTo(target, overwrite = true)
+                } catch (e: Exception) {
+                    log.append("[warn] no se pudo copiar el asset ").append(key)
+                        .append(": ").append(e.message).append('\n')
+                }
+            }
+        }
+
+        if (declared.isEmpty()) {
+            val assetsRoot = File(flutterRoot, "assets")
+            if (assetsRoot.isDirectory) {
+                assetsRoot.walkTopDown()
+                    .filter { it.isFile }
+                    .sortedBy { it.absolutePath }
+                    .forEach { file ->
+                        val relative = file.relativeTo(assetsRoot).invariantSeparatorsPath
+                        add("assets/$relative", file)
+                    }
+            }
+            log.append("[warn] pubspec.yaml sin `flutter: assets:`; se recorrio assets/ ")
+                .append("(").append(written.size).append(" ficheros)\n")
+        } else {
+            for (entry in declared) {
+                val trimmed = entry.trim().trim('"', '\'')
+                if (trimmed.isEmpty()) {
+                    continue
+                }
+                val normalized = trimmed.removePrefix("./")
+                val source = File(flutterRoot, normalized)
+                when {
+                    // Carpeta completa (`assets/`, `assets/img/`).
+                    source.isDirectory -> {
+                        source.walkTopDown()
+                            .filter { it.isFile }
+                            .sortedBy { it.absolutePath }
+                            .forEach { file ->
+                                val relative = file.relativeTo(flutterRoot).invariantSeparatorsPath
+                                add(relative, file)
+                            }
+                    }
+                    // Comodin de un nivel (carpeta + un unico asterisco).
+                    normalized.contains('*') -> {
+                        val parent = File(flutterRoot, normalized.substringBeforeLast('/'))
+                        val pattern = normalized.substringAfterLast('/')
+                        val regex = Regex("^" + globToRegexPattern(pattern) + "$")
+                        parent.listFiles()
+                            ?.filter { it.isFile && regex.matches(it.name) }
+                            ?.sortedBy { it.name }
+                            ?.forEach { file ->
+                                val relative = file.relativeTo(flutterRoot).invariantSeparatorsPath
+                                add(relative, file)
+                            }
+                    }
+                    source.isFile -> add(normalized, source)
+                    else -> log.append("[warn] asset declarado pero inexistente: ").append(trimmed)
+                        .append('\n')
+                }
+            }
+        }
+
+        destination.writeText(manifest.toString())
+        log.append("[ok] AssetManifest.json con ").append(written.size).append(" assets\n")
+        return written
+    }
+
+    /**
+     * Convierte un comodin de un nivel a expresion regular: el asterisco es "cualquier cosa menos
+     * una barra" y el interrogante un caracter; el resto se escapa. Se hace a mano porque
+     * `Regex.escape` envuelve el texto en `\Q...\E` y no deja sustituir los comodines.
+     */
+    @JvmStatic
+    fun globToRegexPattern(pattern: String): String {
+        val builder = StringBuilder(pattern.length * 4)
+        for (character in pattern) {
+            when (character) {
+                '*' -> builder.append("[^/]*")
+                '?' -> builder.append("[^/]")
+                else -> builder.append(Regex.escape(character.toString()))
+            }
+        }
+        return builder.toString()
+    }
+
+    /**
+     * Entradas de `flutter: assets:` del `pubspec.yaml` (parser minimo de YAML, sin dependencias).
+     *
+     * Solo se lee el bloque `assets:` que cuelga de `flutter:`, que es donde Flutter las declara:
+     * ```yaml
+     * flutter:
+     *   uses-material-design: true
+     *   assets:
+     *     - assets/
+     *     - assets/logo.png
+     * ```
+     * Se acepta indentacion con espacios (el YAML prohibe tabuladores) y varios niveles de sangria
+     * dentro de `flutter:`. Las lineas de comentario se ignoran. Devuelve las entradas sin el `-`.
+     */
+    @JvmStatic
+    fun readDeclaredAssets(pubspec: File): List<String> {
+        if (!pubspec.isFile) {
+            return emptyList()
+        }
+        val assets = mutableListOf<String>()
+        var inFlutterBlock = false
+        var flutterIndent = -1
+        var assetsIndent = -1
+        for (raw in pubspec.readLines()) {
+            if (raw.isBlank() || raw.trimStart().startsWith("#")) {
+                continue
+            }
+            val trimmed = raw.trimEnd()
+            val indent = trimmed.length - trimmed.trimStart().length
+            val content = trimmed.trimStart()
+
+            if (indent == 0) {
+                inFlutterBlock = content.startsWith("flutter:")
+                flutterIndent = if (inFlutterBlock) 0 else -1
+                assetsIndent = -1
+                continue
+            }
+            if (!inFlutterBlock || indent <= flutterIndent) {
+                continue
+            }
+            if (assetsIndent >= 0) {
+                if (indent > assetsIndent) {
+                    if (content.startsWith("-")) {
+                        val value = content.removePrefix("-").trim().trim('"', '\'')
+                        if (value.isNotEmpty()) {
+                            assets.add(value)
+                        }
+                    }
+                    continue
+                }
+                assetsIndent = -1
+            }
+            if (content.startsWith("assets:")) {
+                assetsIndent = indent
+                // Forma en linea: `assets: [a, b]`.
+                val inline = content.removePrefix("assets:").trim()
+                if (inline.startsWith("[")) {
+                    inline.trim('[', ']').split(',')
+                        .map { it.trim().trim('"', '\'') }
+                        .filter { it.isNotEmpty() }
+                        .forEach { assets.add(it) }
+                    assetsIndent = -1
+                }
+            }
+        }
+        return assets
+    }
+
+    /**
+     * Deja listo el `package_config.json` del proyecto y devuelve **de donde** salio.
+     *
+     * Orden de preferencia (carril P, Fase 8):
+     * 1. [PackageConfigSource.PUB_RESOLVED_CACHED]: ya hay una resolucion de pub vigente (hash del
+     *    pubspec sin cambios) -> no se toca la red;
+     * 2. [PackageConfigSource.PUB_RESOLVED]: se ejecuta `dart pub get` de verdad en el dispositivo;
+     * 3. [PackageConfigSource.SYNTHETIC]: ultimo recurso, el `package_config` a mano de la Fase 7
+     *    (solo framework + 5 dependencias). Se usa si pub no esta instalado o si falla la resolucion
+     *    (tipicamente sin red) **y** el proyecto no declara dependencias externas.
+     */
+    @JvmStatic
+    fun ensurePackageConfig(
+        context: Context,
+        flutterRoot: File,
+        frameworkDir: File,
+        progress: (String) -> Unit,
+        log: StringBuilder,
+    ): PackageConfigSource {
+        if (FlutterPubResolver.isResolutionFresh(flutterRoot)) {
+            log.append("[ok] resolucion de pub vigente en cache\n")
+            return PackageConfigSource.PUB_RESOLVED_CACHED
+        }
+        val resolution = FlutterPubResolver.resolve(context, flutterRoot, progress)
+        log.append(resolution.log)
+        if (resolution.success) {
+            log.append("[ok] pub resolvio ").append(resolution.resolvedCount).append(" paquetes\n")
+            return PackageConfigSource.PUB_RESOLVED
+        }
+        log.append("[warn] pub no pudo resolver: ").append(resolution.message).append('\n')
+        if (declaresExternalDependencies(File(flutterRoot, "pubspec.yaml"))) {
+            // Con dependencias externas el package_config sintetico no sirve de nada: mejor fallar
+            // claro que producir un kernel sin los paquetes del usuario.
+            throw IllegalStateException(resolution.message)
+        }
+        writePackageConfig(flutterRoot, frameworkDir, FlutterToolchainPaths.pubDepsDir(context))
+        return PackageConfigSource.SYNTHETIC
+    }
+
+    /**
+     * `true` si el `pubspec.yaml` declara alguna dependencia que no sea del SDK (`sdk: flutter`) ni
+     * de desarrollo. Con dependencias externas, un `package_config` sintetico no compila el proyecto.
+     */
+    @JvmStatic
+    fun declaresExternalDependencies(pubspec: File): Boolean {
+        if (!pubspec.isFile) {
+            return false
+        }
+        var inDependencies = false
+        var pendingSdkCheck = false
+        for (raw in pubspec.readLines()) {
+            val trimmed = raw.trim()
+            if (trimmed.isEmpty() || trimmed.startsWith("#")) {
+                continue
+            }
+            if (!raw.startsWith(" ")) {
+                inDependencies = trimmed.startsWith("dependencies:")
+                pendingSdkCheck = false
+                continue
+            }
+            if (!inDependencies) {
+                continue
+            }
+            if (pendingSdkCheck) {
+                pendingSdkCheck = false
+                if (trimmed.startsWith("sdk:")) {
+                    continue
+                }
+            }
+            if (trimmed.startsWith("sdk:")) {
+                continue
+            }
+            if (trimmed.endsWith(":")) {
+                // Cabecera de dependencia: hay que ver si la siguiente linea dice `sdk: …`.
+                pendingSdkCheck = true
+                continue
+            }
+            return true
+        }
+        return false
+    }
+
+    /** De donde salio el `package_config.json` que se usa para compilar. */
+    enum class PackageConfigSource {
+        /** Resuelto por `dart pub get` en este build. */
+        PUB_RESOLVED,
+
+        /** Ya habia una resolucion de pub valida en `.dart_tool` (sin red). */
+        PUB_RESOLVED_CACHED,
+
+        /** Sintetico de la Fase 7 (solo framework + dependencias fijas). */
+        SYNTHETIC,
+    }
+
+    /** Resultado de un proceso externo, con log completo. */
 
     /**
      * Busca imports `package:flutter/` en los `.dart` del proyecto. Si aparecen y no hay fuentes
@@ -423,13 +760,33 @@ object FlutterDartCompiler {
      */
     @JvmStatic
     fun runCommand(command: List<String>, workingDirectory: File, timeoutMs: Long): ProcessResult {
+        return runCommand(command, workingDirectory, timeoutMs, null)
+    }
+
+    /**
+     * Igual que [runCommand] pero **fijando variables de entorno** ([environment]).
+     *
+     * Lo usa [FlutterPubResolver] para pasar `PUB_CACHE`, `HOME`, `TMPDIR` y `FLUTTER_ROOT` al
+     * cliente de pub sin tocar el entorno del proceso de la app. Las variables indicadas tienen
+     * prioridad sobre las heredadas.
+     */
+    @JvmStatic
+    fun runCommand(
+        command: List<String>,
+        workingDirectory: File,
+        timeoutMs: Long,
+        environment: Map<String, String>?,
+    ): ProcessResult {
         val startedAt = System.currentTimeMillis()
         val output = StringBuilder()
         return try {
-            val process = ProcessBuilder(command)
+            val builder = ProcessBuilder(command)
                 .directory(workingDirectory)
                 .redirectErrorStream(true)
-                .start()
+            if (environment != null) {
+                builder.environment().putAll(environment)
+            }
+            val process = builder.start()
 
             val reader = Thread {
                 try {

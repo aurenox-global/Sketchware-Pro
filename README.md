@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.5.9-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.8.0-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -133,6 +133,36 @@ Requirements:
 
 This repository is a personal fork. Every improvement is added here as it lands, and the
 [website](https://aurenox-global.github.io/Sketchware-Pro/) is updated at the same time.
+
+### 2026-09-23 — Flutter, experimental: release/AOT on the device, complete assets and real pub (phase 8)
+
+- **Release/AOT on the device is unlocked.** The Dart SDK for Android was built for this fork with **compressed
+  pointers** — the flag is set by the architecture name (`arm64c`), not by a command-line option — and as a
+  **product** build, because the first token of the snapshot's feature string is decided at compile time
+  (`product`, not `release`). Its `gen_snapshot` (4,991,592 B, sha256 `9921983f…`) ships inside the APK, and with it
+  **the phone itself produces a `libapp.so` the official engine accepts**. Tested: a **release** APK boots in an
+  arm64 Android 14 emulator, the counter goes 0 → 3 on real taps and there is **no DEBUG banner**. Control A/B: the
+  same APK with the `gen_snapshot` of the Termux SDK fails with *the snapshot requires 'no-compressed-pointers' but
+  the VM has 'compressed-pointers'* — only compressed pointers were missing.
+- **The app can run its own tools.** With `targetSdk 34`, SELinux denies `execute_no_trans` for binaries in
+  `filesDir` and in `/data/local/tmp`, but **`nativeLibraryDir` works**: the runtime and `gen_snapshot` are packed
+  as `lib/arm64-v8a/libdartaotruntime.so` and `libfluttergensnapshot.so`. The app ran the whole AOT from its own
+  process, as an untrusted app and without root, in 3.9 s and with the same sha256.
+- **The asset bundle is complete.** Material Icons (the real pin is `bin/internal/material_fonts.version` →
+  `fonts.zip`, not an engine artifact), the `ink_sparkle.frag` and `stretch_effect.frag` shaders precompiled on the
+  host and embedded, `AssetManifest.bin` (`StandardMessageCodec`), `FontManifest.json` and `NOTICES.Z`. Verified on
+  the device: the `+` icon is drawn and the shader error is gone.
+- **Real pub.** `dart pub get` now runs on the device (the pub client ships in the Dart SDK itself) and resolves
+  real pub.dev packages, and the kernel is compiled with the resulting authentic `package_config.json`.
+- **Plugins: half-way, stated honestly.** The fork has its own Kotlin/Java plugin compiler (ECJ plus the fork's
+  `K2JVMCompiler`) that generates the `GeneratedPluginRegistrant`, merges manifests and pulls AAR dependencies;
+  **no plugin has been compiled or started on a device yet** — that is the first pending item.
+- **Cost:** the two packed executables add **10.18 MB** to the `arm64-v8a` APK. Other ABIs have no AOT backend and
+  say so instead of failing silently. The default mode is still **debug/JIT**, this stays experimental and there is
+  still no hot reload.
+- Version **v7.0.8.0** (versionCode 162), release page:
+  [v7.0.8.0](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.0). Full write-up (in Spanish) with
+  the commands, the measured numbers and the honest pending work: [docs/flutter-fase8.md](docs/flutter-fase8.md).
 
 ### 2026-09-23 — Flutter support, experimental: Dart files and builds on the device (phase 7)
 

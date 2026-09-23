@@ -30,6 +30,10 @@ import pro.sketchware.flutter.FlutterToolchainManager;
  *
  * <p>Deteccion de "es un proyecto Flutter": igual que Kotlin, por ficheros
  * ({@code pubspec.yaml} en {@code <proyecto>/files/flutter/}), no por un enum de lenguaje.
+ *
+ * <p>Fase 8 (carril I): el staging incluye ahora los <b>plugins</b> del proyecto
+ * ({@link FlutterPluginPackager}: fuentes Java/Kotlin del plugin + el registrant generado a
+ * {@code compiledClassesPath}, dependencias AAR como local libraries y merge de manifests).
  */
 public class FlutterCompilerBridge {
 
@@ -76,9 +80,11 @@ public class FlutterCompilerBridge {
         try {
             File projectFilesDir = new File(builder.yq.projectMyscPath, "files");
             FlutterProject project = FlutterProjectStore.load(projectFilesDir);
-            // Por defecto DEBUG_JIT: es el unico modo que la prueba E2E pudo arrancar en el
-            // dispositivo (engine debug + kernel_blob.bin). RELEASE_AOT falla a proposito mas
-            // abajo, con un mensaje que explica el por que (gen_snapshot sin compressed pointers).
+            // Por defecto DEBUG_JIT. RELEASE_AOT esta DESBLOQUEADO desde la Fase 8 (carril I): usa
+            // nuestro `gen_snapshot` (product + compressed pointers) empaquetado en jniLibs/arm64-v8a
+            // como libfluttergensnapshot.so. Si la variante instalada no lo lleva (ABI distinta de
+            // arm64-v8a), la compilacion falla con un mensaje claro en vez de producir un libapp.so
+            // incompatible con el engine.
             FlutterBuildMode mode = project != null
                     ? project.getMode()
                     : FlutterProjectDefaults.DEFAULT_MODE;
@@ -86,14 +92,14 @@ public class FlutterCompilerBridge {
             Log.d(TAG, "Proyecto Flutter detectado en " + flutterRoot.getAbsolutePath() + " (modo " + mode + ")");
 
             // El toolchain se pide PARA EL MODO: el engine debug y el release son artefactos
-            // distintos, y de aqui tambien sale el framework Dart + sus dependencias de pub.
+            // distintos (y el patched sdk product solo lo usa el AOT); de aqui tambien sale el
+            // framework Dart + sus dependencias de pub.
             if (!FlutterToolchainManager.ensureInstalled(context, mode, message -> {
                 Log.d(TAG, message);
                 return kotlin.Unit.INSTANCE;
             })) {
-                Log.w(TAG, "Toolchain Flutter no disponible (modo " + mode + "); se omite el build Dart");
-                Log.w(TAG, "Instala/actualiza el toolchain desde el menu Flutter del editor "
-                        + "(Flutter: estado del toolchain) y vuelve a compilar.");
+                Log.w(TAG, "Toolchain Flutter no disponible (modo " + mode + "): "
+                        + FlutterToolchainManager.describeNotReady(context, mode));
                 return false;
             }
 
@@ -151,6 +157,7 @@ public class FlutterCompilerBridge {
             ProjectBuilder builder,
             FlutterDartCompileResult dartResult) {
         boolean ok = true;
+        StringBuilder pluginLog = new StringBuilder();
 
         /* 1) Manifest: FlutterActivity como launcher + flutterEmbedding=2 + extractNativeLibs. */
         if (!FlutterPackagingSupport.injectFlutterManifest(new File(builder.yq.androidManifestPath))) {
@@ -193,6 +200,15 @@ public class FlutterCompilerBridge {
             FlutterPackagingSupport.appendFlutterKeepRules(
                     new File(builder.proguard.getCustomProguardRules()));
         }
+
+        /* 6) Plugins (carril I, Fase 8): compila su parte Java/Kotlin + el registrant generado a
+              compiledClassesPath (lo que D8 dexea), resuelve sus dependencias AAR como local
+              libraries del proyecto y fusiona sus manifests. Best effort: nunca lanza. */
+        int packagedPlugins = FlutterPluginPackager.packPlugins(context, builder, pluginLog);
+        if (pluginLog.length() > 0) {
+            Log.d(TAG, pluginLog.toString());
+        }
+        Log.d(TAG, "Plugins Flutter empaquetados: " + packagedPlugins);
 
         Log.d(TAG, "Artefactos Flutter inyectados en el builder (ok=" + ok + ")");
         return ok;

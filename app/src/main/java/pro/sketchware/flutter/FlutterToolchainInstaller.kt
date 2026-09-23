@@ -28,9 +28,15 @@ import java.security.MessageDigest
  * LIMITACIÓN CONOCIDA (W^X, Android 10+): los binarios se extraen en `<filesDir>/flutter-toolchain`
  * (datos privados de la app) y se marcan con [File.setExecutable]. En Android 10+ (API 29) el
  * `execve` de ficheros escritos por la app en su propio data dir está bloqueado por SELinux para
- * apps con `targetSdk >= 29`. La evidencia del spike se obtuvo **como root** en un AVD Api34; el
- * camino alternativo (empaquetar los ELF como `lib*.so` en `jniLibs` para que el instalador los
- * deje en `nativeLibraryDir`, que sí es ejecutable) queda documentado pero **no implementado aquí**.
+ * apps con `targetSdk >= 29`.
+ *
+ * **Fase 8 / carril I (RESUELTO en el codigo):** los dos ejecutables que la app necesita en tiempo
+ * de build (`dartaotruntime` y nuestro `gen_snapshot`) viajan **empaquetados** en
+ * `app/src/main/jniLibs/arm64-v8a/` como `libdartaotruntime.so` y `libfluttergensnapshot.so`; el
+ * instalador de Android los deja en `nativeLibraryDir`, que **si** es ejecutable (informe AOT §6.1:
+ * `exit=0` desde la app, uid `untrusted_app`). La copia de `filesDir` se conserva como respaldo
+ * (otras ABIs, diagnostico) y [FlutterToolchainManager.isReady] comprueba con una ejecucion real
+ * cual de las dos rutas funciona.
  */
 object FlutterToolchainInstaller {
 
@@ -52,6 +58,9 @@ object FlutterToolchainInstaller {
         "bin/utils/gen_snapshot",
         "bin/snapshots/gen_kernel_aot.dart.snapshot",
         "bin/snapshots/frontend_server_aot.dart.snapshot",
+        // Cliente de `dart pub` (carril P): es el `dartdev` AOT del SDK. Comprobado dentro del
+        // `data.tar.xz` de `dart_3.13.4_aarch64.deb` (16.384.904 B) y ejecutandolo en el emulador.
+        "bin/snapshots/dartdev_aot.dart.snapshot",
         "lib/_internal/vm_platform.dill",
     )
 
@@ -587,6 +596,58 @@ object FlutterToolchainInstaller {
             null
         }
     }
+
+    /**
+     * **Ejecuta** [executable] con [args] y devuelve la salida recortada, o `null` si no se pudo
+     * ejecutar (permiso denegado por SELinux, formato/ABI incorrectos, timeout…).
+     *
+     * Es la comprobacion "de verdad" que usa [FlutterToolchainManager.isReady]: no basta con que el
+     * fichero exista, porque un ELF extraido en `filesDir` existe y **no** se puede ejecutar en
+     * `targetSdk >= 29` (ver la nota de la clase).
+     *
+     * @param timeoutSeconds margen generoso: `--version` no toca disco y termina en milisegundos,
+     *   pero un dispositivo cargado puede tardar; nunca se deja un proceso colgado.
+     */
+    @JvmStatic
+    @JvmOverloads
+    fun probeExecutable(
+        executable: File,
+        args: List<String> = listOf("--version"),
+        timeoutSeconds: Long = 20L,
+    ): String? {
+        if (!executable.isFile) {
+            return null
+        }
+        var process: Process? = null
+        return try {
+            process = ProcessBuilder(listOf(executable.absolutePath) + args)
+                .redirectErrorStream(true)
+                .start()
+            val output = process.inputStream.bufferedReader().readText().trim()
+            val finished = process.waitFor(timeoutSeconds, java.util.concurrent.TimeUnit.SECONDS)
+            if (!finished) {
+                process.destroyForcibly()
+                Log.w(TAG, "${executable.name} no termino en ${timeoutSeconds} s")
+                return null
+            }
+            if (process.exitValue() != 0) {
+                Log.w(TAG, "${executable.name} salio con ${process.exitValue()}: ${output.take(200)}")
+                return null
+            }
+            output
+        } catch (e: Exception) {
+            // Caso tipico: java.io.IOException: Cannot run program …: error=13, Permission denied
+            Log.w(TAG, "No se pudo ejecutar ${executable.absolutePath}: ${e.message}")
+            null
+        } finally {
+            process?.let { if (it.isAlive) it.destroyForcibly() }
+        }
+    }
+
+    /** Primera linea no vacia de `--version` de un ejecutable del toolchain, o `null`. */
+    @JvmStatic
+    fun executableVersion(executable: File): String? =
+        probeExecutable(executable)?.lineSequence()?.firstOrNull { it.isNotBlank() }?.trim()
 
     private fun sha256OfFile(file: File): String {
         val digest = MessageDigest.getInstance("SHA-256")
