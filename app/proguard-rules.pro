@@ -43,6 +43,52 @@
 
 -keep class kellinwood.** { *; }
 
+# --- Hotfix v7.0.8.1: reflexion rota en release (R8) ---
+# com.itsaky.androidide.config.JavacConfigProvider.<clinit> NO referencia los campos del
+# enum por bytecode: los busca por reflexion con el nombre en un String
+# (javax.lang.model.SourceVersion.class.getDeclaredField("RELEASE_17" / "RELEASE_11" / "RELEASE_8")).
+# R8 no puede ver esa dependencia, asi que en la release minificada eliminaba los campos
+# static del enum -> getDeclaredField lanza NoSuchFieldException -> IllegalStateException
+# (linea 46 del <clinit>) -> el catch(Throwable) la reenvuelve en RuntimeException ->
+# ExceptionInInitializerError al inicializar SourceVersion desde FileSystem, y
+# ProjectBuilder.compileJavaCode (ECJ) revienta: NINGUN proyecto compila en release.
+# En debug no pasa porque minifyEnabled = false.
+# Estas reglas conservan el enum completo (nombre + TODOS los campos) solo donde hace falta.
+-keep class javax.lang.model.SourceVersion { *; }
+
+# Resto de enums de javax.lang.model (Modifier, ElementKind, TypeKind, NestingKind...):
+# el propio compilador y el IDE los consultan por nombre en varios puntos. Conservar
+# nombre y miembros evita el mismo tipo de fallo sin llegar a desactivar R8 globalmente.
+-keepclassmembers,allowshrinking enum javax.lang.model.** { *; }
+
+# --- Hotfix v7.0.8.1: segundo fallo R8 en el compilador ECJ (mensajes por reflexion) ---
+# org.eclipse.jdt.internal.compiler.util.Messages.<clinit> inyecta los textos de
+# messages.properties en sus PROPIOS campos static usando reflexion por nombre
+# (Messages.initializeMessages -> Class.getDeclaredFields() + Field.set()).
+# R8 renombraba esos campos (text_block -> 'a', etc.), la inyeccion no encontraba nada
+# y quedaban a null -> JavaFeature.<clinit> acababa llamando a
+# MessageFormat.format(null, ...) -> NullPointerException -> ExceptionInInitializerError
+# dentro del parser de ECJ -> ProjectBuilder.compileJavaCode vuelve a fallar.
+# Hay que conservar la clase, sus campos y (sobre todo) sus NOMBRES sin optimizar.
+-keep class org.eclipse.jdt.internal.compiler.util.Messages { *; }
+
+# Red de seguridad para el resto de tablas de mensajes del compilador ECJ
+# (batch/Main, EclipseFileManager, DefaultProblemFactory...): son campos
+# public static String que se consultan de forma indirecta, asi que no se pueden
+# renombrar ni sustituir por su valor. No es una desactivacion global de R8.
+-keepclassmembers class org.eclipse.jdt.internal.compiler.** {
+    public static java.lang.String *;
+}
+
+# --- Hotfix v7.0.8.1: tercer fallo R8 en el firmado del APK (apksig) ---
+# com.android.apksig.internal.asn1.Asn1BerParser instancia las clases ASN.1 POR NOMBRE
+# usando Class.getConstructor() (p.ej. com.android.apksig.internal.x509.SubjectPublicKeyInfo,
+# cuyo constructor vacio solo se invoca por reflexion). R8 lo eliminaba ->
+# NoSuchMethodException -> Asn1DecodingException -> ProjectBuilder.signDebugApk fallaba
+# al firmar el APK generado (v2/v3 scheme). Se conserva apksig/apksigner completo.
+-keep class com.android.apksig.** { *; }
+-keep class com.android.apksigner.** { *; }
+
 -dontwarn com.google.errorprone.**
 -dontwarn javax.xml.stream.**
 -dontwarn org.codehaus.stax2.**
