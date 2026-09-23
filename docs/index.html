@@ -37,14 +37,14 @@
 
   <!-- ============================================================ hero -->
   <section class="hero" style="border-top:none">
-    <div class="tag">● v7.0.8.2 · versionCode 164 · source-available</div>
+    <div class="tag">● v7.0.8.3 · versionCode 165 · source-available</div>
     <h1>Build real Android apps<br><span class="accent">from your phone.</span></h1>
     <p class="lead">
       Sketchware Pro is an Android IDE that runs on Android itself: drag blocks, write Java or Kotlin,
       compile on the device and get an installable APK — no computer required.
     </p>
     <div class="btns">
-      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.2" target="_blank" rel="noopener">⬇ Download APK</a>
+      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.3" target="_blank" rel="noopener">⬇ Download APK</a>
       <a class="btn ghost" href="https://github.com/aurenox-global/Sketchware-Pro" target="_blank" rel="noopener">View source on GitHub</a>
     </div>
 
@@ -178,6 +178,32 @@
         editor's renderer, which returned an empty root when the layout name was not found in the project data.
         Now every layout is built with the real-views builder that works from the XML alone, with the native
         renderer as fallback and a visible message if both fail. Version <strong>v7.0.6.0</strong>.</p>
+      </div>
+
+      <div class="item done">
+        <span class="when">2026-09-23 · fix</span>
+        <h3>Preview: project colours, cold start and the <code>xml</code> extra <span class="pill ok">fixed</span></h3>
+        <ul class="clean">
+          <li><strong>Project colour resources resolve now.</strong> A background written as <code>@color/...</code> was
+          kept as the parser's <code>0xFFFFFFFF</code> "pending" marker and the preview painted it
+          <strong>white</strong>; the project's <code>@color/...</code> and <code>?attr/...</code> are now resolved —
+          verified with pure blue, <code>(0,0,255)</code>.</li>
+          <li><strong>Cold start no longer crashes.</strong> Opening the preview without passing through the design
+          editor died with a <code>NullPointerException</code> — <code>ColorsEditorManager</code> reads the global
+          <code>DesignActivity.sc_id</code>, which is <code>null</code> in a fresh process — leaving a dead screen with
+          no message. The project is now set beforehand and a <code>try/catch</code> shows the error on screen.</li>
+          <li><strong>The <code>xml</code> extra is honoured.</strong> Opening the preview from the view XML editor now
+          shows exactly what you are editing, without saving.</li>
+          <li><strong>Verified by pixel</strong> on an arm64 API 34 emulator: magenta root <code>(255,0,255)</code>,
+          project colour blue <code>(0,0,255)</code>, a <code>MaterialButton</code> visible, HTML/WebView intact and
+          default <code>TextView</code>/<code>Button</code> text legible in both themes — <code>(68,71,79)</code> on
+          <code>(250,249,253)</code> light, <code>(196,198,208)</code> on <code>(18,19,22)</code> dark.</li>
+          <li><strong>Honest pending:</strong> Material beyond <code>MaterialButton</code>, Material3 projects, custom
+          project themes, a physical phone and a formal regression of the design editor.</li>
+        </ul>
+        <p><img src="assets/preview-colors.png" alt="Light preview: magenta root, blue project colour box, MaterialButton, HTML/WebView and legible default text" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)"></p>
+        <p>Version <strong>v7.0.8.3</strong> (versionCode 165). The round-2 write-up is at the end of
+        <a href="preview-fix.md">docs/preview-fix.md</a>.</p>
       </div>
 
       <div class="item done">

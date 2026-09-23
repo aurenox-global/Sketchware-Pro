@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.8.2-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.8.3-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -160,6 +160,18 @@ This repository is a personal fork. Every improvement is added here as it lands,
 - **Cost:** the two packed executables add **10.18 MB** to the `arm64-v8a` APK. Other ABIs have no AOT backend and
   say so instead of failing silently. The default mode is still **debug/JIT**, this stays experimental and there is
   still no hot reload.
+- **v7.0.8.3 (versionCode 165) — three more preview fixes, measured pixel by pixel.** **Project colour resources**
+  now resolve: a background written as `@color/...` was stored as the parser's `0xFFFFFFFF` "pending" marker and the
+  preview painted it **white** — now the project's `@color/...` and `?attr/...` are resolved (verified with pure blue,
+  `(0,0,255)`). The **cold-start crash** is fixed: opening the preview without passing through the design editor died
+  with a `NullPointerException` (`ColorsEditorManager` reads the global `DesignActivity.sc_id`, `null` in a fresh
+  process) and left a dead screen with no message — the project is now set beforehand and a `try/catch` shows a
+  visible error. And the preview now **honours the `xml` extra**, so opening it from the view XML editor shows exactly
+  what you are editing, unsaved. Verified pixel by pixel on an arm64 API 34 emulator, light and dark: magenta root
+  `(255,0,255)`, a `MaterialButton` visible, and default `TextView`/`Button` text legible in both themes — `(68,71,79)`
+  on `(250,249,253)` light, `(196,198,208)` on `(18,19,22)` dark. Release page:
+  [v7.0.8.3](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.3). Full write-up (in Spanish):
+  [docs/preview-fix.md](docs/preview-fix.md).
 - **v7.0.8.2 (versionCode 164) — the layout preview paints again.** The preview of View-based designs (the
   HTML/WebView one always worked) showed an empty area — white or black depending on the theme — with only the widgets
   that paint themselves (SeekBar, Switch, icons) and the WebView HTML visible. The cause was a **sentinel**: the IDE's

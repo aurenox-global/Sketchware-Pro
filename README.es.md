@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.8.2-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.8.3-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -160,6 +160,19 @@ Este repositorio es un fork personal. Cada mejora se añade aquí según entra, 
 - **Coste:** los dos ejecutables empaquetados suman **10,18 MB** al APK `arm64-v8a`. Las otras ABIs no tienen
   backend AOT y lo dicen, en vez de fallar en silencio. El modo por defecto sigue siendo **debug/JIT**, esto
   continua siendo experimental y todavia no hay hot reload.
+- **v7.0.8.3 (versionCode 165) — tres arreglos mas en la vista previa, medidos pixel a pixel.** Ya se **resuelven
+  los recursos de color del proyecto**: un fondo escrito como `@color/...` se guardaba como el marcador `0xFFFFFFFF`
+  ("pendiente") del parser y la vista previa lo pintaba **blanco**; ahora se resuelven los `@color/...` y `?attr/...`
+  del proyecto (verificado con azul puro, `(0,0,255)`). Se arregla el **cuelgue en arranque en frio**: abrir la vista
+  previa sin pasar por el editor de diseno moria con un `NullPointerException` (`ColorsEditorManager` lee el
+  `DesignActivity.sc_id` global, `null` en un proceso nuevo) y dejaba una pantalla muerta sin mensaje — ahora se fija
+  el proyecto antes y un `try/catch` muestra el error en pantalla. Y la vista previa ahora **honra el extra `xml`**,
+  asi que abrirla desde el editor de XML de vistas muestra exactamente lo que estas editando, sin guardar. Verificado
+  pixel a pixel en un emulador arm64 API 34, en claro y en oscuro: raiz magenta `(255,0,255)`, `MaterialButton`
+  visible y texto por defecto de `TextView`/`Button` legible en ambos temas — `(68,71,79)` sobre `(250,249,253)` en
+  claro, `(196,198,208)` sobre `(18,19,22)` en oscuro. Pagina de la release:
+  [v7.0.8.3](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.3). Todos los detalles:
+  [docs/preview-fix.md](docs/preview-fix.md).
 - **v7.0.8.2 (versionCode 164) — la vista previa de diseños vuelve a pintar.** La vista previa de los diseños hechos
   con elementos View (la de HTML/WebView siempre ha funcionado) mostraba la zona del diseño vacía — en blanco o en negro
   según el tema — y solo se veían los widgets que se pintan solos (SeekBar, Switch, iconos) y el HTML del WebView. La

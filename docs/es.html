@@ -37,14 +37,14 @@
 
   <!-- ============================================================ hero -->
   <section class="hero" style="border-top:none">
-    <div class="tag">● v7.0.8.2 · versionCode 164 · source-available</div>
+    <div class="tag">● v7.0.8.3 · versionCode 165 · source-available</div>
     <h1>Crea apps Android reales<br><span class="accent">desde tu móvil.</span></h1>
     <p class="lead">
       Sketchware Pro es un IDE de Android que funciona sobre Android: arrastra bloques, escribe Java o Kotlin,
       compila en el propio dispositivo y obtén un APK instalable — sin necesidad de ordenador.
     </p>
     <div class="btns">
-      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.2" target="_blank" rel="noopener">⬇ Descargar APK</a>
+      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.3" target="_blank" rel="noopener">⬇ Descargar APK</a>
       <a class="btn ghost" href="https://github.com/aurenox-global/Sketchware-Pro" target="_blank" rel="noopener">Ver el código en GitHub</a>
     </div>
 
@@ -181,6 +181,33 @@
         datos del proyecto. Ahora todos los layouts se construyen con el constructor de vistas reales (solo necesita
         el XML), con el renderizador nativo como reserva y un mensaje visible si ambos fallan. Version
         <strong>v7.0.6.0</strong>.</p>
+      </div>
+
+      <div class="item done">
+        <span class="when">2026-09-23 · arreglo</span>
+        <h3>Vista previa: colores del proyecto, arranque en frío y extra <code>xml</code> <span class="pill ok">arreglado</span></h3>
+        <ul class="clean">
+          <li><strong>Los recursos de color del proyecto ya se resuelven.</strong> Un fondo escrito como
+          <code>@color/...</code> se guardaba como el marcador <code>0xFFFFFFFF</code> ("pendiente") del parser y la
+          vista previa lo pintaba <strong>blanco</strong>; ahora se resuelven los <code>@color/...</code> y
+          <code>?attr/...</code> del proyecto — verificado con azul puro, <code>(0,0,255)</code>.</li>
+          <li><strong>El arranque en frío ya no crashea.</strong> Abrir la vista previa sin pasar por el editor de diseño
+          moría con un <code>NullPointerException</code> — <code>ColorsEditorManager</code> lee el
+          <code>DesignActivity.sc_id</code> global, que es <code>null</code> en un proceso nuevo — y dejaba una pantalla
+          muerta sin mensaje. Ahora se fija el proyecto antes y un <code>try/catch</code> muestra el error en pantalla.</li>
+          <li><strong>Se honra el extra <code>xml</code>.</strong> Abrir la vista previa desde el editor de XML de vistas
+          muestra exactamente lo que estás editando, sin guardar.</li>
+          <li><strong>Verificado pixel a pixel</strong> en un emulador arm64 API 34: raíz magenta <code>(255,0,255)</code>,
+          azul del color del proyecto <code>(0,0,255)</code>, un <code>MaterialButton</code> visible, HTML/WebView
+          intacto y texto por defecto de <code>TextView</code>/<code>Button</code> legible en ambos temas —
+          <code>(68,71,79)</code> sobre <code>(250,249,253)</code> en claro, <code>(196,198,208)</code> sobre
+          <code>(18,19,22)</code> en oscuro.</li>
+          <li><strong>Pendiente honesto:</strong> Material más allá de <code>MaterialButton</code>, proyectos con
+          Material3, temas personalizados del proyecto, móvil físico y una regresión formal del editor de diseño.</li>
+        </ul>
+        <p><img src="assets/preview-colors.png" alt="Vista previa en claro: raíz magenta, caja azul del color del proyecto, MaterialButton, HTML/WebView y texto por defecto legible" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)"></p>
+        <p>Versión <strong>v7.0.8.3</strong> (versionCode 165). El detalle de la ronda 2 está al final de
+        <a href="preview-fix.md">docs/preview-fix.md</a>.</p>
       </div>
 
       <div class="item done">
