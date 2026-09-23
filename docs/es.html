@@ -130,62 +130,18 @@
       esta lista es el registro de lo hecho y la hoja de ruta de lo que falta.
     </p>
 
-    <div class="log">
-      <div class="item done">
-        <span class="when">2026-09-21 · build v7.0.5 publicado</span>
-        <h3>Primera versión versionada <span class="pill ok">hecho</span></h3>
-        <ul class="clean">
-          <li><strong>La build ya no necesita un repo git</strong> — <code>git rev-parse</code> se ejecutaba al configurar y ensuciaba <code>BuildConfig.GIT_HASH</code>. Ahora lee <code>GIT_HASH</code> / <code>GIT_SHORT_HASH</code> del entorno y solo usa git si existe <code>.git</code>.</li>
-          <li><strong>Default de <code>SKETCHUB_API_KEY</code></strong> — sin la variable de entorno, <code>BuildConfig</code> contenía el literal <code>"null"</code>. Ahora es cadena vacía.</li>
-          <li><strong>Firma del release fuera del repositorio</strong> — las credenciales salen de <code>RELEASE_STORE_*</code> / <code>RELEASE_KEY_*</code> (entorno o <code>~/.gradle/gradle.properties</code>), con aviso explícito si faltan.</li>
-          <li><strong>64 bloques <code>catch</code> vacíos anotados</strong> — 44 archivos se tragaban las excepciones en silencio; ahora registran con <code>Log.d("SketchwarePro", …)</code>.</li>
-          <li><strong>Builds más rápidas</strong> — activados <code>org.gradle.parallel</code> y <code>org.gradle.caching</code>.</li>
-          <li><strong>Repositorio publicado y versionado</strong> — historial git, <code>.gitignore</code> auditado y primera release pública con el APK adjunto.</li>
-        </ul>
-      </div>
-
-      <div class="item done">
-        <span class="when">2026-09-21 · tamaño</span>
-        <h3>Un APK por arquitectura <span class="pill ok">hecho</span></h3>
-        <p>ABI splits activados: <code>assembleRelease</code> genera un APK por arquitectura en lugar de uno
-        universal, así que el dispositivo deja de descargar los otros tres juegos de librerías nativas. Verificado:
-        cada APK lleva solo su propio <code>lib/&lt;abi&gt;/</code>, incluido el <code>aapt2</code> incluido. Publicado como
-        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.1">v7.0.5.1</a>, firmado con la clave original.</p>
-      </div>
-
-      <div class="item done">
-        <span class="when">2026-09-21 · firma</span>
-        <h3>Se mantiene la clave de firma original <span class="pill ok">hecho</span></h3>
-        <p>El build de release conserva la <code>testkey.keystore</code> del propio proyecto (SHA-256
-        <code>a40da80a…</code>) a propósito, para que los APK nuevos se instalen encima de los existentes.
-        Verificado con <code>apksigner</code>: los cuatro APK por arquitectura llevan esa huella. La keystore
-        privada de 4096 bits queda guardada en <code>~/.android-keys/sketchware-pro/release.jks</code> para el día
-        en que se quiera una identidad de distribución real.</p>
-      </div>
-
-      <div class="item done">
-        <span class="when">2026-09-22 · editor</span>
-        <h3>Autocompletado de Kotlin <span class="pill ok">hecho</span></h3>
-        <p>Los ficheros <code>.kt</code> reciben el mismo trato que Java: sugerencias con los simbolos Kotlin de tu
-        proyecto (clases, objetos, <code>fun</code>, <code>val</code>/<code>var</code>), palabras clave de Kotlin y
-        clases del SDK y de las librerias. El resaltado y el indentado siguen delegando en el lenguaje TextMate de
-        Kotlin. Los diagnosticos de Kotlin necesitan el compilador de Kotlin y llegaran en una fase aparte. Version
-        <strong>v7.0.5.9</strong>.</p>
-      </div>
-
-      <div class="item done">
-        <span class="when">2026-09-22 · arreglo</span>
-        <h3>La vista previa de layouts ya no sale en blanco <span class="pill ok">arreglado</span></h3>
-        <p>Los disenos hechos con elementos View (AndroidX, widgets) mostraban la vista previa en blanco: iban por el
-        renderizador del editor de diseno, que devolvia una raiz vacia cuando el nombre del layout no aparecia en los
-        datos del proyecto. Ahora todos los layouts se construyen con el constructor de vistas reales (solo necesita
-        el XML), con el renderizador nativo como reserva y un mensaje visible si ambos fallan. Version
-        <strong>v7.0.6.0</strong>.</p>
-      </div>
-
-      <div class="item done">
+    <div class="hits">
+      <span class="k">Hitos destacados</span>
+      <p>
+        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.0">Flutter corriendo en el dispositivo, release/AOT incluido</a> &middot;
+        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.3">la vista previa de diseños arreglada, rondas 1 y 2</a> &middot;
+        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.9">soporte de Kotlin en el IDE de la app</a>.
+      </p>
+    </div>
+    <div class="log" id="change-log">
+      <div class="item done featured">
         <span class="when">2026-09-23 · arreglo</span>
-        <h3>Vista previa: colores del proyecto, arranque en frío y extra <code>xml</code> <span class="pill ok">arreglado</span></h3>
+        <h3>Vista previa: colores del proyecto, arranque en frío y extra <code>xml</code>  <span class="pill feat">destacado</span> <span class="pill ok">arreglado</span></h3>
         <ul class="clean">
           <li><strong>Los recursos de color del proyecto ya se resuelven.</strong> Un fondo escrito como
           <code>@color/...</code> se guardaba como el marcador <code>0xFFFFFFFF</code> ("pendiente") del parser y la
@@ -210,9 +166,9 @@
         <a href="preview-fix.md">docs/preview-fix.md</a>.</p>
       </div>
 
-      <div class="item done">
+      <div class="item done featured">
         <span class="when">2026-09-23 · arreglo</span>
-        <h3>La vista previa de diseños vuelve a pintar <span class="pill ok">arreglado</span></h3>
+        <h3>La vista previa de diseños vuelve a pintar  <span class="pill feat">destacado</span> <span class="pill ok">arreglado</span></h3>
         <ul class="clean">
           <li><strong>El síntoma.</strong> La vista previa de los diseños hechos con elementos View (la de HTML/WebView
           siempre ha funcionado) mostraba la zona del diseño vacía — en blanco o en negro según el tema — y solo se veían
@@ -244,9 +200,9 @@
         evidencia medida están en <a href="preview-fix.md">docs/preview-fix.md</a>.</p>
       </div>
 
-      <div class="item done">
+      <div class="item done featured">
         <span class="when">2026-09-23 · Flutter (experimental)</span>
-        <h3>Release/AOT en el dispositivo, assets completos y pub real <span class="pill info">experimental</span></h3>
+        <h3>Release/AOT en el dispositivo, assets completos y pub real  <span class="pill feat">destacado</span> <span class="pill info">experimental</span></h3>
         <ul class="clean">
           <li><strong>El release/AOT en el dispositivo esta desbloqueado.</strong> El Dart SDK para Android se compilo
           para este fork con <strong>compressed pointers</strong> — el flag lo activa el <strong>nombre de la
@@ -294,9 +250,9 @@
         se firma, con <code>ExceptionInInitializerError</code> ya ausente del logcat.</p>
       </div>
 
-      <div class="item done">
+      <div class="item done featured">
         <span class="when">2026-09-23 · Flutter (experimental)</span>
-        <h3>Soporte de Flutter: editor de Dart y compilacion en el dispositivo <span class="pill info">experimental</span></h3>
+        <h3>Soporte de Flutter: editor de Dart y compilacion en el dispositivo  <span class="pill feat">destacado</span> <span class="pill info">experimental</span></h3>
         <ul class="clean">
           <li><strong>El editor entiende Dart.</strong> Los <code>.dart</code> reciben la gramatica TextMate de Dart (del
           proyecto Dart-Code, licencia MIT), su configuracion de lenguaje, emparejado de llaves y autocompletado, mas un
@@ -324,6 +280,26 @@
         <p><img src="assets/flutter-e2e.png" alt="App Flutter compilada y ejecutada en el dispositivo, con el contador en 3" style="width:100%;max-width:300px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)"></p>
         <p>Version <strong>v7.0.7.0</strong> (versionCode 161). Los numeros medidos, los comandos reales y lo que queda
         pendiente estan en <a href="flutter-fase7.md">docs/flutter-fase7.md</a>.</p>
+      </div>
+
+      <div class="item done">
+        <span class="when">2026-09-22 · arreglo</span>
+        <h3>La vista previa de layouts ya no sale en blanco <span class="pill ok">arreglado</span></h3>
+        <p>Los disenos hechos con elementos View (AndroidX, widgets) mostraban la vista previa en blanco: iban por el
+        renderizador del editor de diseno, que devolvia una raiz vacia cuando el nombre del layout no aparecia en los
+        datos del proyecto. Ahora todos los layouts se construyen con el constructor de vistas reales (solo necesita
+        el XML), con el renderizador nativo como reserva y un mensaje visible si ambos fallan. Version
+        <strong>v7.0.6.0</strong>.</p>
+      </div>
+
+      <div class="item done featured">
+        <span class="when">2026-09-22 · editor</span>
+        <h3>Autocompletado de Kotlin  <span class="pill feat">destacado</span> <span class="pill ok">hecho</span></h3>
+        <p>Los ficheros <code>.kt</code> reciben el mismo trato que Java: sugerencias con los simbolos Kotlin de tu
+        proyecto (clases, objetos, <code>fun</code>, <code>val</code>/<code>var</code>), palabras clave de Kotlin y
+        clases del SDK y de las librerias. El resaltado y el indentado siguen delegando en el lenguaje TextMate de
+        Kotlin. Los diagnosticos de Kotlin necesitan el compilador de Kotlin y llegaran en una fase aparte. Version
+        <strong>v7.0.5.9</strong>.</p>
       </div>
 
       <div class="item done">
@@ -381,6 +357,38 @@
       </div>
 
       <div class="item done">
+        <span class="when">2026-09-21 · tamaño</span>
+        <h3>Un APK por arquitectura <span class="pill ok">hecho</span></h3>
+        <p>ABI splits activados: <code>assembleRelease</code> genera un APK por arquitectura en lugar de uno
+        universal, así que el dispositivo deja de descargar los otros tres juegos de librerías nativas. Verificado:
+        cada APK lleva solo su propio <code>lib/&lt;abi&gt;/</code>, incluido el <code>aapt2</code> incluido. Publicado como
+        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.1">v7.0.5.1</a>, firmado con la clave original.</p>
+      </div>
+
+      <div class="item done">
+        <span class="when">2026-09-21 · firma</span>
+        <h3>Se mantiene la clave de firma original <span class="pill ok">hecho</span></h3>
+        <p>El build de release conserva la <code>testkey.keystore</code> del propio proyecto (SHA-256
+        <code>a40da80a…</code>) a propósito, para que los APK nuevos se instalen encima de los existentes.
+        Verificado con <code>apksigner</code>: los cuatro APK por arquitectura llevan esa huella. La keystore
+        privada de 4096 bits queda guardada en <code>~/.android-keys/sketchware-pro/release.jks</code> para el día
+        en que se quiera una identidad de distribución real.</p>
+      </div>
+
+      <div class="item done">
+        <span class="when">2026-09-21 · build v7.0.5 publicado</span>
+        <h3>Primera versión versionada <span class="pill ok">hecho</span></h3>
+        <ul class="clean">
+          <li><strong>La build ya no necesita un repo git</strong> — <code>git rev-parse</code> se ejecutaba al configurar y ensuciaba <code>BuildConfig.GIT_HASH</code>. Ahora lee <code>GIT_HASH</code> / <code>GIT_SHORT_HASH</code> del entorno y solo usa git si existe <code>.git</code>.</li>
+          <li><strong>Default de <code>SKETCHUB_API_KEY</code></strong> — sin la variable de entorno, <code>BuildConfig</code> contenía el literal <code>"null"</code>. Ahora es cadena vacía.</li>
+          <li><strong>Firma del release fuera del repositorio</strong> — las credenciales salen de <code>RELEASE_STORE_*</code> / <code>RELEASE_KEY_*</code> (entorno o <code>~/.gradle/gradle.properties</code>), con aviso explícito si faltan.</li>
+          <li><strong>64 bloques <code>catch</code> vacíos anotados</strong> — 44 archivos se tragaban las excepciones en silencio; ahora registran con <code>Log.d("SketchwarePro", …)</code>.</li>
+          <li><strong>Builds más rápidas</strong> — activados <code>org.gradle.parallel</code> y <code>org.gradle.caching</code>.</li>
+          <li><strong>Repositorio publicado y versionado</strong> — historial git, <code>.gitignore</code> auditado y primera release pública con el APK adjunto.</li>
+        </ul>
+      </div>
+
+      <div class="item done">
         <span class="when">2026-09-21 · CI</span>
         <h3>El CI está en verde <span class="pill ok">hecho</span></h3>
         <p>Android CI y Verification Baseline ya pasan. El último bloqueo era sutil: el jar de <code>bundletool</code>
@@ -428,7 +436,45 @@
           <li><strong>Permisos de almacenamiento</strong> — <code>MANAGE_EXTERNAL_STORAGE</code> y <code>requestLegacyExternalStorage</code> son un problema en Android moderno.</li>
         </ul>
       </div>
+
     </div>
+
+    <div class="log-foot">
+      <button type="button" class="btn ghost log-toggle" id="log-toggle"
+              aria-controls="change-log" aria-expanded="false"
+              data-more="Ver todas las mejoras" data-less="Ver solo las 5 últimas" hidden>
+        Ver todas las mejoras
+      </button>
+      <span class="log-hint">Más recientes primero.</span>
+    </div>
+
+    <script>
+    (function () {
+      var log = document.getElementById('change-log');
+      var btn = document.getElementById('log-toggle');
+      if (!log || !btn) return;
+      var items = log.querySelectorAll('.item');
+      var total = items.length;
+      var lead = 5;
+      if (total <= lead) return;
+      var collapsed = true;
+      var more = btn.getAttribute('data-more') || 'Ver todas';
+      var less = btn.getAttribute('data-less') || 'Ver menos';
+      function render() {
+        for (var i = 0; i < total; i++) {
+          items[i].hidden = collapsed && i >= lead;
+        }
+        btn.textContent = collapsed ? more + ' (' + total + ')' : less;
+        btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      }
+      btn.addEventListener('click', function () {
+        collapsed = !collapsed;
+        render();
+      });
+      btn.hidden = false;
+      render();
+    })();
+    </script>
   </section>
 
   <!-- ========================================================= instalar -->

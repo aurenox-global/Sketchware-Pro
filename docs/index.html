@@ -130,59 +130,18 @@
       this list is the changelog of what has been done, and the roadmap of what is still missing.
     </p>
 
-    <div class="log">
-      <div class="item done">
-        <span class="when">2026-09-21 · v7.0.5 build published</span>
-        <h3>First versioned build <span class="pill ok">done</span></h3>
-        <ul class="clean">
-          <li><strong>Build no longer needs a git repo</strong> — <code>git rev-parse</code> used to run during configuration and corrupted <code>BuildConfig.GIT_HASH</code>. Now it reads <code>GIT_HASH</code> / <code>GIT_SHORT_HASH</code> from the environment and only uses git when <code>.git</code> exists.</li>
-          <li><strong><code>SKETCHUB_API_KEY</code> default</strong> — without the env var, <code>BuildConfig</code> used to contain the literal <code>"null"</code>. It is now an empty string.</li>
-          <li><strong>Release signing moved out of the repo</strong> — credentials come from <code>RELEASE_STORE_*</code> / <code>RELEASE_KEY_*</code> (environment or <code>~/.gradle/gradle.properties</code>), with an explicit warning when they are missing.</li>
-          <li><strong>64 empty <code>catch</code> blocks annotated</strong> — 44 files were swallowing exceptions silently; they now log through <code>Log.d("SketchwarePro", …)</code>.</li>
-          <li><strong>Faster builds</strong> — <code>org.gradle.parallel</code> and <code>org.gradle.caching</code> enabled.</li>
-          <li><strong>Repository published and versioned</strong> — git history, <code>.gitignore</code> audited, first public release with the APK attached.</li>
-        </ul>
-      </div>
-
-      <div class="item done">
-        <span class="when">2026-09-21 · size</span>
-        <h3>One APK per architecture <span class="pill ok">done</span></h3>
-        <p>ABI splits enabled: <code>assembleRelease</code> produces one APK per architecture instead of a single
-        universal one, so a device no longer downloads the other three sets of native libraries. Verified: each APK
-        carries only its own <code>lib/&lt;abi&gt;/</code>, including the bundled <code>aapt2</code>. Published as
-        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.1">v7.0.5.1</a>, signed with the original key.</p>
-      </div>
-
-      <div class="item done">
-        <span class="when">2026-09-21 · signing</span>
-        <h3>The original signing key stays <span class="pill ok">done</span></h3>
-        <p>Release builds keep the project's own <code>testkey.keystore</code> (SHA-256 <code>a40da80a…</code>) on
-        purpose, so new APKs install over existing installs. Verified with <code>apksigner</code>: all four split
-        APKs carry that fingerprint. A private 4096-bit keystore is kept aside at
-        <code>~/.android-keys/sketchware-pro/release.jks</code> for the day a real distribution identity is wanted.</p>
-      </div>
-
-      <div class="item done">
-        <span class="when">2026-09-22 · editor</span>
-        <h3>Kotlin completions <span class="pill ok">done</span></h3>
-        <p><code>.kt</code> files get the same treatment as Java: suggestions from your project's Kotlin symbols
-        (classes, objects, <code>fun</code>, <code>val</code>/<code>var</code>), Kotlin keywords, and the SDK and
-        library classes. Highlighting and indenting still delegate to the TextMate Kotlin language. Kotlin
-        diagnostics need the Kotlin compiler and will come in a later phase. Version <strong>v7.0.5.9</strong>.</p>
-      </div>
-
-      <div class="item done">
-        <span class="when">2026-09-22 · fix</span>
-        <h3>Layout preview no longer blank <span class="pill ok">fixed</span></h3>
-        <p>Designs built with View elements (AndroidX, widgets) showed a blank preview: they went through the design
-        editor's renderer, which returned an empty root when the layout name was not found in the project data.
-        Now every layout is built with the real-views builder that works from the XML alone, with the native
-        renderer as fallback and a visible message if both fail. Version <strong>v7.0.6.0</strong>.</p>
-      </div>
-
-      <div class="item done">
+    <div class="hits">
+      <span class="k">Top milestones</span>
+      <p>
+        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.0">Flutter running on the device, release/AOT included</a> &middot;
+        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.3">the design preview fixed, rounds 1 and 2</a> &middot;
+        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.9">Kotlin support in the in-app IDE</a>.
+      </p>
+    </div>
+    <div class="log" id="change-log">
+      <div class="item done featured">
         <span class="when">2026-09-23 · fix</span>
-        <h3>Preview: project colours, cold start and the <code>xml</code> extra <span class="pill ok">fixed</span></h3>
+        <h3>Preview: project colours, cold start and the <code>xml</code> extra  <span class="pill feat">highlight</span> <span class="pill ok">fixed</span></h3>
         <ul class="clean">
           <li><strong>Project colour resources resolve now.</strong> A background written as <code>@color/...</code> was
           kept as the parser's <code>0xFFFFFFFF</code> "pending" marker and the preview painted it
@@ -206,9 +165,9 @@
         <a href="preview-fix.md">docs/preview-fix.md</a>.</p>
       </div>
 
-      <div class="item done">
+      <div class="item done featured">
         <span class="when">2026-09-23 · fix</span>
-        <h3>Design preview paints again <span class="pill ok">fixed</span></h3>
+        <h3>Design preview paints again  <span class="pill feat">highlight</span> <span class="pill ok">fixed</span></h3>
         <ul class="clean">
           <li><strong>The symptom.</strong> The preview of View-based designs (the HTML/WebView preview always worked)
           showed the design area empty — white or black depending on the theme — with only the widgets that paint
@@ -239,9 +198,9 @@
         evidence are documented in <a href="preview-fix.md">docs/preview-fix.md</a>.</p>
       </div>
 
-      <div class="item done">
+      <div class="item done featured">
         <span class="when">2026-09-23 · Flutter (experimental)</span>
-        <h3>Release/AOT on the device, complete assets and real pub <span class="pill info">experimental</span></h3>
+        <h3>Release/AOT on the device, complete assets and real pub  <span class="pill feat">highlight</span> <span class="pill info">experimental</span></h3>
         <ul class="clean">
           <li><strong>Release/AOT is unlocked on the device.</strong> The Dart SDK for Android was built for this fork
           with <strong>compressed pointers</strong> — the flag comes from the architecture name (<code>arm64c</code>),
@@ -287,9 +246,9 @@
         signs, with <code>ExceptionInInitializerError</code> gone from logcat.</p>
       </div>
 
-      <div class="item done">
+      <div class="item done featured">
         <span class="when">2026-09-23 · Flutter (experimental)</span>
-        <h3>Flutter support: Dart editor and builds on the device <span class="pill info">experimental</span></h3>
+        <h3>Flutter support: Dart editor and builds on the device  <span class="pill feat">highlight</span> <span class="pill info">experimental</span></h3>
         <ul class="clean">
           <li><strong>The editor understands Dart.</strong> <code>.dart</code> files get the TextMate Dart grammar
           (from the Dart-Code project, MIT), its language configuration, bracket matching and Dart completions, plus a
@@ -316,6 +275,24 @@
         <p><img src="assets/flutter-e2e.png" alt="Flutter app built and run on the device, with the counter at 3" style="width:100%;max-width:300px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)"></p>
         <p>Version <strong>v7.0.7.0</strong> (versionCode 161). The measured numbers, the raw commands and the pending work
         are documented in <a href="flutter-fase7.md">docs/flutter-fase7.md</a>.</p>
+      </div>
+
+      <div class="item done">
+        <span class="when">2026-09-22 · fix</span>
+        <h3>Layout preview no longer blank <span class="pill ok">fixed</span></h3>
+        <p>Designs built with View elements (AndroidX, widgets) showed a blank preview: they went through the design
+        editor's renderer, which returned an empty root when the layout name was not found in the project data.
+        Now every layout is built with the real-views builder that works from the XML alone, with the native
+        renderer as fallback and a visible message if both fail. Version <strong>v7.0.6.0</strong>.</p>
+      </div>
+
+      <div class="item done featured">
+        <span class="when">2026-09-22 · editor</span>
+        <h3>Kotlin completions  <span class="pill feat">highlight</span> <span class="pill ok">done</span></h3>
+        <p><code>.kt</code> files get the same treatment as Java: suggestions from your project's Kotlin symbols
+        (classes, objects, <code>fun</code>, <code>val</code>/<code>var</code>), Kotlin keywords, and the SDK and
+        library classes. Highlighting and indenting still delegate to the TextMate Kotlin language. Kotlin
+        diagnostics need the Kotlin compiler and will come in a later phase. Version <strong>v7.0.5.9</strong>.</p>
       </div>
 
       <div class="item done">
@@ -373,6 +350,37 @@
       </div>
 
       <div class="item done">
+        <span class="when">2026-09-21 · size</span>
+        <h3>One APK per architecture <span class="pill ok">done</span></h3>
+        <p>ABI splits enabled: <code>assembleRelease</code> produces one APK per architecture instead of a single
+        universal one, so a device no longer downloads the other three sets of native libraries. Verified: each APK
+        carries only its own <code>lib/&lt;abi&gt;/</code>, including the bundled <code>aapt2</code>. Published as
+        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.1">v7.0.5.1</a>, signed with the original key.</p>
+      </div>
+
+      <div class="item done">
+        <span class="when">2026-09-21 · signing</span>
+        <h3>The original signing key stays <span class="pill ok">done</span></h3>
+        <p>Release builds keep the project's own <code>testkey.keystore</code> (SHA-256 <code>a40da80a…</code>) on
+        purpose, so new APKs install over existing installs. Verified with <code>apksigner</code>: all four split
+        APKs carry that fingerprint. A private 4096-bit keystore is kept aside at
+        <code>~/.android-keys/sketchware-pro/release.jks</code> for the day a real distribution identity is wanted.</p>
+      </div>
+
+      <div class="item done">
+        <span class="when">2026-09-21 · v7.0.5 build published</span>
+        <h3>First versioned build <span class="pill ok">done</span></h3>
+        <ul class="clean">
+          <li><strong>Build no longer needs a git repo</strong> — <code>git rev-parse</code> used to run during configuration and corrupted <code>BuildConfig.GIT_HASH</code>. Now it reads <code>GIT_HASH</code> / <code>GIT_SHORT_HASH</code> from the environment and only uses git when <code>.git</code> exists.</li>
+          <li><strong><code>SKETCHUB_API_KEY</code> default</strong> — without the env var, <code>BuildConfig</code> used to contain the literal <code>"null"</code>. It is now an empty string.</li>
+          <li><strong>Release signing moved out of the repo</strong> — credentials come from <code>RELEASE_STORE_*</code> / <code>RELEASE_KEY_*</code> (environment or <code>~/.gradle/gradle.properties</code>), with an explicit warning when they are missing.</li>
+          <li><strong>64 empty <code>catch</code> blocks annotated</strong> — 44 files were swallowing exceptions silently; they now log through <code>Log.d("SketchwarePro", …)</code>.</li>
+          <li><strong>Faster builds</strong> — <code>org.gradle.parallel</code> and <code>org.gradle.caching</code> enabled.</li>
+          <li><strong>Repository published and versioned</strong> — git history, <code>.gitignore</code> audited, first public release with the APK attached.</li>
+        </ul>
+      </div>
+
+      <div class="item done">
         <span class="when">2026-09-21 · CI</span>
         <h3>CI is green <span class="pill ok">done</span></h3>
         <p>Android CI and Verification Baseline pass now. The last blocker was subtle: the <code>bundletool</code> jar
@@ -419,7 +427,45 @@
           <li><strong>Storage permissions</strong> — <code>MANAGE_EXTERNAL_STORAGE</code> and <code>requestLegacyExternalStorage</code> are a problem for modern Android.</li>
         </ul>
       </div>
+
     </div>
+
+    <div class="log-foot">
+      <button type="button" class="btn ghost log-toggle" id="log-toggle"
+              aria-controls="change-log" aria-expanded="false"
+              data-more="Show all improvements" data-less="Show only the latest 5" hidden>
+        Show all improvements
+      </button>
+      <span class="log-hint">Newest first.</span>
+    </div>
+
+    <script>
+    (function () {
+      var log = document.getElementById('change-log');
+      var btn = document.getElementById('log-toggle');
+      if (!log || !btn) return;
+      var items = log.querySelectorAll('.item');
+      var total = items.length;
+      var lead = 5;
+      if (total <= lead) return;
+      var collapsed = true;
+      var more = btn.getAttribute('data-more') || 'Show all';
+      var less = btn.getAttribute('data-less') || 'Show less';
+      function render() {
+        for (var i = 0; i < total; i++) {
+          items[i].hidden = collapsed && i >= lead;
+        }
+        btn.textContent = collapsed ? more + ' (' + total + ')' : less;
+        btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      }
+      btn.addEventListener('click', function () {
+        collapsed = !collapsed;
+        render();
+      });
+      btn.hidden = false;
+      render();
+    })();
+    </script>
   </section>
 
   <!-- ========================================================= install -->
