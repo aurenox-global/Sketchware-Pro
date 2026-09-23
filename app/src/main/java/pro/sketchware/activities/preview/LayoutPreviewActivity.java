@@ -252,12 +252,33 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
         }, "live-preview-refresh").start();
     }
 
+    /**
+     * Diagnostico: vuelca el XML que se va a previsualizar al log (troceado, logcat corta los
+     * mensajes largos). Sirve para reproducir un diseno exactamente con
+     * `am start ... --es xml "<layout...>"` y para ver que XML genera el editor de diseno.
+     */
+    private void debugXml(String layoutName, String xml) {
+        if (xml == null) {
+            android.util.Log.i(TAG, "xml " + layoutName + ": (null)");
+            return;
+        }
+        final int chunk = 700;
+        // Tope de seguridad para no inundar el log con disenos muy grandes.
+        final int max = 16 * 1024;
+        android.util.Log.i(TAG, "xml " + layoutName + " len=" + xml.length());
+        for (int i = 0; i < Math.min(xml.length(), max); i += chunk) {
+            android.util.Log.i(TAG, "xml[%d] %s".formatted(i, xml.substring(i, Math.min(xml.length(), i + chunk))));
+        }
+    }
+
     private void renderLayout(String layoutName, String xml) {
+        debugXml(layoutName, xml);
         // Construimos siempre con el constructor de vistas reales: trabaja SOLO con el XML (no depende de
         // los datos internos del proyecto) y ya soportaba WebView/HTML. Antes, los layouts sin WebView iban
         // por el renderizador del editor de diseno, que si no encuentra el nombre del layout en los datos
         // del proyecto pinta una raiz vacia: de ahi las vistas previas en blanco.
         renderWarnings.clear();
+        resourceResolver.clearWarnings();
         if (!tryInflateRealLayout(layoutName, xml) && !renderWithViewPane(layoutName, xml)) {
             // Nada de pantallas mudas: motivo visible en la barra de estado y toast.
             String motivo = binding.debugStatus.getText() == null ? "" : binding.debugStatus.getText().toString();
@@ -334,12 +355,16 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
                 sample += " [" + bean.id + "/" + bean.convert + "/" + (beanText == null ? "-" : beanText) + "]";
                 shown++;
             }
-            if (renderWarnings.isEmpty()) {
+            if (renderWarnings.isEmpty() && resourceResolver.getWarnings().isEmpty()) {
                 debug("Preview OK · vistas: " + viewsById.size() + " · WebViews: " + webViewCount + sample);
             } else {
-                // Degradacion visible (requisito: nunca un lienzo mudo sin motivo).
+                // Degradacion visible (requisito: nunca un lienzo mudo sin motivo): se listan tanto las
+                // vistas que no se han podido crear como los recursos (colores/fuentes/imagenes) que no
+                // se han podido resolver.
+                java.util.List<String> pendientes = new ArrayList<>(renderWarnings);
+                pendientes.addAll(resourceResolver.getWarnings());
                 debugWarning("Preview PARCIAL · vistas: " + viewsById.size() + " · no disponibles: "
-                        + android.text.TextUtils.join(", ", renderWarnings));
+                        + android.text.TextUtils.join(", ", pendientes));
             }
             return true;
         } catch (Throwable throwable) {
@@ -393,6 +418,19 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
     }
 
     /**
+     * Marcador visible para un recurso que la vista previa no puede resolver (imagen que no esta en
+     * el APK del IDE, nombre mal escrito, drawable que solo existe en la app compilada...).
+     * Requisito: nunca un hueco mudo; siempre explicar el motivo.
+     */
+    private android.graphics.drawable.Drawable createMissingDrawable(String resourceName) {
+        android.graphics.drawable.GradientDrawable marker = new android.graphics.drawable.GradientDrawable();
+        marker.setColor(0x22B00020);
+        marker.setStroke(dp(2), 0xFFB00020);
+        marker.setSize(dp(96), dp(96));
+        return marker;
+    }
+
+    /**
      * Marcador visible que sustituye a una vista que el editor no sabe inflar. Mantiene el hueco en
      * la jerarquia (para no romper el layout del resto) y explica que falta.
      */
@@ -427,7 +465,11 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
      */
     private void applyBeanBackground(View view, com.besome.sketch.beans.LayoutBean layout) {
         String resColor = layout.backgroundResColor;
-        if (resColor != null && !resColor.isEmpty()) {
+        String resDrawable = layout.backgroundResource;
+        boolean hasResourceColor = resColor != null && !resColor.isEmpty();
+        boolean hasResourceDrawable = resDrawable != null && !resDrawable.isEmpty()
+                && !"NONE".equalsIgnoreCase(resDrawable);
+        if (hasResourceColor) {
             int color = resourceResolver.resolveColor(view,
                     resColor.startsWith("#") || resColor.startsWith("@") || resColor.startsWith("?")
                             ? resColor : "@color/" + resColor, 0);
@@ -435,9 +477,14 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
                 view.setBackgroundColor(color);
                 return;
             }
+            // El color venia de un recurso que la vista previa NO puede resolver (p.ej. un
+            // "?atributoDelTema" que no existe en el tema del IDE). Ojo: en ese caso
+            // ViewBeanFactory deja layout.backgroundColor = 0xFFFFFFFF como MARCADOR de "pendiente
+            // de resolver", y pintarlo dejaba el layout en BLANCO opaco (parecia no pintado, y
+            // tapaba el fondo del tema). Por eso aqui NO caemos al color literal si venia de
+            // recurso: dejamos el fondo del tema y avisamos en la barra de estado.
         }
-        String resDrawable = layout.backgroundResource;
-        if (resDrawable != null && !resDrawable.isEmpty() && !"NONE".equalsIgnoreCase(resDrawable)) {
+        if (hasResourceDrawable) {
             android.graphics.drawable.Drawable drawable = resourceResolver.resolveDrawable(
                     resDrawable.startsWith("@") ? resDrawable : "@drawable/" + resDrawable);
             if (drawable != null) {
@@ -474,6 +521,9 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
                             resourceResolver.resolveDrawable("@drawable/" + image.resName);
                     if (drawable != null) {
                         imageView.setImageDrawable(drawable);
+                    } else {
+                        // Hueco mudo no: marcador visible con el motivo (ver createMissingViewPlaceholder).
+                        imageView.setImageDrawable(createMissingDrawable(image.resName));
                     }
                 }
                 if (image.scaleType != null && !image.scaleType.isEmpty()) {
@@ -495,9 +545,6 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
                 if (!isColorNotSet(textColor)) {
                     textView.setTextColor(textColor);
                 }
-                if (text.textType == 1) {
-                    textView.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-                }
                 textView.setGravity(layout.gravity);
                 if (view instanceof android.widget.EditText editText && text.hint != null && !text.hint.isEmpty()) {
                     editText.setHint(text.hint);
@@ -511,14 +558,142 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
         applyInjectAttributes(view, bean);
     }
 
+    /**
+     * Nombre "local" de un atributo: quita el prefijo de espacio de nombres.
+     *
+     * Importante: {@link pro.sketchware.utility.InjectAttributeHandler} parsea el XML con los
+     * espacios de nombres ACTIVADOS, asi que devuelve nombres locales ("textColor", "fontFamily",
+     * "src", ...). Este metodo normaliza tambien la forma con prefijo ("android:textColor") para que
+     * funcione con las dos.
+     */
+    private static String localAttrName(String attribute) {
+        if (attribute == null) {
+            return "";
+        }
+        int index = attribute.indexOf(':');
+        return index >= 0 ? attribute.substring(index + 1) : attribute;
+    }
+
+    /**
+     * Aplica fuente y estilo al texto de un TextView, como hace el editor de disenos
+     * ({@code ViewPane.updateTextView}).
+     *
+     * Antes solo se contemplaba textType == 1 (negrita): cursiva (2) y negrita+cursiva (3) se
+     * ignoraban, y android:fontFamily no se aplicaba en absoluto (ni las fuentes del proyecto
+     * "@font/miFuente", ni las familias del sistema como serif/monospace). Resultado: los estilos de
+     * texto elegidos en el editor no se veian en la vista previa.
+     */
+    private void applyTextTypeface(android.widget.TextView textView, ViewBean bean) {
+        com.besome.sketch.beans.TextBean text = bean.text;
+        int style = text == null ? android.graphics.Typeface.NORMAL : text.textType;
+        String family = null;
+        for (android.util.Pair<String, String> pair : new pro.sketchware.utility.InjectAttributeHandler(bean).getAttributes()) {
+            String name = localAttrName(pair.first);
+            if ("fontFamily".equals(name)) {
+                family = pair.second;
+            } else if ("textStyle".equals(name)) {
+                style = parseTextStyle(pair.second);
+            }
+        }
+        if (family == null && text != null && text.textFont != null
+                && !com.besome.sketch.beans.TextBean.TEXT_FONT.equals(text.textFont)) {
+            // La propiedad "fuente" del bean (los XML generados por el IDE la escriben como
+            // android:fontFamily, pero por si viene sin pasar por ahi).
+            family = text.textFont;
+        }
+        android.graphics.Typeface typeface = resolveTypeface(family);
+        if (typeface != null) {
+            textView.setTypeface(typeface, style);
+        } else if (style != android.graphics.Typeface.NORMAL) {
+            textView.setTypeface(null, style);
+        }
+    }
+
+    private int parseTextStyle(String value) {
+        if (value == null) {
+            return android.graphics.Typeface.NORMAL;
+        }
+        int style = android.graphics.Typeface.NORMAL;
+        if (value.contains("bold")) {
+            style |= android.graphics.Typeface.BOLD;
+        }
+        if (value.contains("italic")) {
+            style |= android.graphics.Typeface.ITALIC;
+        }
+        return style;
+    }
+
+    /**
+     * Fuente del texto: "@font/nombre" del proyecto (files/resource/font/...) o una familia del
+     * sistema (serif, monospace, sans-serif, cursive, ...). Devuelve null si no aplica o no existe.
+     */
+    private android.graphics.Typeface resolveTypeface(String family) {
+        if (family == null) {
+            return null;
+        }
+        String value = family.trim();
+        if (value.isEmpty() || "NONE".equalsIgnoreCase(value)
+                || com.besome.sketch.beans.TextBean.TEXT_FONT.equalsIgnoreCase(value)) {
+            return null;
+        }
+        if (value.startsWith("@font/")) {
+            String name = value.substring("@font/".length());
+            File fontFile = findProjectFontFile(name);
+            if (fontFile != null) {
+                try {
+                    return android.graphics.Typeface.createFromFile(fontFile);
+                } catch (Throwable throwable) {
+                    android.util.Log.w(TAG, "warning: fuente ilegible " + fontFile, throwable);
+                }
+            }
+            renderWarnings.add(value);
+            return null;
+        }
+        if (value.startsWith("@") || value.startsWith("?")) {
+            return null;
+        }
+        try {
+            return android.graphics.Typeface.create(value, android.graphics.Typeface.NORMAL);
+        } catch (Throwable ignored) {
+            android.util.Log.d("SketchwarePro", "LayoutPreviewActivity: familia no valida " + value, ignored);
+            return null;
+        }
+    }
+
+    /** Fichero de fuente del proyecto: files/resource/font/<nombre>.(ttf|otf|ttc), sin distinguir mayusculas. */
+    private File findProjectFontFile(String name) {
+        File fontDir = new File(new FilePathUtil().getPathResource(scId), "font");
+        if (!fontDir.isDirectory()) {
+            return null;
+        }
+        File[] children = fontDir.listFiles();
+        if (children == null) {
+            return null;
+        }
+        for (File child : children) {
+            if (!child.isFile()) {
+                continue;
+            }
+            String fileName = child.getName();
+            String baseName = fileName.contains(".")
+                    ? fileName.substring(0, fileName.lastIndexOf('.'))
+                    : fileName;
+            if (baseName.equalsIgnoreCase(name) || fileName.equalsIgnoreCase(name)) {
+                return child;
+            }
+        }
+        return null;
+    }
+
     private void applyInjectAttributes(View view, ViewBean bean) {
         try {
             var injectHandler = new pro.sketchware.utility.InjectAttributeHandler(bean);
             for (android.util.Pair<String, String> pair : injectHandler.getAttributes()) {
-                switch (pair.first) {
-                    case "android:background": {
+                switch (localAttrName(pair.first)) {
+                    case "background": {
                         String value = pair.second;
-                        if (value.startsWith("#") || value.startsWith("@color/") || value.startsWith("?attr/")) {
+                        if (value.startsWith("#") || value.startsWith("@color/")
+                                || value.startsWith("@android:color/") || value.startsWith("?")) {
                             int color = resourceResolver.resolveColor(view, value, 0);
                             if (!isColorNotSet(color)) {
                                 view.setBackgroundColor(color);
@@ -531,21 +706,21 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
                         }
                         break;
                     }
-                    case "android:backgroundTint": {
+                    case "backgroundTint": {
                         int color = resourceResolver.resolveColor(view, pair.second, 0);
                         if (!isColorNotSet(color)) {
                             view.setBackgroundTintList(android.content.res.ColorStateList.valueOf(color));
                         }
                         break;
                     }
-                    case "android:textColor": {
+                    case "textColor": {
                         int color = resourceResolver.resolveColor(view, pair.second, 0);
                         if (!isColorNotSet(color) && view instanceof android.widget.TextView textView) {
                             textView.setTextColor(color);
                         }
                         break;
                     }
-                    case "android:gravity": {
+                    case "gravity": {
                         if (view instanceof android.widget.TextView textView) {
                             textView.setGravity(parseGravity(pair.second));
                         } else {
@@ -553,7 +728,7 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
                         }
                         break;
                     }
-                    case "android:orientation": {
+                    case "orientation": {
                         if (view instanceof android.widget.LinearLayout linearLayout) {
                             linearLayout.setOrientation("horizontal".equalsIgnoreCase(pair.second)
                                     ? android.widget.LinearLayout.HORIZONTAL
@@ -561,11 +736,11 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
                         }
                         break;
                     }
-                    case "android:elevation": {
+                    case "elevation": {
                         view.setElevation(parseDimen(pair.second));
                         break;
                     }
-                    case "android:alpha": {
+                    case "alpha": {
                         try {
                             view.setAlpha(Float.parseFloat(pair.second));
                         } catch (NumberFormatException ignored) {
@@ -573,7 +748,7 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
                         }
                         break;
                     }
-                    case "android:visibility": {
+                    case "visibility": {
                         if ("gone".equalsIgnoreCase(pair.second)) {
                             view.setVisibility(android.view.View.GONE);
                         } else if ("invisible".equalsIgnoreCase(pair.second)) {
@@ -581,70 +756,65 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
                         }
                         break;
                     }
-                    case "android:padding": {
+                    case "padding": {
                         int pad = parseDimen(pair.second);
                         view.setPadding(pad, pad, pad, pad);
                         break;
                     }
-                    case "android:paddingLeft": {
+                    case "paddingLeft": {
                         view.setPadding(parseDimen(pair.second), view.getPaddingTop(), view.getPaddingRight(), view.getPaddingBottom());
                         break;
                     }
-                    case "android:paddingTop": {
+                    case "paddingTop": {
                         view.setPadding(view.getPaddingLeft(), parseDimen(pair.second), view.getPaddingRight(), view.getPaddingBottom());
                         break;
                     }
-                    case "android:paddingRight": {
+                    case "paddingRight": {
                         view.setPadding(view.getPaddingLeft(), view.getPaddingTop(), parseDimen(pair.second), view.getPaddingBottom());
                         break;
                     }
-                    case "android:paddingBottom": {
+                    case "paddingBottom": {
                         view.setPadding(view.getPaddingLeft(), view.getPaddingTop(), view.getPaddingRight(), parseDimen(pair.second));
                         break;
                     }
-                    case "android:textSize": {
+                    case "textSize": {
                         if (view instanceof android.widget.TextView textView) {
                             textView.setTextSize(parseSp(pair.second));
                         }
                         break;
                     }
-                    case "android:textStyle": {
-                        if (view instanceof android.widget.TextView textView) {
-                            boolean bold = pair.second.contains("bold");
-                            boolean italic = pair.second.contains("italic");
-                            int textStyle = android.graphics.Typeface.NORMAL;
-                            if (bold) textStyle |= android.graphics.Typeface.BOLD;
-                            if (italic) textStyle |= android.graphics.Typeface.ITALIC;
-                            textView.setTypeface(android.graphics.Typeface.DEFAULT, textStyle);
-                        }
-                        break;
-                    }
-                    case "android:hint": {
+                    case "hint": {
                         if (view instanceof android.widget.EditText editText) {
                             editText.setHint(pair.second);
                         }
                         break;
                     }
-                    case "android:src": {
-                        android.graphics.drawable.Drawable drawable = resourceResolver.resolveDrawable(pair.second);
-                        if (drawable != null && view instanceof android.widget.ImageView imageView) {
-                            imageView.setImageDrawable(drawable);
+                    // android:src y app:srcCompat: el mismo tratamiento que en el resto de la
+                    // preview (drawable del proyecto, de assets o del propio IDE). Si no se puede
+                    // resolver, marcador visible en vez de un hueco vacio.
+                    case "src":
+                    case "srcCompat": {
+                        if (view instanceof android.widget.ImageView imageView) {
+                            android.graphics.drawable.Drawable drawable = resourceResolver.resolveDrawable(pair.second);
+                            imageView.setImageDrawable(drawable != null
+                                    ? drawable
+                                    : createMissingDrawable(pair.second));
                         }
                         break;
                     }
-                    case "android:scaleType": {
+                    case "scaleType": {
                         if (view instanceof android.widget.ImageView imageView) {
                             imageView.setScaleType(parseScaleType(pair.second));
                         }
                         break;
                     }
-                    case "android:singleLine": {
+                    case "singleLine": {
                         if (view instanceof android.widget.TextView textView) {
                             textView.setSingleLine("true".equalsIgnoreCase(pair.second));
                         }
                         break;
                     }
-                    case "android:maxLines": {
+                    case "maxLines": {
                         if (view instanceof android.widget.TextView textView) {
                             try {
                                 textView.setMaxLines(Integer.parseInt(pair.second));
@@ -660,6 +830,11 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
             }
         } catch (Throwable ignored) {
             android.util.Log.d("SketchwarePro", "LayoutPreviewActivity: Throwable ignored", ignored);
+        }
+        // Fuente y estilo del texto: se aplican aqui, al final, para cubrir tanto los atributos del
+        // bean como los "extra" (android:fontFamily) y cualquier TextView, no solo los reconocidos.
+        if (view instanceof android.widget.TextView textView) {
+            applyTextTypeface(textView, bean);
         }
     }
 

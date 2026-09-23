@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.8.3-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.9.0-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -160,6 +160,30 @@ Este repositorio es un fork personal. Cada mejora se añade aquí según entra, 
 - **Coste:** los dos ejecutables empaquetados suman **10,18 MB** al APK `arm64-v8a`. Las otras ABIs no tienen
   backend AOT y lo dicen, en vez de fallar en silencio. El modo por defecto sigue siendo **debug/JIT**, esto
   continua siendo experimental y todavia no hay hot reload.
+- **v7.0.9.0 (versionCode 166) — ronda 3 de la vista previa, y la descarga de Dart la decides tu.** Los cuatro
+  sintomas que reportaste eran **cuatro causas raiz distintas**, todas medidas pixel a pixel en un emulador arm64
+  API 34. (1) **Color de texto**: el selector del editor guarda `"?" + attr` (p. ej. `?colorPrimary`) y la vista previa
+  solo entendia `?attr/...`, asi que el texto caia al color por defecto del tema — medido `(68,71,79)` → `(68,94,145)`.
+  (2) **Layouts / lineales**: el mismo fallo de resolucion, pero el respaldo era el marcador blanco opaco
+  `0xFFFFFFFF` ("pendiente") del propio IDE, asi que el lineal se pintaba **blanco** — `(255,255,255)` → `(68,94,145)`.
+  (3) **Estilos de texto**: solo se aplicaba negrita; ahora tambien cursiva, negrita+cursiva, monoespaciada y las
+  fuentes TTF del proyecto (`@font/...`), y una fuente inexistente da aviso. (4) **Imagenes**: solo se buscaba
+  `drawable/<n>.{xml,png,jpg}`; ahora tambien webp/jpeg/gif/bmp, carpetas de densidad y subcarpetas, `files/assets`,
+  `app:srcCompat`, **vectores** (dibujados con el `PathParser` propio de la vista previa) y la imagen por defecto del
+  IDE, y lo irresoluble muestra marcador rojo con el motivo. Encontrado y arreglado por el camino: los atributos
+  internos se comparaban con el prefijo `android:` contra nombres locales, asi que **no coincidian nunca**
+  (`fontFamily`, `srcCompat`, `alpha`, `gravity`, paddings…). Limites honestos: selector/ripple/layer-list se
+  aproximan con su ultima forma, los vectores con transformaciones de grupo no se soportan, los `.9.png` van sin
+  parches, los `?atributo` se resuelven con el tema del IDE (no el del proyecto) y nada esta probado en movil fisico.
+  Y el toolchain de Dart (~**307,2 MB**, el tamano real) **ya no se descarga en silencio**: `ensureInstalled` — la que
+  usan todos los caminos de build — ya no toca la red y solo deja el mensaje para instalarlo desde el menu; solo la
+  variante nueva `allowDownload = true`, tras el consentimiento, descarga. Un dialogo Material muestra el estado, los
+  componentes que faltan **con su tamano**, "Descarga necesaria: ~307.2 MB", el aviso de Wi-Fi, donde se guarda y que
+  despues funciona sin conexion, con **Descargar ahora / Borrar toolchain (liberar X MB, con confirmacion) / Cancelar**;
+  "Compilar y ejecutar" pide el mismo consentimiento y, al cancelar, aborta con un mensaje claro y sin escribir nada en
+  disco. Pagina de la release: [v7.0.9.0](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.9.0).
+  Todos los detalles: [docs/preview-fix.md](docs/preview-fix.md) (ronda 3) y
+  [docs/flutter-consent.md](docs/flutter-consent.md).
 - **v7.0.8.3 (versionCode 165) — tres arreglos mas en la vista previa, medidos pixel a pixel.** Ya se **resuelven
   los recursos de color del proyecto**: un fondo escrito como `@color/...` se guardaba como el marcador `0xFFFFFFFF`
   ("pendiente") del parser y la vista previa lo pintaba **blanco**; ahora se resuelven los `@color/...` y `?attr/...`

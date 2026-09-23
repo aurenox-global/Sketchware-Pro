@@ -2310,6 +2310,28 @@ Please try again later"</string>
     <string name="flutter_toolchain_ready">Toolchain de Flutter listo</string>
     <string name="flutter_metadata_not_available">El proyecto Flutter no tiene metadatos válidos</string>
     <string name="flutter_error_prefix">Error: %s</string>
+    <string name="flutter_toolchain_consent_title">Toolchain de Dart/Flutter</string>
+    <string name="flutter_toolchain_calculating">Comprobando el toolchain de Dart…</string>
+    <string name="flutter_toolchain_status_installed">Instalado y listo</string>
+    <string name="flutter_toolchain_status_missing">No instalado</string>
+    <string name="flutter_toolchain_consent_state">Estado: %1$s</string>
+    <string name="flutter_toolchain_consent_missing_header">Falta descargar:</string>
+    <string name="flutter_toolchain_consent_component_size">%1$s (%2$s)</string>
+    <string name="flutter_toolchain_consent_download_size">Descarga necesaria: ~%1$s</string>
+    <string name="flutter_toolchain_consent_network">La descarga se hace por internet (mejor con Wi-Fi): son unos %1$s. Puede tardar varios minutos.</string>
+    <string name="flutter_toolchain_consent_location">Se guarda en: %1$s</string>
+    <string name="flutter_toolchain_consent_offline">Después de instalarlo, compilar y ejecutar Flutter funciona en local, sin conexión.</string>
+    <string name="flutter_toolchain_download_now">Descargar ahora</string>
+    <string name="flutter_toolchain_delete">Borrar toolchain (liberar %1$s)</string>
+    <string name="flutter_toolchain_delete_title">Borrar el toolchain de Dart</string>
+    <string name="flutter_toolchain_delete_message">Se borrarán %1$s de %2$s.\n\nDespués habrá que volver a descargarlo para compilar Flutter. ¿Seguro?</string>
+    <string name="flutter_toolchain_delete_confirm">Borrar</string>
+    <string name="flutter_toolchain_delete_done">Toolchain borrado (%1$s liberados)</string>
+    <string name="flutter_toolchain_info_status_line">Toolchain: %1$s</string>
+    <string name="flutter_toolchain_info_missing_size">no instalado (~%1$s)</string>
+    <string name="flutter_toolchain_info_ready">listo</string>
+    <string name="flutter_toolchain_info_dart_version">Dart instalado: %1$s</string>
+    <string name="flutter_toolchain_info_disk_usage">Espacio ocupado por el toolchain: %1$s</string>
 
 
 </resources>

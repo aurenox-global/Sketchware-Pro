@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.8.3-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.9.0-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -160,6 +160,29 @@ This repository is a personal fork. Every improvement is added here as it lands,
 - **Cost:** the two packed executables add **10.18 MB** to the `arm64-v8a` APK. Other ABIs have no AOT backend and
   say so instead of failing silently. The default mode is still **debug/JIT**, this stays experimental and there is
   still no hot reload.
+- **v7.0.9.0 (versionCode 166) — preview round 3, and a Dart download you decide.** The four reported preview
+  symptoms turned out to be **four different root causes**, all measured pixel by pixel on an arm64 API 34 emulator.
+  (1) **Text colour**: the editor's colour picker stores `"?" + attr` (e.g. `?colorPrimary`) and the preview only
+  understood `?attr/...`, so the text fell back to the default theme colour — measured `(68,71,79)` → `(68,94,145)`.
+  (2) **Layouts / linear layouts**: the same resolution failure, but the fallback was the IDE's own opaque white
+  `0xFFFFFFFF` "pending" marker, so the linear layout was painted **white** — `(255,255,255)` → `(68,94,145)`.
+  (3) **Text styles**: only bold was applied; now italic, bold+italic, monospace and the project's `@font/...` TTFs are
+  applied, and a font that does not exist gets a notice. (4) **Images**: only `drawable/<name>.{xml,png,jpg}` was
+  searched; now webp/jpeg/gif/bmp, density folders and subfolders, `files/assets`, `app:srcCompat`, **vectors** (drawn
+  with the preview's own `PathParser`) and the IDE's default image resolve too, and anything unresolvable shows a red
+  marker with the reason. Found and fixed on the way: injected attributes were compared with the `android:` prefix
+  against local names, so they **never matched** (`fontFamily`, `srcCompat`, `alpha`, `gravity`, paddings…). Honest
+  limits: selectors/ripples/layer-lists are approximated by their last shape, vectors with group transforms are not
+  supported, `.9.png` lose their patches, `?attributes` resolve with the IDE theme (not the project's), and nothing
+  was tested on a physical phone. And the Dart toolchain (~**307.2 MB**, the real size) is **no longer downloaded
+  silently**: `ensureInstalled` — the path every build uses — no longer touches the network and only leaves the message
+  to install it from the menu; only the new `allowDownload = true` variant, after consent, downloads. A Material dialog
+  shows the state, the missing components **with their size**, "Descarga necesaria: ~307.2 MB", the Wi-Fi warning, where
+  it is saved and that it works offline afterwards, with **Download now / Delete toolchain (free X MB, with
+  confirmation) / Cancel**; "Compile and run" asks for the same consent and, when cancelled, aborts with a clear
+  message and writes nothing to disk. Release page:
+  [v7.0.9.0](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.9.0). Full write-ups (in Spanish):
+  [docs/preview-fix.md](docs/preview-fix.md) (round 3) and [docs/flutter-consent.md](docs/flutter-consent.md).
 - **v7.0.8.3 (versionCode 165) — three more preview fixes, measured pixel by pixel.** **Project colour resources**
   now resolve: a background written as `@color/...` was stored as the parser's `0xFFFFFFFF` "pending" marker and the
   preview painted it **white** — now the project's `@color/...` and `?attr/...` are resolved (verified with pure blue,

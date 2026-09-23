@@ -80,10 +80,14 @@ import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import a.a.a.DB;
@@ -2941,11 +2945,21 @@ public class LogicEditorActivity extends BaseAppCompatActivity implements View.O
             final StringBuilder logBuffer = new StringBuilder();
             FlutterBuildResult result;
             try {
-                result = FlutterBuildOrchestrator.build(applicationContext, buildScId, mode, message -> {
-                    logBuffer.append(message).append('\n');
-                    appendFlutterProgressLog(logView, scrollView, logBuffer.toString());
-                    return kotlin.Unit.INSTANCE;
-                });
+                // Sin descargas silenciosas (Fase 9): si el toolchain de Dart falta, se pide permiso
+                // explicito con el tamaño de la descarga antes de tocar la red. Si el usuario
+                // cancela, el build se aborta y queda el motivo en el log.
+                boolean toolchainAuthorized = requestFlutterToolchainConsentForBuild(mode);
+                if (!toolchainAuthorized) {
+                    logBuffer.append(FlutterToolchainManager.MESSAGE_TOOLCHAIN_REQUIRES_CONSENT).append('\n');
+                    logBuffer.append("Build abortado: no se ha autorizado la descarga del toolchain.\n");
+                    result = null;
+                } else {
+                    result = FlutterBuildOrchestrator.build(applicationContext, buildScId, mode, true, message -> {
+                        logBuffer.append(message).append('\n');
+                        appendFlutterProgressLog(logView, scrollView, logBuffer.toString());
+                        return kotlin.Unit.INSTANCE;
+                    });
+                }
             } catch (Throwable throwable) {
                 logBuffer.append(getString(R.string.flutter_error_prefix, safeFlutterMessage(throwable))).append('\n');
                 result = null;
@@ -3004,32 +3018,286 @@ public class LogicEditorActivity extends BaseAppCompatActivity implements View.O
         }
     }
 
-    private void showFlutterToolchainStatusDialog() {
+    /**
+     * Estado del toolchain calculado **en segundo plano** para los dialogos.
+     *
+     * [FlutterToolchainManager.isReady] ejecuta binarios y [FlutterToolchainManager.installedBytes]
+     * recorre cientos de MB en disco: nada de eso puede correr en el hilo de UI.
+     */
+    private static final class FlutterToolchainState {
+        FlutterBuildMode mode;
+        boolean installed;
+        String dartVersion;
+        String notReadyReason;
+        String directory;
+        String summary;
+        long downloadBytes;
+        long fullDownloadBytes;
+        long installedBytes;
+        List<FlutterToolchainManager.ToolchainComponent> components = new ArrayList<>();
+    }
+
+    /** Calcula el estado real del toolchain. Bloqueante: llamar desde un hilo de fondo. */
+    private FlutterToolchainState collectFlutterToolchainState(FlutterBuildMode mode) {
+        Context applicationContext = getApplicationContext();
+        FlutterToolchainState state = new FlutterToolchainState();
+        state.mode = mode;
+        state.installed = FlutterToolchainManager.isReady(applicationContext, mode);
+        state.dartVersion = FlutterToolchainManager.installedDartVersion(applicationContext);
+        state.notReadyReason = state.installed ? "" : FlutterToolchainManager.describeNotReady(applicationContext, mode);
+        state.directory = FlutterToolchainManager.toolchainDir(applicationContext).getAbsolutePath();
+        state.summary = FlutterToolchainManager.toolchainStatusSummary(applicationContext, mode);
+        state.fullDownloadBytes = FlutterToolchainManager.totalDownloadBytes(applicationContext, mode);
+        state.installedBytes = FlutterToolchainManager.installedBytes(applicationContext);
         try {
-            Context applicationContext = getApplicationContext();
-            String dartVersion = FlutterToolchainManager.installedDartVersion(applicationContext);
-            boolean ready = FlutterToolchainManager.isReady(applicationContext);
-            String toolchainPath = FlutterToolchainManager.toolchainDir(applicationContext).getAbsolutePath();
+            state.components = FlutterToolchainManager.componentInventory(applicationContext, mode);
+            state.downloadBytes = 0L;
+            for (FlutterToolchainManager.ToolchainComponent component : state.components) {
+                if (!component.installed) {
+                    state.downloadBytes += component.downloadBytes;
+                }
+            }
+        } catch (Exception e) {
+            state.components = new ArrayList<>();
+            state.downloadBytes = FlutterToolchainManager.estimatedDownloadBytes(applicationContext, mode);
+        }
+        return state;
+    }
 
-            StringBuilder message = new StringBuilder();
-            message.append(ready ? getString(R.string.flutter_toolchain_ready) : getString(R.string.flutter_toolchain_not_ready));
-            message.append("\n\n");
-            message.append("Dart: ").append(dartVersion == null || dartVersion.isEmpty() ? "-" : dartVersion);
-            message.append("\n");
-            message.append("Directorio: ").append(toolchainPath);
+    /** Modo que usa el dialogo del toolchain: el del proyecto, o el por defecto. */
+    private FlutterBuildMode flutterToolchainDialogMode() {
+        try {
+            FlutterProject project = loadFlutterProjectForEditor();
+            if (project != null && project.getMode() != null) {
+                return project.getMode();
+            }
+        } catch (Exception ignored) {
+            // Se usa el modo por defecto.
+        }
+        return FlutterProjectDefaults.DEFAULT_MODE;
+    }
 
-            new MaterialAlertDialogBuilder(this)
+    /**
+     * Texto del dialogo de consentimiento: estado, que falta con su tamaño, aviso de red, donde se
+     * guarda y que despues todo funciona en local.
+     *
+     * @param forBuild `true` cuando el dialogo sale porque el usuario pulso "compilar y ejecutar".
+     */
+    private String buildFlutterToolchainConsentMessage(FlutterToolchainState state, boolean forBuild) {
+        StringBuilder message = new StringBuilder();
+        String stateLabel = state.installed
+                ? getString(R.string.flutter_toolchain_status_installed)
+                : getString(R.string.flutter_toolchain_status_missing);
+        message.append(getString(R.string.flutter_toolchain_consent_state, stateLabel));
+        message.append("\n\n").append(state.summary);
+
+        List<String> missing = new ArrayList<>();
+        for (FlutterToolchainManager.ToolchainComponent component : state.components) {
+            if (!component.installed) {
+                missing.add(getString(
+                        R.string.flutter_toolchain_consent_component_size,
+                        component.label,
+                        FlutterToolchainManager.formatBytes(component.downloadBytes)
+                ));
+            }
+        }
+
+        if (!missing.isEmpty()) {
+            message.append("\n\n").append(getString(R.string.flutter_toolchain_consent_missing_header));
+            for (String item : missing) {
+                message.append("\n - ").append(item);
+            }
+        }
+
+        if (!state.installed) {
+            String size = FlutterToolchainManager.formatBytes(state.downloadBytes);
+            message.append("\n\n").append(getString(R.string.flutter_toolchain_consent_download_size, size));
+            message.append("\n").append(getString(R.string.flutter_toolchain_consent_network, size));
+        } else if (state.installedBytes > 0) {
+            message.append("\n\n").append(getString(
+                    R.string.flutter_toolchain_info_disk_usage,
+                    FlutterToolchainManager.formatBytes(state.installedBytes)
+            ));
+        }
+
+        message.append("\n").append(getString(R.string.flutter_toolchain_consent_location, state.directory));
+        message.append("\n").append(getString(R.string.flutter_toolchain_consent_offline));
+
+        if (forBuild) {
+            message.append("\n\n").append(FlutterToolchainManager.MESSAGE_TOOLCHAIN_REQUIRES_CONSENT).append('.');
+        }
+
+        if (!state.installed && state.notReadyReason != null && !state.notReadyReason.isEmpty()) {
+            message.append("\n\n").append(state.notReadyReason);
+        }
+
+        return message.toString();
+    }
+
+    /**
+     * `true` si se puede compilar/descargar el toolchain: ya esta listo o el usuario lo ha autorizado.
+     *
+     * Bloqueante (espera la respuesta del dialogo): llamar desde el hilo del build, nunca desde la UI.
+     */
+    private boolean requestFlutterToolchainConsentForBuild(FlutterBuildMode mode) {
+        if (isFinishing() || isDestroyed()) {
+            return false;
+        }
+
+        final FlutterToolchainState state = collectFlutterToolchainState(mode);
+        if (state.installed) {
+            return true;
+        }
+
+        final CountDownLatch latch = new CountDownLatch(1);
+        final AtomicBoolean granted = new AtomicBoolean(false);
+
+        runOnUiThread(() -> {
+            try {
+                new MaterialAlertDialogBuilder(this)
+                        .setTitle(R.string.flutter_toolchain_consent_title)
+                        .setMessage(buildFlutterToolchainConsentMessage(state, true))
+                        .setPositiveButton(R.string.flutter_toolchain_download_now, (dialog, which) -> {
+                            granted.set(true);
+                            latch.countDown();
+                        })
+                        .setNegativeButton(android.R.string.cancel, (dialog, which) -> {
+                            granted.set(false);
+                            latch.countDown();
+                        })
+                        .setOnCancelListener(dialog -> {
+                            granted.set(false);
+                            latch.countDown();
+                        })
+                        .show();
+            } catch (Exception e) {
+                android.util.Log.d("SketchwarePro", "Flutter: no se pudo mostrar el dialogo de consentimiento", e);
+                granted.set(false);
+                latch.countDown();
+            }
+        });
+
+        try {
+            if (!latch.await(5, TimeUnit.MINUTES)) {
+                android.util.Log.w("SketchwarePro", "Flutter: sin respuesta al consentimiento del toolchain");
+                return false;
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+        return granted.get();
+    }
+
+    /** Dialogo de estado del toolchain: informa, ofrece descargar (con consentimiento) y borrar. */
+    private void showFlutterToolchainStatusDialog() {
+        final FlutterBuildMode mode = flutterToolchainDialogMode();
+        final AlertDialog progressDialog;
+        try {
+            progressDialog = new MaterialAlertDialogBuilder(this)
                     .setTitle(R.string.flutter_menu_toolchain_status)
-                    .setMessage(message.toString())
-                    .setPositiveButton(R.string.flutter_toolchain_install, (dialog, which) -> startFlutterToolchainInstall())
-                    .setNegativeButton(android.R.string.ok, null)
+                    .setMessage(R.string.flutter_toolchain_calculating)
+                    .setCancelable(false)
+                    .create();
+            progressDialog.show();
+        } catch (Exception e) {
+            Toast.makeText(this, getString(R.string.flutter_error_prefix, safeFlutterMessage(e)), Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        new Thread(() -> {
+            final FlutterToolchainState state;
+            try {
+                state = collectFlutterToolchainState(mode);
+            } catch (Throwable throwable) {
+                runOnUiThread(() -> {
+                    dismissQuietly(progressDialog);
+                    Toast.makeText(LogicEditorActivity.this,
+                            getString(R.string.flutter_error_prefix, safeFlutterMessage(throwable)),
+                            Toast.LENGTH_LONG).show();
+                });
+                return;
+            }
+
+            runOnUiThread(() -> {
+                dismissQuietly(progressDialog);
+                showFlutterToolchainConsentDialog(state);
+            });
+        }, "flutter-toolchain-status").start();
+    }
+
+    private void showFlutterToolchainConsentDialog(FlutterToolchainState state) {
+        try {
+            MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(this)
+                    .setTitle(R.string.flutter_toolchain_consent_title)
+                    .setView(createFlutterScrollableLog(buildFlutterToolchainConsentMessage(state, false)));
+
+            if (state.installed) {
+                builder.setPositiveButton(android.R.string.ok, null);
+            } else {
+                builder.setPositiveButton(R.string.flutter_toolchain_download_now,
+                        (dialog, which) -> startFlutterToolchainInstall(state.mode));
+            }
+
+            // Borrar solo tiene sentido si hay algo instalado.
+            if (state.components.isEmpty() || state.installedBytes > 0) {
+                builder.setNeutralButton(
+                        getString(
+                                R.string.flutter_toolchain_delete,
+                                FlutterToolchainManager.formatBytes(state.installedBytes)
+                        ),
+                        (dialog, which) -> confirmFlutterToolchainDelete(state)
+                );
+            }
+
+            builder.setNegativeButton(android.R.string.cancel, null)
                     .show();
         } catch (Exception e) {
             Toast.makeText(this, getString(R.string.flutter_error_prefix, safeFlutterMessage(e)), Toast.LENGTH_LONG).show();
         }
     }
 
-    private void startFlutterToolchainInstall() {
+    /** Confirmacion antes de borrar el toolchain (liberar espacio). */
+    private void confirmFlutterToolchainDelete(FlutterToolchainState state) {
+        long bytes = state.installedBytes;
+        try {
+            new MaterialAlertDialogBuilder(this)
+                    .setTitle(R.string.flutter_toolchain_delete_title)
+                    .setMessage(getString(
+                            R.string.flutter_toolchain_delete_message,
+                            FlutterToolchainManager.formatBytes(bytes),
+                            state.directory
+                    ))
+                    .setPositiveButton(R.string.flutter_toolchain_delete_confirm, (dialog, which) -> {
+                        new Thread(() -> {
+                            FlutterToolchainManager.reset(getApplicationContext());
+                            runOnUiThread(() -> {
+                                Toast.makeText(LogicEditorActivity.this,
+                                        getString(R.string.flutter_toolchain_delete_done,
+                                                FlutterToolchainManager.formatBytes(bytes)),
+                                        Toast.LENGTH_LONG).show();
+                                showFlutterToolchainStatusDialog();
+                            });
+                        }, "flutter-toolchain-delete").start();
+                    })
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show();
+        } catch (Exception e) {
+            Toast.makeText(this, getString(R.string.flutter_error_prefix, safeFlutterMessage(e)), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void dismissQuietly(AlertDialog dialog) {
+        try {
+            if (dialog != null) {
+                dialog.dismiss();
+            }
+        } catch (Exception ignored) {
+            // Nada que hacer.
+        }
+    }
+
+    private void startFlutterToolchainInstall(final FlutterBuildMode mode) {
         final TextView logView = createFlutterLogView(getString(R.string.flutter_build_starting));
         final ScrollView scrollView = new ScrollView(this);
         scrollView.addView(logView);
@@ -3054,7 +3322,8 @@ public class LogicEditorActivity extends BaseAppCompatActivity implements View.O
             final StringBuilder logBuffer = new StringBuilder();
             boolean installed;
             try {
-                installed = FlutterToolchainManager.ensureInstalled(applicationContext, message -> {
+                // Aqui SI se descarga: el usuario lo acaba de autorizar en el dialogo de consentimiento.
+                installed = FlutterToolchainManager.ensureInstalled(applicationContext, mode, true, message -> {
                     logBuffer.append(message).append('\n');
                     appendFlutterProgressLog(logView, scrollView, logBuffer.toString());
                     return kotlin.Unit.INSTANCE;
@@ -3068,11 +3337,7 @@ public class LogicEditorActivity extends BaseAppCompatActivity implements View.O
             final String finalLog = logBuffer.toString();
 
             runOnUiThread(() -> {
-                try {
-                    progressDialog.dismiss();
-                } catch (Exception ignored) {
-                    // Nada que hacer.
-                }
+                dismissQuietly(progressDialog);
 
                 try {
                     new MaterialAlertDialogBuilder(LogicEditorActivity.this)
@@ -3088,40 +3353,93 @@ public class LogicEditorActivity extends BaseAppCompatActivity implements View.O
     }
 
     private void showFlutterProjectInfoDialog() {
-        try {
-            File filesDirectory = getFlutterProjectFilesDirectory();
-            FlutterProject project = loadFlutterProjectForEditor();
-
-            StringBuilder message = new StringBuilder();
-            if (project == null) {
-                message.append(getString(R.string.flutter_metadata_not_available));
-            } else {
-                message.append("Nombre: ").append(project.getProjectName()).append("\n");
-                message.append("scId: ").append(project.getScId()).append("\n");
-                message.append("Paquete: ").append(project.getPackageName()).append("\n");
-                message.append("Modo: ").append(project.getMode().name());
+        // El estado del toolchain exige ejecutar binarios y medir el disco: se calcula fuera del hilo
+        // de UI y el dialogo se muestra cuando esta listo.
+        new Thread(() -> {
+            final String info;
+            try {
+                info = buildFlutterProjectInfoMessage();
+            } catch (Throwable throwable) {
+                runOnUiThread(() -> Toast.makeText(
+                        LogicEditorActivity.this,
+                        getString(R.string.flutter_error_prefix, safeFlutterMessage(throwable)),
+                        Toast.LENGTH_LONG
+                ).show());
+                return;
             }
 
-            if (filesDirectory != null) {
-                File rootDirectory = FlutterProjectStore.rootDirectory(filesDirectory);
-                message.append("\n\n");
-                message.append("Directorio: ").append(rootDirectory.getAbsolutePath());
-                message.append("\n");
-                message.append("pubspec.yaml: ").append(new File(rootDirectory, "pubspec.yaml").exists() ? "si" : "no");
-                message.append("\n");
-                message.append("lib/main.dart: ").append(new File(rootDirectory, "lib/main.dart").exists() ? "si" : "no");
-            }
+            runOnUiThread(() -> {
+                try {
+                    new MaterialAlertDialogBuilder(LogicEditorActivity.this)
+                            .setTitle(R.string.flutter_menu_project_info)
+                            .setView(createFlutterScrollableLog(info))
+                            .setPositiveButton(android.R.string.ok, null)
+                            .show();
+                } catch (Exception e) {
+                    Toast.makeText(LogicEditorActivity.this, getString(R.string.flutter_error_prefix, safeFlutterMessage(e)), Toast.LENGTH_LONG).show();
+                }
+            });
+        }, "flutter-project-info").start();
+    }
 
-            message.append("\n\n").append(FlutterBuildPerformanceMetricsStore.snapshot(getApplicationContext()));
+    /** Texto del dialogo de informacion del proyecto (incluye el estado del toolchain). Bloqueante. */
+    private String buildFlutterProjectInfoMessage() {
+        File filesDirectory = getFlutterProjectFilesDirectory();
+        FlutterProject project = loadFlutterProjectForEditor();
+        FlutterBuildMode mode = flutterToolchainDialogMode();
+        FlutterToolchainState toolchainState = collectFlutterToolchainState(mode);
 
-            new MaterialAlertDialogBuilder(this)
-                    .setTitle(R.string.flutter_menu_project_info)
-                    .setView(createFlutterScrollableLog(message.toString()))
-                    .setPositiveButton(android.R.string.ok, null)
-                    .show();
-        } catch (Exception e) {
-            Toast.makeText(this, getString(R.string.flutter_error_prefix, safeFlutterMessage(e)), Toast.LENGTH_LONG).show();
+        StringBuilder message = new StringBuilder();
+        if (project == null) {
+            message.append(getString(R.string.flutter_metadata_not_available));
+        } else {
+            message.append("Nombre: ").append(project.getProjectName()).append("\n");
+            message.append("scId: ").append(project.getScId()).append("\n");
+            message.append("Paquete: ").append(project.getPackageName()).append("\n");
+            message.append("Modo: ").append(project.getMode().name());
         }
+
+        if (filesDirectory != null) {
+            File rootDirectory = FlutterProjectStore.rootDirectory(filesDirectory);
+            message.append("\n\n");
+            message.append("Directorio: ").append(rootDirectory.getAbsolutePath());
+            message.append("\n");
+            message.append("pubspec.yaml: ").append(new File(rootDirectory, "pubspec.yaml").exists() ? "si" : "no");
+            message.append("\n");
+            message.append("lib/main.dart: ").append(new File(rootDirectory, "lib/main.dart").exists() ? "si" : "no");
+        }
+
+        // Estado del toolchain (Fase 9): aviso visible, con lo que falta / ocupa.
+        message.append("\n\n");
+        if (toolchainState.installed) {
+            message.append(getString(
+                    R.string.flutter_toolchain_info_status_line,
+                    getString(R.string.flutter_toolchain_info_ready)
+            ));
+        } else {
+            message.append(getString(
+                    R.string.flutter_toolchain_info_status_line,
+                    getString(
+                            R.string.flutter_toolchain_info_missing_size,
+                            FlutterToolchainManager.formatBytes(toolchainState.downloadBytes)
+                    )
+            ));
+        }
+        message.append("\n");
+        message.append(getString(
+                R.string.flutter_toolchain_info_dart_version,
+                toolchainState.dartVersion == null || toolchainState.dartVersion.isEmpty()
+                        ? "-"
+                        : toolchainState.dartVersion
+        ));
+        message.append("\n");
+        message.append(getString(
+                R.string.flutter_toolchain_info_disk_usage,
+                FlutterToolchainManager.formatBytes(toolchainState.installedBytes)
+        ));
+
+        message.append("\n\n").append(FlutterBuildPerformanceMetricsStore.snapshot(getApplicationContext()));
+        return message.toString();
     }
 
     private String formatKmpTargetLabel(KmpTarget target) {

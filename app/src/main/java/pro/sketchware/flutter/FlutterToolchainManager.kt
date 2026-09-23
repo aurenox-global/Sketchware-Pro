@@ -3,6 +3,7 @@ package pro.sketchware.flutter
 import android.content.Context
 import android.util.Log
 import java.io.File
+import java.util.Locale
 
 /**
  * Estado real de un ejecutable del toolchain (lo que ve [FlutterToolchainManager.isReady]).
@@ -180,12 +181,42 @@ object FlutterToolchainManager {
      * jar del embedding trae el `BuildConfig` que decide cual de los dos caminos toma el runtime.
      *
      * @param progress callback de progreso, se invoca desde el hilo llamante.
+     *
+     * NOTA (consentimiento): esta variante **no descarga**: si falta algo registra
+     * [MESSAGE_TOOLCHAIN_REQUIRES_CONSENT] y devuelve `false`. Para descargar de verdad hay que usar
+     * [ensureInstalled] con `allowDownload = true` desde la UI, despues del dialogo de
+     * consentimiento.
      */
     @JvmStatic
-    fun ensureInstalled(context: Context, mode: FlutterBuildMode, progress: (String) -> Unit): Boolean {
+    fun ensureInstalled(context: Context, mode: FlutterBuildMode, progress: (String) -> Unit): Boolean =
+        ensureInstalled(context, mode, allowDownload = false, progress = progress)
+
+    /**
+     * Igual que [ensureInstalled] pero decidiendo **explicitamente** si se puede descargar.
+     *
+     * El toolchain de Dart son cientos de MB: la descarga **nunca** puede ocurrir sin que el usuario
+     * lo haya visto y aceptado antes ([MESSAGE_TOOLCHAIN_REQUIRES_CONSENT]). Por eso el camino de
+     * compilacion entra aqui con `allowDownload = false` y solo la UI, despues del dialogo de
+     * consentimiento, repite la operacion con `true`.
+     *
+     * @param allowDownload `false` -> si falta algo, no se toca la red: se registra el motivo y se
+     *   devuelve `false`.
+     */
+    @JvmStatic
+    fun ensureInstalled(
+        context: Context,
+        mode: FlutterBuildMode,
+        allowDownload: Boolean,
+        progress: (String) -> Unit,
+    ): Boolean {
         if (isReady(context, mode)) {
             progress("Toolchain Flutter ya instalado (Dart ${installedDartVersion(context)}, modo $mode)")
             return true
+        }
+
+        if (!allowDownload) {
+            progress(MESSAGE_TOOLCHAIN_REQUIRES_CONSENT)
+            return false
         }
 
         if (installedDartVersion(context) == null) {
@@ -211,6 +242,224 @@ object FlutterToolchainManager {
     @JvmStatic
     fun ensureInstalled(context: Context, progress: (String) -> Unit): Boolean =
         ensureInstalled(context, FlutterProjectDefaults.DEFAULT_MODE, progress)
+
+    /* ---------------------------------------------------------------------------------------- */
+    /* Estado visible + espacio en disco (consentimiento de descarga)                            */
+    /* ---------------------------------------------------------------------------------------- */
+
+    /**
+     * Mensaje que se registra cuando hace falta el toolchain y **no** hay consentimiento de
+     * descarga. Es el texto que ve el usuario en el log del build; coincide con la accion que debe
+     * tomar a mano (el dialogo de consentimiento vive en ese menu).
+     */
+    const val MESSAGE_TOOLCHAIN_REQUIRES_CONSENT =
+        "Para compilar Flutter hace falta el toolchain de Dart: instalalo desde Flutter > Estado del toolchain"
+
+    /**
+     * Un componente del toolchain con lo que ocupa su descarga y si ya esta en disco.
+     *
+     * [downloadBytes] es el tamaño del artefacto remoto (constante verificada con `curl -sI` /
+     * `content-length`); en el framework Dart es la medida real del tarball (GitHub no publica
+     * `content-length`, ver `FlutterToolchainPaths.FRAMEWORK_TARBALL_ESTIMATED_SIZE`).
+     */
+    class ToolchainComponent(
+        /** Texto para la UI, p. ej. `SDK Dart 3.13.4 (dart_3.13.4_aarch64.deb)`. */
+        @JvmField val label: String,
+        @JvmField val downloadBytes: Long,
+        @JvmField val installed: Boolean,
+    )
+
+    /**
+     * Inventario de lo que compone el toolchain para [mode]: un elemento por artefacto descargable,
+     * con su tamaño y si ya esta instalado.
+     *
+     * Las comprobaciones son **de fichero** (rapidas, sin lanzar procesos): es la lista que se pinta
+     * en el dialogo de consentimiento, no el veredicto de [isReady] (que ejecuta binarios). Para el
+     * veredicto real, [isReady] / [describeNotReady].
+     */
+    @JvmStatic
+    fun componentInventory(context: Context, mode: FlutterBuildMode): List<ToolchainComponent> {
+        val abi = FlutterToolchainPaths.resolveSupportedAbi() ?: FlutterToolchainPaths.deviceAbiName()
+        val dartSpec = FlutterToolchainPaths.dartPackageSpec(abi)
+        val patchedSdkSpec = if (mode == FlutterBuildMode.RELEASE_AOT) {
+            FlutterToolchainPaths.patchedSdkProductArtifact()
+        } else {
+            FlutterToolchainPaths.patchedSdkArtifact()
+        }
+        val components = mutableListOf<ToolchainComponent>()
+
+        // 1) SDK Dart on-device (el .deb de Termux de la ABI del dispositivo).
+        components.add(
+            ToolchainComponent(
+                "SDK Dart ${FlutterToolchainPaths.DART_VERSION} (${dartSpec?.fileName ?: "sin paquete para $abi"})",
+                dartSpec?.sizeBytes ?: 0L,
+                isDartSdkInstalled(context),
+            )
+        )
+
+        // 2) Embedding (jar de clases del runtime; debug/release segun el modo).
+        val embeddingSpec = FlutterToolchainPaths.embeddingJarArtifact(mode)
+        components.add(
+            ToolchainComponent(
+                "Embedding del engine ($mode)",
+                embeddingSpec.sizeBytes,
+                FlutterToolchainPaths.embeddingJar(context, mode).isFile,
+            )
+        )
+
+        // 3) Nativas de la ABI (libflutter.so del engine debug o release).
+        val nativeSpec = FlutterToolchainPaths.nativeJarArtifact(abi, mode)
+        components.add(
+            ToolchainComponent(
+                "Engine $mode para $abi (libflutter.so)",
+                nativeSpec?.sizeBytes ?: 0L,
+                FlutterToolchainPaths.libFlutterSo(context, mode).isFile,
+            )
+        )
+
+        // 4) Patched SDK (plataforma Dart de `gen_kernel`; product en AOT).
+        components.add(
+            ToolchainComponent(
+                "Patched SDK (platform_strong.dill, $mode)",
+                patchedSdkSpec.sizeBytes,
+                FlutterToolchainPaths.patchedSdkPlatformDillForMode(context, mode).isFile,
+            )
+        )
+
+        // 5) Framework Dart (fuentes de `package:flutter…`; no lo trae ningun artefacto del engine).
+        val frameworkDir = FlutterToolchainPaths.frameworkDir(context)
+        val frameworkReady = File(frameworkDir, "pubspec.yaml").isFile && File(frameworkDir, "lib").isDirectory
+        components.add(
+            ToolchainComponent(
+                "Framework Dart de Flutter ${FlutterToolchainPaths.FLUTTER_VERSION}",
+                FlutterToolchainPaths.FRAMEWORK_TARBALL_ESTIMATED_SIZE,
+                frameworkReady,
+            )
+        )
+
+        // 6) Dependencias de pub del framework (una entrada por paquete).
+        for (dependency in FlutterToolchainPaths.frameworkPubDependencies()) {
+            val target = FlutterToolchainPaths.pubDependencyDir(context, dependency)
+            components.add(
+                ToolchainComponent(
+                    "pub: ${dependency.name} ${dependency.version}",
+                    dependency.sizeBytes,
+                    File(target, "lib").isDirectory,
+                )
+            )
+        }
+
+        // 7) Fuentes de assets (fonts.zip del SDK; los shaders van embebidos en el APK).
+        components.add(
+            ToolchainComponent(
+                "Assets: MaterialIcons (material_fonts)",
+                FlutterBundleAssets.MATERIAL_FONTS_SIZE,
+                FlutterBundleAssets.areAssetSourcesReady(context),
+            )
+        )
+
+        return components
+    }
+
+    /** Variante con el modo por defecto ([FlutterProjectDefaults.DEFAULT_MODE]). */
+    @JvmStatic
+    fun componentInventory(context: Context): List<ToolchainComponent> =
+        componentInventory(context, FlutterProjectDefaults.DEFAULT_MODE)
+
+    /** Etiquetas legibles de lo que falta para [mode] (vacia si no falta nada). */
+    @JvmStatic
+    fun missingComponents(context: Context, mode: FlutterBuildMode): List<String> =
+        componentInventory(context, mode).filter { !it.installed }.map { it.label }
+
+    /** Variante con el modo por defecto. */
+    @JvmStatic
+    fun missingComponents(context: Context): List<String> =
+        missingComponents(context, FlutterProjectDefaults.DEFAULT_MODE)
+
+    /** Bytes que hay que descargar para completar el toolchain de [mode] (0 si ya esta completo). */
+    @JvmStatic
+    fun estimatedDownloadBytes(context: Context, mode: FlutterBuildMode): Long =
+        componentInventory(context, mode).filter { !it.installed }.sumOf { it.downloadBytes }
+
+    /** Variante con el modo por defecto. */
+    @JvmStatic
+    fun estimatedDownloadBytes(context: Context): Long =
+        estimatedDownloadBytes(context, FlutterProjectDefaults.DEFAULT_MODE)
+
+    /** Bytes de la descarga **completa** (toolchain desde cero) para [mode]. */
+    @JvmStatic
+    fun totalDownloadBytes(context: Context, mode: FlutterBuildMode): Long =
+        componentInventory(context, mode).sumOf { it.downloadBytes }
+
+    /** Variante con el modo por defecto. */
+    @JvmStatic
+    fun totalDownloadBytes(context: Context): Long =
+        totalDownloadBytes(context, FlutterProjectDefaults.DEFAULT_MODE)
+
+    /** Espacio que ocupa hoy el toolchain en el almacenamiento privado de la app. */
+    @JvmStatic
+    fun installedBytes(context: Context): Long = directorySize(toolchainDir(context))
+
+    /** Suma recursiva de tamaños; nunca lanza (devuelve 0 si el directorio no existe). */
+    private fun directorySize(dir: File): Long {
+        if (!dir.exists()) {
+            return 0L
+        }
+        if (dir.isFile) {
+            return dir.length()
+        }
+        var total = 0L
+        dir.listFiles()?.forEach { child -> total += directorySize(child) }
+        return total
+    }
+
+    /** `true` si el SDK Dart esta extraido (marcador + runtime + snapshot del front-end). */
+    private fun isDartSdkInstalled(context: Context): Boolean =
+        FlutterToolchainPaths.dartMarkerFile(context).isFile &&
+            FlutterToolchainPaths.dartAotRuntimeExecutable(context).isFile &&
+            FlutterToolchainPaths.genKernelSnapshot(context).isFile
+
+    /**
+     * Resumen de una linea del estado del toolchain (para el dialogo de la UI).
+     *
+     * Ejemplo: `Toolchain Flutter listo (Dart 3.13.4, 307.4 MB en disco, modo DEBUG_JIT)` o el mismo
+     * texto con `NO instalado … faltan 307.4 MB de descarga` cuando no lo esta.
+     */
+    @JvmStatic
+    fun toolchainStatusSummary(context: Context): String =
+        toolchainStatusSummary(context, FlutterProjectDefaults.DEFAULT_MODE)
+
+    /** Igual que [toolchainStatusSummary] pero para [mode]. */
+    @JvmStatic
+    fun toolchainStatusSummary(context: Context, mode: FlutterBuildMode): String {
+        val version = installedDartVersion(context)
+        val installed = isReady(context, mode)
+        val occupied = formatBytes(installedBytes(context))
+        return if (installed) {
+            "Toolchain Flutter listo (Dart $version, $occupied en disco, modo $mode)"
+        } else {
+            val pending = formatBytes(estimatedDownloadBytes(context, mode))
+            "Toolchain Flutter NO instalado (Dart ${version ?: "sin instalar"}, $occupied en disco; " +
+                "faltan $pending de descarga, modo $mode)"
+        }
+    }
+
+    /** Formatea bytes como `KB`/`MB`/`GB` con un decimal (locale fijo, para logs y dialogos). */
+    @JvmStatic
+    fun formatBytes(bytes: Long): String {
+        if (bytes <= 0L) {
+            return "0 MB"
+        }
+        val kb = bytes / 1024.0
+        if (kb < 1024.0) {
+            return String.format(Locale.US, "%.1f KB", kb)
+        }
+        val mb = kb / 1024.0
+        if (mb < 1024.0) {
+            return String.format(Locale.US, "%.1f MB", mb)
+        }
+        return String.format(Locale.US, "%.2f GB", mb / 1024.0)
+    }
 
     /** Borra todo el toolchain (diagnóstico/reinstalación). */
     @JvmStatic

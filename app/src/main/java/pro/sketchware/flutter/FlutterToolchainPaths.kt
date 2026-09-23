@@ -120,6 +120,18 @@ object FlutterToolchainPaths {
     /** `flutter_patched_sdk_product.zip` (pendiente de probar; mismo uso que el no-product). */
     const val PATCHED_SDK_PRODUCT_ZIP_SIZE = 4_108_252L
 
+    /**
+     * Tamaño del tarball del framework (`flutter-3.47.5.tar.gz`).
+     *
+     * A diferencia del resto de artefactos, GitHub **no** publica `content-length` para este fichero
+     * (se sirve en *chunked*, ver [frameworkSourceTarball]), así que el descargador no puede
+     * verificarlo. Este valor **no** se usa para la descarga: es la medida real del fichero
+     * (`curl -sL -o /tmp/flutter-3475.tar.gz …` -> 34.580.315 B el 2026-09-23) y se usa solo para
+     * calcular el espacio aproximado que ocupa / falta, que es lo que muestra el dialogo de
+     * consentimiento antes de descargar.
+     */
+    const val FRAMEWORK_TARBALL_ESTIMATED_SIZE = 34_580_315L
+
     /** `languageVersion` que declara `packages/flutter/pubspec.yaml` (dato de la prueba E2E). */
     const val FLUTTER_FRAMEWORK_LANGUAGE_VERSION = "3.11"
 

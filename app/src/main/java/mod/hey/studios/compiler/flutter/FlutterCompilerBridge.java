@@ -94,6 +94,12 @@ public class FlutterCompilerBridge {
             // El toolchain se pide PARA EL MODO: el engine debug y el release son artefactos
             // distintos (y el patched sdk product solo lo usa el AOT); de aqui tambien sale el
             // framework Dart + sus dependencias de pub.
+            //
+            // CONSENTIMIENTO (Fase 9): esta es la variante SIN permiso de descarga. En los caminos de
+            // "compilar y ejecutar" (DesignActivity/ExportProjectActivity) no se pueden bajar cientos
+            // de MB a espaldas del usuario: si falta el toolchain se registra el motivo y el build
+            // sigue sin Flutter. La descarga real solo la lanza la UI del editor Flutter, despues de
+            // que el usuario la acepte en el dialogo de consentimiento.
             if (!FlutterToolchainManager.ensureInstalled(context, mode, message -> {
                 Log.d(TAG, message);
                 return kotlin.Unit.INSTANCE;

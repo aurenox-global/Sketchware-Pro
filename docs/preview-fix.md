@@ -174,3 +174,91 @@ Medidas sobre esta captura (`44_test_light_B_magenta.png`, en `preview-evidence/
   azul); la fidelidad de estilos propios (`styles.xml`, `my_sc_theme`) **no** está verificada.
 - **Móvil físico**: no probado (todo en emulador arm64 API 34).
 - **Regresión formal del editor de diseño**: solo comprobado que su camino (`isPreviewMode=false`) queda intacto.
+
+---
+
+## 7. Ronda 3 (v7.0.9.0)
+
+Fecha: 2026-09-23 · Versión: **v7.0.9.0** (versionCode 166) · Release:
+<https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.9.0>
+
+Cuatro síntomas distintos, **cuatro causas raíz distintas**, todas reproducidas y medidas **píxel a píxel** sobre un
+emulador arm64 API 34. «Antes» es el build de la ronda 2 (v7.0.8.2/164).
+
+### 7.1 Color de texto desde la paleta Material (`?colorPrimary`)
+
+El selector de color del editor guarda el valor como `"?" + attr` (p. ej. `?colorPrimary`) y escribe
+`android:textColor="?colorPrimary"`; la vista previa solo entendía la forma `?attr/...`, así que **no resolvía nada y
+el texto caía al color por defecto del tema**. Ahora `resolveColor()` acepta cualquier expresión que empiece por `?`
+(`?colorPrimary`, `?attr/colorPrimary`, `?android:attr/colorPrimary`, `?android:colorPrimary`) y la resuelve contra el
+tema del IDE. Medido con un texto `PALETA` = `?colorPrimary` y un texto control `CONTROL` = `#FF0000`:
+
+| | texto `?colorPrimary` | texto control `#FF0000` |
+| --- | --- | --- |
+| Antes | `(68,71,79)` — color por defecto del tema | `(255,0,0)` |
+| Después | **`(68,94,145)` — `colorPrimary` del tema** | `(255,0,0)`, intacto |
+
+### 7.2 Layouts / lineales que se pintaban blancos
+
+Mismo fallo de resolución, pero por el lado del fondo: `ViewBeanFactory.applyBackground()` guarda el valor de respaldo
+`0xFFFFFFFF` (el marcador «pendiente de resolver» del propio IDE) y, al no resolverlo, la preview pintaba el lineal
+**blanco opaco**. Sobre un lienzo claro, el lineal desaparecía. Medido en tres bandas: un
+`android:background="?colorPrimary"` pasó de **`(255,255,255)`** a **`(68,94,145)`**, mientras un
+`@color/...` del proyecto (`(0,0,255)`) y un `@drawable/...` con forma y borde no cambiaron. Ahora
+`applyBeanBackground()` no cae al color literal cuando el recurso no se pudo resolver: deja el fondo del tema y lo
+reporta.
+
+### 7.3 Estilos de texto: cursiva, negrita+cursiva, monoespaciada y fuentes del proyecto
+
+Solo se aplicaba `textType == 1` (negrita); cursiva (`2`) y negrita+cursiva (`3`) se ignoraban, y no existía rama para
+`android:fontFamily`. Ahora `applyTextTypeface()` aplica los tres estilos, las familias del sistema (`serif`,
+`monospace`, …) y las **fuentes TTF del proyecto** (`@font/nombre` → `files/resource/font/…`, `.ttf/.otf/.ttc`). Si la
+fuente no existe, se pinta el texto por defecto **con aviso** (`no disponibles: @font/no_existe`). Medido a 30 sp:
+
+| texto | Antes | Después |
+| --- | --- | --- |
+| `textStyle="italic"` | recto | **cursiva** |
+| `textStyle="bold\|italic"` | recto, sin negrita | **negrita + cursiva** |
+| `fontFamily="monospace"` | proporcional | **monoespaciado** |
+| `fontFamily="@font/fuente_proyecto"` (TTF real) | ignorada | **fuente del proyecto aplicada** |
+
+### 7.4 Imágenes
+
+El resolvedor solo miraba `files/resource/drawable/<nombre>.{xml,png,jpg}` y, si no estaba, devolvía `null` **sin
+marcador** (hueco mudo). Ahora busca en **todos** los directorios `drawable*` (recursivo, con carpetas de densidad y
+subcarpetas), en `files/assets`, en el resto de `files/` y, como último recurso, en los drawables del propio IDE
+(`default_image`, `ic_mtrl_*`). Extensiones: `.xml .png .jpg .jpeg .webp .gif .bmp`. Se añaden `app:srcCompat`, las
+rutas `file://…`, `assets/…`, `@asset/…`, `@android:drawable/…` y los **vectores** `.xml`, que se dibujan con un
+`PathParser` propio (`VectorPathDrawable`; `VectorDrawableCompat` no puede inflar desde una cadena). Lo que no se
+puede resolver muestra un **marcador rojo con borde** y el motivo en la barra de estado.
+
+Medido con ocho `ImageView` de 50 dp, cada uno con una variante distinta (bandas de 137 px): antes solo se veían las
+dos primeras (`drawable/v_png.png` y `V_MAYUS.PNG`); después se ven también `.webp`, `.jpeg`, `drawable-xhdpi/`,
+subcarpeta, fichero de `files/assets`, `app:srcCompat`, vector, `.gif` y el `default_image` del IDE, y `@drawable/noexiste`
+da marcador rojo `(176,0,32)` + aviso. Este es el caso que ilustran las capturas:
+
+| Antes (v7.0.8.2) | Después (v7.0.9.0) |
+| --- | --- |
+| ![antes](assets/preview-r3-before.png) | ![después](assets/preview-r3-after.png) |
+
+### 7.5 Extra encontrado por el camino
+
+`applyInjectAttributes()` comparaba los nombres de atributo **con prefijo** (`"android:textColor"`) mientras
+`InjectAttributeHandler` devuelve **nombres locales** (`"textColor"`): ninguna rama del `switch` coincidía nunca, así
+que *todos* los atributos «extra» (`fontFamily`, `srcCompat`, `alpha`, `gravity`, paddings, `maxLines`…) se
+descartaban en silencio. Ahora se normalizan, así que funcionan. Regresión comprobada: layout real del proyecto
+(claro/oscuro), HTML/WebView, `@color/` del proyecto, hex explícitos y `MaterialButton` siguen bien.
+
+### 7.6 Pendientes honestos de la ronda 3
+
+- `<selector>`, `<ripple>`, `<layer-list>`, `<inset>`, `<clip>`: se aproximan dibujando su **última forma** (la preview
+  no tiene estados pressed/disabled que reproducir).
+- **Vectores complejos**: solo `<path>` con `pathData` + `fillColor`/`strokeColor`; un vector con `<group>`,
+  `translateX/Y`, `scale`, `clip-path` o degradados puede salir desplazado.
+- Los **`.9.png`** se leen como bitmap normal, **sin parches**.
+- Los `?atributo` se resuelven con el tema del **IDE**, no con el del proyecto; **M3 night variants no probado**.
+- Un `@color/` que no esté en `files/resource/values/colors.xml` da aviso y no se aplica.
+- **Nada probado en móvil físico**: todo en emulador arm64 API 34.
+
+El detalle completo (método, XML de los casos, evidencia cruda) está en `preview-r3.md` y en
+`preview-evidence/r3/`.

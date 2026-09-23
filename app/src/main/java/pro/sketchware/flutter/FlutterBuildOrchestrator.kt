@@ -18,7 +18,9 @@ import mod.hey.studios.compiler.flutter.FlutterCompilerBridge
  * en `try/catch`, y un resultado tipado ([FlutterBuildResult]) en vez de excepciones.
  *
  * Secuencia (espejo de `DesignActivity.BuildTask.doInBackground`):
- * 1. toolchain on-device ([FlutterToolchainManager.ensureInstalled]).
+ * 1. toolchain on-device ([FlutterToolchainManager.ensureInstalled]). **Sin descargas silenciosas**:
+ *    solo descarga si el llamante lo autoriza (`allowToolchainDownload`), que la UI hace despues del
+ *    dialogo de consentimiento de la Fase 9.
  * 2. compilación Dart ([FlutterDartCompiler]) -> `libapp.so` (AOT) o `kernel_blob.bin` (JIT).
  * 3. staging Flutter (nativas, `flutter_assets`, embedding, manifest) vía
  *    [FlutterCompilerBridge.compileFlutterCodeIfPossible].
@@ -32,12 +34,35 @@ object FlutterBuildOrchestrator {
 
     private const val TAG = "FlutterBuildOrch"
 
-    /** Ejecuta el build completo. Bloqueante. */
+    /**
+     * Ejecuta el build completo **sin** permiso para descargar el toolchain.
+     *
+     * Equivale a [build] con `allowToolchainDownload = false`: si falta el toolchain de Dart, el
+     * build se aborta con un mensaje claro en el log en vez de descargar cientos de MB por su cuenta.
+     * La UI que ya obtuvo el consentimiento del usuario llama a la variante con `true`.
+     */
     @JvmStatic
     fun build(
         context: Context,
         scId: String,
         mode: FlutterBuildMode,
+        progress: (String) -> Unit,
+    ): FlutterBuildResult = build(context, scId, mode, allowToolchainDownload = false, progress = progress)
+
+    /**
+     * Ejecuta el build completo. Bloqueante.
+     *
+     * @param allowToolchainDownload `true` **solo** si el usuario ya ha visto el dialogo de
+     *   consentimiento (tamaño de la descarga + aviso de red) y ha aceptado. Con `false`, si falta el
+     *   toolchain, no se toca la red: se registra
+     *   [FlutterToolchainManager.MESSAGE_TOOLCHAIN_REQUIRES_CONSENT] y el build falla.
+     */
+    @JvmStatic
+    fun build(
+        context: Context,
+        scId: String,
+        mode: FlutterBuildMode,
+        allowToolchainDownload: Boolean,
         progress: (String) -> Unit,
     ): FlutterBuildResult {
         val startedAt = System.currentTimeMillis()
@@ -67,7 +92,11 @@ object FlutterBuildOrchestrator {
 
             emit("Comprobando toolchain on-device...")
             // El toolchain se pide para el modo pedido: engine debug/release + framework Dart.
-            if (!FlutterToolchainManager.ensureInstalled(context, mode) { message -> emit(message) }) {
+            // La descarga (cientos de MB) SOLO ocurre si la UI ya tiene el consentimiento del usuario.
+            if (!FlutterToolchainManager.ensureInstalled(context, mode, allowToolchainDownload) { message -> emit(message) }) {
+                if (!allowToolchainDownload) {
+                    emit("Build abortado: falta el toolchain y no hay consentimiento de descarga")
+                }
                 return FlutterBuildResult.failure(
                     log.append("Toolchain Flutter no disponible\n").toString(),
                     System.currentTimeMillis() - startedAt,

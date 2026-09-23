@@ -37,14 +37,14 @@
 
   <!-- ============================================================ hero -->
   <section class="hero" style="border-top:none">
-    <div class="tag">● v7.0.8.3 · versionCode 165 · source-available</div>
+    <div class="tag">● v7.0.9.0 · versionCode 166 · source-available</div>
     <h1>Build real Android apps<br><span class="accent">from your phone.</span></h1>
     <p class="lead">
       Sketchware Pro is an Android IDE that runs on Android itself: drag blocks, write Java or Kotlin,
       compile on the device and get an installable APK — no computer required.
     </p>
     <div class="btns">
-      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.3" target="_blank" rel="noopener">⬇ Download APK</a>
+      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.9.0" target="_blank" rel="noopener">⬇ Download APK</a>
       <a class="btn ghost" href="https://github.com/aurenox-global/Sketchware-Pro" target="_blank" rel="noopener">View source on GitHub</a>
     </div>
 
@@ -134,11 +134,72 @@
       <span class="k">Top milestones</span>
       <p>
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.0">Flutter running on the device, release/AOT included</a> &middot;
-        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.3">the design preview fixed, rounds 1 and 2</a> &middot;
+        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.9.0">the design preview fixed, rounds 1 to 3</a> &middot;
+        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.9.0">the Dart toolchain download is now your decision</a> &middot;
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.9">Kotlin support in the in-app IDE</a>.
       </p>
     </div>
     <div class="log" id="change-log">
+      <div class="item done featured">
+        <span class="when">2026-09-23 · fix</span>
+        <h3>Preview round 3: text colours, styles, linear layouts and images  <span class="pill feat">highlight</span> <span class="pill ok">fixed</span></h3>
+        <ul class="clean">
+          <li><strong>Text colour from the Material palette.</strong> The editor's picker stores <code>"?" + attr</code>
+          (e.g. <code>?colorPrimary</code>) and the preview only understood <code>?attr/...</code>, so the text fell
+          back to the default theme colour. Any expression starting with <code>?</code> resolves now — measured
+          <code>(68,71,79)</code> → <code>(68,94,145)</code>.</li>
+          <li><strong>Linear layouts were painted white.</strong> The same resolution failure, but the fallback was the
+          IDE's opaque white <code>0xFFFFFFFF</code> "pending" marker, so a <code>?colorPrimary</code> background came
+          out white — <code>(255,255,255)</code> → <code>(68,94,145)</code>. The preview no longer falls back to that
+          literal colour when the resource could not be resolved.</li>
+          <li><strong>Text styles.</strong> Only bold was applied; now italic, bold+italic, monospace and the project's
+          <code>@font/...</code> TTFs work, and a font that does not exist gets a notice instead of silence.</li>
+          <li><strong>Images.</strong> Only <code>drawable/&lt;name&gt;.{xml,png,jpg}</code> was searched and a miss was a
+          silent gap; now webp/jpeg/gif/bmp, density folders and subfolders, <code>files/assets</code>,
+          <code>app:srcCompat</code>, <strong>vectors</strong> (drawn with the preview's own <code>PathParser</code>)
+          and the IDE's default image resolve too, and anything unresolvable shows a <strong>red marker</strong> plus
+          the reason in the status bar.</li>
+          <li><strong>Found on the way.</strong> Injected attributes were compared with the <code>android:</code> prefix
+          against local names, so they <strong>never matched</strong>: <code>fontFamily</code>, <code>srcCompat</code>,
+          <code>alpha</code>, <code>gravity</code>, paddings… now work. Regression checked: a real project in light and
+          dark, HTML/WebView, project <code>@color/</code> and <code>MaterialButton</code> are all fine.</li>
+          <li><strong>Honest pending:</strong> selectors/ripples/layer-lists are approximated by their last shape,
+          vectors with group transforms are not supported, <code>.9.png</code> lose their patches,
+          <code>?attributes</code> resolve with the IDE theme (not the project's) and nothing was tested on a physical
+          phone.</li>
+        </ul>
+        <p>
+          <img src="assets/preview-r3-before.png" alt="Before: only two of the eight ImageViews render" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)">
+          <img src="assets/preview-r3-after.png" alt="After: all eight ImageViews render" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)">
+        </p>
+        <p>Version <strong>v7.0.9.0</strong> (versionCode 166). The round-3 write-up is at the end of
+        <a href="preview-fix.md">docs/preview-fix.md</a>.</p>
+      </div>
+
+      <div class="item done featured">
+        <span class="when">2026-09-23 · Flutter (experimental)</span>
+        <h3>Dart toolchain: visible download, decided by you  <span class="pill feat">highlight</span> <span class="pill ok">fixed</span></h3>
+        <ul class="clean">
+          <li><strong>No more silent downloads.</strong> <code>ensureInstalled</code> — the path every build uses — no
+          longer touches the network: it only leaves the message to install the toolchain from the menu. Only the new
+          <code>allowDownload = true</code> variant, after consent, downloads.</li>
+          <li><strong>The dialog</strong> (menu → Flutter: toolchain status) shows the state, the missing components
+          <strong>with their size</strong>, <code>Descarga necesaria: ~307.2 MB</code>, a Wi-Fi warning, where it is
+          saved (<code>/data/user/0/pro.sketchware/files/flutter-toolchain</code>) and that it works offline afterwards,
+          with <strong>Download now</strong> / <strong>Delete toolchain (free X MB, with confirmation)</strong> /
+          <strong>Cancel</strong>.</li>
+          <li><strong>Compile and run</strong> asks for the same consent and, when cancelled, aborts with a clear message
+          and writes nothing to disk. Project info shows whether the toolchain is installed, what is missing and the
+          space used.</li>
+          <li><strong>Honest:</strong> the real 307 MB download was <strong>not</strong> run in the test (it was
+          optional); the dialog, the build abort and the delete path (with a simulated 5 MB) were verified on an
+          emulator with <code>uiautomator</code> plus screenshots.</li>
+        </ul>
+        <p><img src="assets/flutter-consent.png" alt="Consent dialog: state, missing components with their sizes, ~307.2 MB needed, Wi-Fi warning, save path and the Download now / Delete toolchain / Cancel buttons" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)"></p>
+        <p>Version <strong>v7.0.9.0</strong> (versionCode 166). Full write-up:
+        <a href="flutter-consent.md">docs/flutter-consent.md</a>.</p>
+      </div>
+
       <div class="item done featured">
         <span class="when">2026-09-23 · fix</span>
         <h3>Preview: project colours, cold start and the <code>xml</code> extra  <span class="pill feat">highlight</span> <span class="pill ok">fixed</span></h3>

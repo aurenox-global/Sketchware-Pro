@@ -37,14 +37,14 @@
 
   <!-- ============================================================ hero -->
   <section class="hero" style="border-top:none">
-    <div class="tag">● v7.0.8.3 · versionCode 165 · source-available</div>
+    <div class="tag">● v7.0.9.0 · versionCode 166 · source-available</div>
     <h1>Crea apps Android reales<br><span class="accent">desde tu móvil.</span></h1>
     <p class="lead">
       Sketchware Pro es un IDE de Android que funciona sobre Android: arrastra bloques, escribe Java o Kotlin,
       compila en el propio dispositivo y obtén un APK instalable — sin necesidad de ordenador.
     </p>
     <div class="btns">
-      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.3" target="_blank" rel="noopener">⬇ Descargar APK</a>
+      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.9.0" target="_blank" rel="noopener">⬇ Descargar APK</a>
       <a class="btn ghost" href="https://github.com/aurenox-global/Sketchware-Pro" target="_blank" rel="noopener">Ver el código en GitHub</a>
     </div>
 
@@ -134,11 +134,74 @@
       <span class="k">Hitos destacados</span>
       <p>
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.0">Flutter corriendo en el dispositivo, release/AOT incluido</a> &middot;
-        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.3">la vista previa de diseños arreglada, rondas 1 y 2</a> &middot;
+        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.9.0">la vista previa de diseños arreglada, rondas 1 a 3</a> &middot;
+        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.9.0">la descarga del toolchain de Dart ahora la decides tu</a> &middot;
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.9">soporte de Kotlin en el IDE de la app</a>.
       </p>
     </div>
     <div class="log" id="change-log">
+      <div class="item done featured">
+        <span class="when">2026-09-23 · arreglo</span>
+        <h3>Vista previa ronda 3: color de texto, estilos, lineales e imágenes  <span class="pill feat">destacado</span> <span class="pill ok">arreglado</span></h3>
+        <ul class="clean">
+          <li><strong>Color de texto desde la paleta Material.</strong> El selector del editor guarda
+          <code>"?" + attr</code> (p. ej. <code>?colorPrimary</code>) y la vista previa solo entendía
+          <code>?attr/...</code>, así que el texto caía al color por defecto del tema. Ahora se resuelve cualquier
+          expresión que empiece por <code>?</code> — medido <code>(68,71,79)</code> → <code>(68,94,145)</code>.</li>
+          <li><strong>Los lineales se pintaban blancos.</strong> El mismo fallo de resolución, pero el respaldo era el
+          marcador blanco opaco <code>0xFFFFFFFF</code> ("pendiente") del propio IDE, así que un fondo
+          <code>?colorPrimary</code> salía blanco — <code>(255,255,255)</code> → <code>(68,94,145)</code>. La vista
+          previa ya no cae a ese color literal cuando el recurso no se pudo resolver.</li>
+          <li><strong>Estilos de texto.</strong> Solo se aplicaba negrita; ahora también cursiva, negrita+cursiva,
+          monoespaciada y las fuentes TTF del proyecto (<code>@font/...</code>), y una fuente inexistente da aviso en
+          vez de silencio.</li>
+          <li><strong>Imágenes.</strong> Solo se buscaba <code>drawable/&lt;n&gt;.{xml,png,jpg}</code> y un fallo era un
+          hueco mudo; ahora también resuelven webp/jpeg/gif/bmp, carpetas de densidad y subcarpetas,
+          <code>files/assets</code>, <code>app:srcCompat</code>, los <strong>vectores</strong> (dibujados con el
+          <code>PathParser</code> propio de la vista previa) y la imagen por defecto del IDE, y lo irresoluble muestra
+          un <strong>marcador rojo</strong> y el motivo en la barra de estado.</li>
+          <li><strong>Encontrado por el camino.</strong> Los atributos internos se comparaban con el prefijo
+          <code>android:</code> contra nombres locales, así que <strong>no coincidían nunca</strong>:
+          <code>fontFamily</code>, <code>srcCompat</code>, <code>alpha</code>, <code>gravity</code>, paddings… ya
+          funcionan. Regresión comprobada: un proyecto real en claro y oscuro, HTML/WebView, <code>@color/</code> del
+          proyecto y <code>MaterialButton</code> siguen bien.</li>
+          <li><strong>Pendiente honesto:</strong> selector/ripple/layer-list se aproximan con su última forma, los
+          vectores con transformaciones de grupo no se soportan, los <code>.9.png</code> van sin parches, los
+          <code>?atributo</code> se resuelven con el tema del IDE (no el del proyecto) y nada está probado en móvil
+          físico.</li>
+        </ul>
+        <p>
+          <img src="assets/preview-r3-before.png" alt="Antes: solo se ven dos de las ocho imágenes" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)">
+          <img src="assets/preview-r3-after.png" alt="Después: se ven las ocho imágenes" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)">
+        </p>
+        <p>Versión <strong>v7.0.9.0</strong> (versionCode 166). El detalle de la ronda 3 está al final de
+        <a href="preview-fix.md">docs/preview-fix.md</a>.</p>
+      </div>
+
+      <div class="item done featured">
+        <span class="when">2026-09-23 · Flutter (experimental)</span>
+        <h3>Toolchain de Dart: descarga visible y decidida por ti  <span class="pill feat">destacado</span> <span class="pill ok">arreglado</span></h3>
+        <ul class="clean">
+          <li><strong>Se acabaron las descargas silenciosas.</strong> <code>ensureInstalled</code> — la que usan todos
+          los caminos de build — ya no toca la red: solo deja el mensaje para instalarlo desde el menú. Solo la
+          variante nueva <code>allowDownload = true</code>, tras el consentimiento, descarga.</li>
+          <li><strong>El diálogo</strong> (menú → Flutter: estado del toolchain) muestra el estado, los componentes que
+          faltan <strong>con su tamaño</strong>, <code>Descarga necesaria: ~307.2 MB</code>, aviso de Wi-Fi, dónde se
+          guarda (<code>/data/user/0/pro.sketchware/files/flutter-toolchain</code>) y que después funciona sin
+          conexión, con <strong>Descargar ahora</strong> / <strong>Borrar toolchain (liberar X MB, con
+          confirmación)</strong> / <strong>Cancelar</strong>.</li>
+          <li><strong>Compilar y ejecutar</strong> pide el mismo consentimiento y, al cancelar, aborta con un mensaje
+          claro y sin escribir nada en disco. La información del proyecto muestra si el toolchain está instalado, lo
+          que falta y el espacio ocupado.</li>
+          <li><strong>Honesto:</strong> la descarga real de los 307 MB <strong>no</strong> se ejecutó en la prueba (era
+          opcional); el diálogo, el aborto del build y el borrado (con 5 MB simulados) se verificaron en un emulador
+          con <code>uiautomator</code> y capturas.</li>
+        </ul>
+        <p><img src="assets/flutter-consent.png" alt="Diálogo de consentimiento: estado, componentes que faltan con su tamaño, ~307.2 MB necesarios, aviso de Wi-Fi, ruta de guardado y los botones Descargar ahora / Borrar toolchain / Cancelar" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)"></p>
+        <p>Versión <strong>v7.0.9.0</strong> (versionCode 166). Todo el detalle:
+        <a href="flutter-consent.md">docs/flutter-consent.md</a>.</p>
+      </div>
+
       <div class="item done featured">
         <span class="when">2026-09-23 · arreglo</span>
         <h3>Vista previa: colores del proyecto, arranque en frío y extra <code>xml</code>  <span class="pill feat">destacado</span> <span class="pill ok">arreglado</span></h3>
