@@ -68,8 +68,8 @@ android {
         namespace = "pro.sketchware"
       targetSdk = 35
         minSdk = 26
-        versionCode = 166
-        versionName = "v7.0.9.0"
+        versionCode = 167
+        versionName = "v7.0.10.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "GIT_HASH", "\"${gitCommitHash}\"")

@@ -19,7 +19,13 @@ public final class FeatureFlags {
         DEFAULTS.put(Key.ACCESSIBILITY_CHECKS_REPORTING, false);
         DEFAULTS.put(Key.KPI_DASHBOARD_RELEASE_GATES, false);
         DEFAULTS.put(Key.KMP_EXPERIMENTAL_ENABLE, false);
-        DEFAULTS.put(Key.FLUTTER_EXPERIMENTAL_ENABLE, false);
+        // Flutter activado por defecto: la funcion ya es estable (modelo de proyecto, andamiaje,
+        // compilacion) y la descarga del toolchain NUNCA es silenciosa: siempre pasa por un dialogo
+        // de consentimiento con tamanos, red y ubicacion, con errores claros si algo falla.
+        // El interruptor sigue existiendo en Ajustes > Feature flags para quien quiera apagarla.
+        // applyDefaultsIfMissing() solo escribe el valor si la clave no existe todavia, asi que
+        // respeta a los usuarios que ya la hayan cambiado a mano.
+        DEFAULTS.put(Key.FLUTTER_EXPERIMENTAL_ENABLE, true);
         DEFAULTS.put(Key.LOCAL_AI_MULTI_ACTIVITY_GENERATION, true);
         DEFAULTS.put(Key.LOCAL_AI_EVENT_CODE_GUIDE, true);
     }

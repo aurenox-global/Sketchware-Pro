@@ -92,6 +92,10 @@ import a.a.a.mB;
 import a.a.a.rs;
 import a.a.a.wq;
 import a.a.a.yB;
+
+import pro.sketchware.flutter.FlutterBuildMode;
+import pro.sketchware.flutter.FlutterProjectDefaults;
+import pro.sketchware.flutter.FlutterToolchainUi;
 import a.a.a.yq;
 import a.a.a.zy;
 import dev.chrisbanes.insetter.Insetter;
@@ -939,6 +943,28 @@ public class DesignActivity extends BaseAppCompatActivity implements View.OnClic
      */
     void toCollectionManager() {
         launchActivity(ManageCollectionActivity.class, openCollectionManager);
+    }
+
+    /**
+     * Estado del toolchain Flutter/Dart (descarga consentida y borrado), accesible desde la propia
+     * pantalla de diseno sin pasar por el editor de logica.
+     *
+     * Si la funcion experimental esta apagada el atajo sigue visible y explica como activarla.
+     */
+    public void toFlutterToolchain() {
+        FlutterToolchainUi.showStatusDialog(this, flutterToolchainMode());
+    }
+
+    /** Modo Flutter del proyecto si ya lo tiene, o el modo por defecto. */
+    private FlutterBuildMode flutterToolchainMode() {
+        try {
+            if (sc_id != null && !sc_id.isEmpty()) {
+                return FlutterToolchainUi.preferredMode(new File(wq.b(sc_id), "files"));
+            }
+        } catch (Exception e) {
+            Log.d("SketchwarePro", "DesignActivity: no se pudo resolver el modo Flutter del proyecto", e);
+        }
+        return FlutterProjectDefaults.DEFAULT_MODE;
     }
 
     /**

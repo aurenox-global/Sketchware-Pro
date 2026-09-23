@@ -37,14 +37,14 @@
 
   <!-- ============================================================ hero -->
   <section class="hero" style="border-top:none">
-    <div class="tag">● v7.0.9.0 · versionCode 166 · source-available</div>
+    <div class="tag">● v7.0.10.0 · versionCode 167 · source-available</div>
     <h1>Crea apps Android reales<br><span class="accent">desde tu móvil.</span></h1>
     <p class="lead">
       Sketchware Pro es un IDE de Android que funciona sobre Android: arrastra bloques, escribe Java o Kotlin,
       compila en el propio dispositivo y obtén un APK instalable — sin necesidad de ordenador.
     </p>
     <div class="btns">
-      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.9.0" target="_blank" rel="noopener">⬇ Descargar APK</a>
+      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.0" target="_blank" rel="noopener">⬇ Descargar APK</a>
       <a class="btn ghost" href="https://github.com/aurenox-global/Sketchware-Pro" target="_blank" rel="noopener">Ver el código en GitHub</a>
     </div>
 
@@ -134,12 +134,55 @@
       <span class="k">Hitos destacados</span>
       <p>
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.0">Flutter corriendo en el dispositivo, release/AOT incluido</a> &middot;
-        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.9.0">la vista previa de diseños arreglada, rondas 1 a 3</a> &middot;
-        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.9.0">la descarga del toolchain de Dart ahora la decides tu</a> &middot;
+        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.0">la vista previa de diseños arreglada, rondas 1 a 4</a> &middot;
+        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.0">la descarga del toolchain de Dart ahora la decides tú, y se encuentra fácil</a> &middot;
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.9">soporte de Kotlin en el IDE de la app</a>.
       </p>
     </div>
     <div class="log" id="change-log">
+      <div class="item done featured">
+        <span class="when">2026-09-24 · Flutter + vista previa</span>
+        <h3>La descarga de Dart que no encontrabas, y la ronda 4 de la vista previa  <span class="pill feat">destacado</span> <span class="pill ok">arreglado</span></h3>
+        <ul class="clean">
+          <li><strong>El toolchain ya no está escondido.</strong> <code>FLUTTER_EXPERIMENTAL_ENABLE</code> ahora viene
+          <strong>activado por defecto</strong> (quien ya lo haya cambiado conserva su valor), una <strong>tarjeta
+          "Flutter (Dart)"</strong> en los ajustes del proyecto muestra el estado real
+          (<code>Toolchain Flutter: no instalado (~307.2 MB)</code> o <code>instalado (Dart &lt;v&gt;) · &lt;N MB&gt;</code>)
+          y abre el diálogo de estado/descarga/borrado, y el <strong>drawer</strong> de la pantalla de diseño tiene un
+          ítem nuevo (<code>Flutter: estado del toolchain</code>) que abre ese mismo diálogo. Si el flag está apagado,
+          las dos entradas siguen visibles y explican cómo activarlo, con un botón que abre Feature flags — nada
+          desaparece en silencio.</li>
+          <li><strong>El "32" eran vistas dibujadas, no rotas.</strong> El antiguo
+          <code>Preview PARCIAL · vistas: 32 · no disponibles: @drawable/ic_tune_white</code> se leía como "32 vistas
+          rotas" cuando las 32 eran las vistas que <strong>sí</strong> se dibujaron; ahora el aviso es un resumen
+          corto y agrupado (<code>Preview PARCIAL: N recursos no encontrados · M vistas no instanciables</code>) con un
+          <strong>diálogo de detalle</strong> al pulsar la barra — grupos por causa, recuento, motivo y dónde se buscó,
+          tope de 12 por grupo — y el detalle completo en logcat.</li>
+          <li><strong>El fallo real: no se miraban las librerías del proyecto.</strong> La vista previa ignoraba los
+          AAR locales que descomprime <code>DependencyResolver</code>/<code>ManageLocalLibrary</code> y las librerías
+          integradas ya extraídas, que el compilador <em>sí</em> enlaza con <code>aapt2</code>. Ahora las indexa:
+          medido con un fixture de librería local, <code>@drawable/ic_tune_white</code> pasa de marcador rojo
+          (2.076 px) a icono dibujado (6.174 px) y el caso pasa de PARCIAL a <code>Preview OK · vistas: 32</code>. Las
+          fuentes rotas ya no cuentan como vistas y la barra ya no queda tapada por la barra de navegación.</li>
+          <li><strong>Aclaración honesta:</strong> <code>ic_tune_white</code> no existe en <strong>ninguna
+          fuente</strong> de este IDE — el APK trae <code>ic_tune_24</code>/<code>ic_mtrl_tune</code> y era un nombre
+          heredado de Sketchware —, así que ese nombre concreto no se puede dibujar y ahora se dice claro, sin marcar
+          la vista entera. Regresión bien: <code>colorPrimary</code>, fondos, estilos, imágenes/vectores/gif,
+          <code>MaterialButton</code>+WebView y un layout real.</li>
+          <li><strong>Pendiente honesto:</strong> verificado en un emulador arm64 API 34 con <code>uiautomator</code> y
+          capturas y sin descargar nada; la línea <em>instalado</em> no llegó a verse renderizada (no había toolchain
+          y no se descargaron los 307 MB).</li>
+        </ul>
+        <p>
+          <img src="assets/flutter-where.png" alt="Ajustes del proyecto: la tarjeta Flutter (Dart) con Toolchain Flutter: no instalado (~307.2 MB)" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)">
+          <img src="assets/preview-r4-before.png" alt="Antes: los drawables de la librería salen con marcador rojo y la barra enumera todos los nombres" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)">
+          <img src="assets/preview-r4-after.png" alt="Después: el drawable de la librería se dibuja y la barra es un resumen corto y agrupado" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)">
+        </p>
+        <p>Versión <strong>v7.0.10.0</strong> (versionCode 167). El detalle de la ronda 4 está al final de
+        <a href="preview-fix.md">docs/preview-fix.md</a>; dónde encontrar el toolchain de Dart, en
+        <a href="flutter-consent.md">docs/flutter-consent.md</a>.</p>
+      </div>
+
       <div class="item done featured">
         <span class="when">2026-09-23 · arreglo</span>
         <h3>Vista previa ronda 3: color de texto, estilos, lineales e imágenes  <span class="pill feat">destacado</span> <span class="pill ok">arreglado</span></h3>

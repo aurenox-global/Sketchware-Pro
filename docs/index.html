@@ -37,14 +37,14 @@
 
   <!-- ============================================================ hero -->
   <section class="hero" style="border-top:none">
-    <div class="tag">● v7.0.9.0 · versionCode 166 · source-available</div>
+    <div class="tag">● v7.0.10.0 · versionCode 167 · source-available</div>
     <h1>Build real Android apps<br><span class="accent">from your phone.</span></h1>
     <p class="lead">
       Sketchware Pro is an Android IDE that runs on Android itself: drag blocks, write Java or Kotlin,
       compile on the device and get an installable APK — no computer required.
     </p>
     <div class="btns">
-      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.9.0" target="_blank" rel="noopener">⬇ Download APK</a>
+      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.0" target="_blank" rel="noopener">⬇ Download APK</a>
       <a class="btn ghost" href="https://github.com/aurenox-global/Sketchware-Pro" target="_blank" rel="noopener">View source on GitHub</a>
     </div>
 
@@ -134,12 +134,55 @@
       <span class="k">Top milestones</span>
       <p>
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.0">Flutter running on the device, release/AOT included</a> &middot;
-        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.9.0">the design preview fixed, rounds 1 to 3</a> &middot;
-        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.9.0">the Dart toolchain download is now your decision</a> &middot;
+        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.0">the design preview fixed, rounds 1 to 4</a> &middot;
+        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.0">the Dart toolchain download is now your decision, and easy to find</a> &middot;
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.9">Kotlin support in the in-app IDE</a>.
       </p>
     </div>
     <div class="log" id="change-log">
+      <div class="item done featured">
+        <span class="when">2026-09-24 · Flutter + preview</span>
+        <h3>The Dart download you could not find, and preview round 4  <span class="pill feat">highlight</span> <span class="pill ok">fixed</span></h3>
+        <ul class="clean">
+          <li><strong>The toolchain is no longer hidden.</strong> <code>FLUTTER_EXPERIMENTAL_ENABLE</code> is now
+          <strong>on by default</strong> (whoever already changed it keeps their value), a <strong>"Flutter (Dart)"
+          card</strong> in the project settings shows the real state
+          (<code>Toolchain Flutter: no instalado (~307.2 MB)</code> or <code>instalado (Dart &lt;v&gt;) · &lt;N MB&gt;</code>)
+          and opens the status/download/delete dialog, and the design screen <strong>drawer</strong> has a new item
+          (<code>Flutter: estado del toolchain</code>) that opens the same dialog. With the flag off, both entries stay
+          visible and explain how to turn it on, with a button that opens Feature flags — nothing disappears
+          silently.</li>
+          <li><strong>The "32" were drawn views, not broken ones.</strong> The old
+          <code>Preview PARCIAL · vistas: 32 · no disponibles: @drawable/ic_tune_white</code> was read as "32 broken
+          views" while the 32 were the views that <strong>did</strong> paint; the notice is now a short grouped
+          summary (<code>Preview PARCIAL: N recursos no encontrados · M vistas no instanciables</code>) with a
+          <strong>detail dialog</strong> when you tap the bar — groups by cause, count, reason and where it was
+          searched for, 12 per group — and the full detail in logcat.</li>
+          <li><strong>The real bug: project libraries were not searched at all.</strong> The preview ignored the local
+          AARs unpacked by <code>DependencyResolver</code>/<code>ManageLocalLibrary</code> and the extracted built-in
+          libraries, which the compiler <em>does</em> link with <code>aapt2</code>. Now it indexes them: measured with
+          a local library fixture, <code>@drawable/ic_tune_white</code> goes from a red marker (2,076 px) to a drawn
+          icon (6,174 px) and the case turns from PARCIAL into <code>Preview OK · vistas: 32</code>. Broken fonts no
+          longer count as views and the notice bar is no longer covered by the navigation bar.</li>
+          <li><strong>Honest clarification:</strong> <code>ic_tune_white</code> exists in <strong>no source</strong> of
+          this IDE — the APK ships <code>ic_tune_24</code>/<code>ic_mtrl_tune</code> and it was an inherited
+          Sketchware name — so that exact name cannot be drawn, and now it says so clearly instead of flagging the
+          whole view. Regression fine: <code>colorPrimary</code>, backgrounds, styles, images/vectors/gif,
+          <code>MaterialButton</code>+WebView and a real layout.</li>
+          <li><strong>Honest pending:</strong> verified on an arm64 API 34 emulator with <code>uiautomator</code> and
+          screenshots and without downloading anything; the <em>installed</em> line was never rendered (there was no
+          toolchain and the 307 MB were not downloaded).</li>
+        </ul>
+        <p>
+          <img src="assets/flutter-where.png" alt="Project settings: the Flutter (Dart) card showing Toolchain Flutter: no instalado (~307.2 MB)" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)">
+          <img src="assets/preview-r4-before.png" alt="Before: library drawables show a red marker and the status bar lists every unavailable name" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)">
+          <img src="assets/preview-r4-after.png" alt="After: the library drawable is drawn and the status bar is a short grouped summary" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)">
+        </p>
+        <p>Version <strong>v7.0.10.0</strong> (versionCode 167). The round-4 write-up is at the end of
+        <a href="preview-fix.md">docs/preview-fix.md</a>; where to find the Dart toolchain is in
+        <a href="flutter-consent.md">docs/flutter-consent.md</a>.</p>
+      </div>
+
       <div class="item done featured">
         <span class="when">2026-09-23 · fix</span>
         <h3>Preview round 3: text colours, styles, linear layouts and images  <span class="pill feat">highlight</span> <span class="pill ok">fixed</span></h3>

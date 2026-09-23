@@ -36,9 +36,12 @@
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
         android:background="#B3000000"
-        android:padding="6dp"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
         android:textColor="#FFFFFFFF"
-        android:textSize="10sp"
+        android:textSize="11sp"
         android:visibility="gone"
         tools:visibility="gone" />
 

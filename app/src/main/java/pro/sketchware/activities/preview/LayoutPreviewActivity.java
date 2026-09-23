@@ -18,8 +18,11 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -81,6 +84,8 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
         binding.debugStatus.setVisibility(android.view.View.VISIBLE);
         binding.debugStatus.setBackgroundColor(0xB3000000);
         binding.debugStatus.setText(message);
+        binding.debugStatus.setOnClickListener(null);
+        binding.debugStatus.setClickable(false);
         android.util.Log.i(TAG, "info: " + message);
     }
 
@@ -161,6 +166,9 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
         pane.setVerticalScrollBarEnabled(true);
         pane.setResourceManager(jC.d(scId));
         UI.addSystemWindowInsetToPadding(binding.pane, false, false, false, true);
+        // La barra de aviso va pegada al borde inferior: sin el inset de la barra de navegacion el
+        // resumen quedaba cortado (era parte del problema de "aviso ilegible").
+        UI.addSystemWindowInsetToPadding(binding.debugStatus, false, false, false, true);
 
         layoutHistory.push(title);
         // Si quien abre la vista previa nos da el XML (editor de XML de vistas), lo usamos tal cual.
@@ -356,15 +364,11 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
                 shown++;
             }
             if (renderWarnings.isEmpty() && resourceResolver.getWarnings().isEmpty()) {
+                hidePreviewWarning();
                 debug("Preview OK · vistas: " + viewsById.size() + " · WebViews: " + webViewCount + sample);
             } else {
-                // Degradacion visible (requisito: nunca un lienzo mudo sin motivo): se listan tanto las
-                // vistas que no se han podido crear como los recursos (colores/fuentes/imagenes) que no
-                // se han podido resolver.
-                java.util.List<String> pendientes = new ArrayList<>(renderWarnings);
-                pendientes.addAll(resourceResolver.getWarnings());
-                debugWarning("Preview PARCIAL · vistas: " + viewsById.size() + " · no disponibles: "
-                        + android.text.TextUtils.join(", ", pendientes));
+                // Nada de muros de texto: resumen corto y agrupado en la barra + detalle a un toque.
+                showPreviewWarningSummary(viewsById.size(), webViewCount);
             }
             return true;
         } catch (Throwable throwable) {
@@ -372,6 +376,104 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
             debugWarning("Preview FAIL: " + throwable);
             return false;
         }
+    }
+
+    /**
+     * Aviso corto y agrupado de vista previa parcial, con detalle bajo demanda.
+     *
+     * Antes se imprimia una sola linea asi:
+     *
+     * <pre>Preview PARCIAL · vistas: 32 · no disponibles: @drawable/ic_tune_white</pre>
+     *
+     * que el usuario leia como "32 vistas no disponibles" (cuando "32" eran las vistas SI dibujadas)
+     * y el resto era un muro de nombres de recursos, sin decir que tipo de problema era cada uno.
+     *
+     * Ahora: la barra dice CUANTOS recursos no se encontraron y CUANTAS vistas no se pudieron
+     * instanciar (dos categorias distintas), y el detalle agrupado por causa sale en un dialogo
+     * (y completo en el log, tag LayoutPreview).
+     */
+    private void showPreviewWarningSummary(int views, int webViews) {
+        Map<ProjectResourceResolver.Kind, java.util.Set<String>> byKind = resourceResolver.getWarningsByKind();
+        int resourceCount = resourceResolver.getWarnings().size();
+        int viewCount = renderWarnings.size();
+
+        List<String> parts = new ArrayList<>();
+        if (resourceCount > 0) {
+            parts.add(resourceCount + (resourceCount == 1 ? " recurso no encontrado" : " recursos no encontrados"));
+        }
+        if (viewCount > 0) {
+            parts.add(viewCount + (viewCount == 1 ? " vista no instanciable" : " vistas no instanciables"));
+        }
+        String summary = "Preview PARCIAL: " + android.text.TextUtils.join(" · ", parts);
+        binding.debugStatus.setVisibility(android.view.View.VISIBLE);
+        binding.debugStatus.setBackgroundColor(0xB3B00020);
+        binding.debugStatus.setText("⚠ " + summary);
+        binding.debugStatus.setOnClickListener(v -> showPreviewWarningDetail());
+        binding.debugStatus.setClickable(true);
+        android.util.Log.w(TAG, "warning: " + summary);
+
+        // Detalle completo en el log, agrupado por causa (no depende del dialogo).
+        android.util.Log.w(TAG, "warning: vistas dibujadas: " + views + " · WebViews: " + webViews);
+        for (Map.Entry<ProjectResourceResolver.Kind, java.util.Set<String>> entry : byKind.entrySet()) {
+            for (String value : entry.getValue()) {
+                android.util.Log.w(TAG, "warning: [" + entry.getKey().label + "] " + value);
+            }
+        }
+        for (String className : renderWarnings) {
+            android.util.Log.w(TAG, "warning: [vista no instanciable] " + className);
+        }
+    }
+
+    /** Quita el aviso de la barra y su listener (previsualizacion correcta). */
+    private void hidePreviewWarning() {
+        binding.debugStatus.setOnClickListener(null);
+        binding.debugStatus.setClickable(false);
+    }
+
+    /**
+     * Detalle agrupado del aviso, en un dialogo: una linea de cabecera por causa con su recuento y
+     * la lista de elementos (limitada, para que un diseno con 200 recursos rotos siga siendo legible).
+     */
+    private void showPreviewWarningDetail() {
+        Map<ProjectResourceResolver.Kind, java.util.Set<String>> byKind = resourceResolver.getWarningsByKind();
+        StringBuilder text = new StringBuilder();
+        Map<String, List<String>> groups = new LinkedHashMap<>();
+
+        if (!renderWarnings.isEmpty()) {
+            groups.put("Vistas no instanciables (clase no disponible en el editor)", new ArrayList<>(renderWarnings));
+        }
+        for (Map.Entry<ProjectResourceResolver.Kind, java.util.Set<String>> entry : byKind.entrySet()) {
+            groups.put("Recursos no encontrados · " + entry.getKey().label, new ArrayList<>(entry.getValue()));
+        }
+
+        final int maxPerGroup = 12;
+        boolean first = true;
+        for (Map.Entry<String, List<String>> group : groups.entrySet()) {
+            if (!first) {
+                text.append('\n');
+            }
+            first = false;
+            List<String> values = group.getValue();
+            text.append("• ").append(group.getKey()).append(": ").append(values.size()).append('\n');
+            int shown = Math.min(values.size(), maxPerGroup);
+            for (int i = 0; i < shown; i++) {
+                text.append("    ").append(values.get(i)).append('\n');
+            }
+            if (values.size() > shown) {
+                text.append("    …y ").append(values.size() - shown).append(" mas (ver log LayoutPreview)\n");
+            }
+        }
+        String searched = resourceResolver.getSearchedLocations();
+        if (!searched.isEmpty()) {
+            text.append("\nDrawables buscados en: ").append(searched);
+        }
+        text.append("\n\nEl resto del diseno SI se ha dibujado; solo falta lo listado arriba,").append(" que se marca en rojo en el lienzo.");
+
+        new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                .setTitle("Vista previa parcial")
+                .setMessage(text.toString().trim())
+                .setPositiveButton(android.R.string.ok, null)
+                .show();
     }
 
     /**
@@ -646,7 +748,10 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
                     android.util.Log.w(TAG, "warning: fuente ilegible " + fontFile, throwable);
                 }
             }
-            renderWarnings.add(value);
+            // Una fuente que no existe es un RECURSO no resuelto, no una vista no disponible: va al
+            // grupo de recursos para que el aviso lo cuente como recurso (no como vista).
+            resourceResolver.addExternalWarning(
+                    ProjectResourceResolver.Kind.FONT, value + " (no esta en files/resource/font)");
             return null;
         }
         if (value.startsWith("@") || value.startsWith("?")) {

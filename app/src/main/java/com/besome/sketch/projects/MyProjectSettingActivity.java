@@ -53,9 +53,12 @@ import pro.sketchware.activities.iconcreator.IconCreatorActivity;
 import pro.sketchware.control.VersionDialog;
 import pro.sketchware.databinding.MyprojectSettingBinding;
 import pro.sketchware.featureflags.FeatureFlags;
+import pro.sketchware.flutter.FlutterBuildMode;
 import pro.sketchware.flutter.FlutterProject;
+import pro.sketchware.flutter.FlutterProjectDefaults;
 import pro.sketchware.flutter.FlutterProjectStore;
 import pro.sketchware.flutter.FlutterScaffoldInitializer;
+import pro.sketchware.flutter.FlutterToolchainUi;
 import pro.sketchware.kmp.KmpProject;
 import pro.sketchware.kmp.KmpProjectSerializer;
 import pro.sketchware.kmp.KmpScaffoldInitResult;
@@ -119,6 +122,7 @@ public class MyProjectSettingActivity extends BaseAppCompatActivity implements V
         binding.verCodeHolder.setOnClickListener(this);
         binding.verNameHolder.setOnClickListener(this);
         binding.imgThemeColorHelp.setOnClickListener(this);
+        binding.flutterToolchainCard.setOnClickListener(this);
         binding.okButton.setOnClickListener(this);
         binding.cancel.setOnClickListener(this);
 
@@ -207,6 +211,61 @@ public class MyProjectSettingActivity extends BaseAppCompatActivity implements V
             }
         }
         syncThemeColors();
+        refreshFlutterToolchainRow();
+    }
+
+    /**
+     * Rellena la fila Flutter con el estado real del toolchain.
+     *
+     * Aunque el flag experimental este apagado la fila sigue visible: nunca se esconde en silencio,
+     * solo explica como activar la funcion.
+     */
+    private void refreshFlutterToolchainRow() {
+        final TextView statusView = binding.tvFlutterToolchainStatus;
+        final TextView hintView = binding.tvFlutterToolchainHint;
+
+        // Instalaciones que nunca abrieron "Feature flags" no tienen la clave guardada: se aplica el
+        // valor por defecto (que respeta a quien ya la haya cambiado a mano).
+        FlutterToolchainUi.applyDefaultFlagIfMissing(getApplicationContext());
+
+        if (!FlutterToolchainUi.isEnabled(getApplicationContext())) {
+            statusView.setText(R.string.flutter_discoverability_row_disabled);
+            hintView.setText(R.string.flutter_discoverability_row_disabled_hint);
+            return;
+        }
+
+        statusView.setText(R.string.flutter_discoverability_row_checking);
+        hintView.setText(R.string.flutter_discoverability_row_hint);
+
+        final Context applicationContext = getApplicationContext();
+        final FlutterBuildMode mode = flutterToolchainMode();
+        new Thread(() -> {
+            final String line;
+            try {
+                line = FlutterToolchainUi.statusLine(applicationContext, mode);
+            } catch (Throwable throwable) {
+                Log.d(TAG, "No se pudo calcular el estado del toolchain Flutter", throwable);
+                return;
+            }
+            runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed()) {
+                    return;
+                }
+                statusView.setText(line);
+            });
+        }, "flutter-toolchain-row").start();
+    }
+
+    /** Modo Flutter del proyecto si ya lo tiene, o el modo por defecto. */
+    private FlutterBuildMode flutterToolchainMode() {
+        try {
+            if (sc_id != null && !sc_id.isEmpty()) {
+                return FlutterToolchainUi.preferredMode(new File(wq.b(sc_id), "files"));
+            }
+        } catch (Exception e) {
+            Log.d(TAG, "No se pudo resolver el modo Flutter del proyecto", e);
+        }
+        return FlutterProjectDefaults.DEFAULT_MODE;
     }
 
     @Override
@@ -257,6 +316,10 @@ public class MyProjectSettingActivity extends BaseAppCompatActivity implements V
             } else {
                 showOldVersionControlDialog();
             }
+        } else if (id == R.id.flutter_toolchain_card) {
+            // Estado, descarga consentida y borrado: el mismo dialogo del editor de logica.
+            FlutterToolchainUi.showStatusDialog(this, flutterToolchainMode());
+            refreshFlutterToolchainRow();
         }
     }
 
@@ -265,6 +328,10 @@ public class MyProjectSettingActivity extends BaseAppCompatActivity implements V
         super.onResume();
         if (!isStoragePermissionGranted()) {
             finish();
+        }
+        // El estado puede cambiar mientras la pantalla estaba en segundo plano (descarga, borrado).
+        if (binding != null) {
+            refreshFlutterToolchainRow();
         }
     }
 

@@ -2333,5 +2333,19 @@ Please try again later"</string>
     <string name="flutter_toolchain_info_dart_version">Dart instalado: %1$s</string>
     <string name="flutter_toolchain_info_disk_usage">Espacio ocupado por el toolchain: %1$s</string>
 
+    <!-- Descubribilidad del toolchain Flutter (ajustes del proyecto y pantalla de dise\u00f1o) -->
+    <string name="flutter_discoverability_row_installed">Toolchain Flutter: instalado (Dart %1$s) \u00b7 %2$s</string>
+    <string name="flutter_discoverability_row_missing">Toolchain Flutter: no instalado (~%1$s)</string>
+    <string name="flutter_discoverability_row_checking">Toolchain Flutter: comprobando el estado\u2026</string>
+    <string name="flutter_discoverability_row_disabled">Toolchain Flutter: funci\u00f3n desactivada</string>
+    <string name="flutter_discoverability_row_hint">Toca para ver el estado, descargar el toolchain o liberar espacio</string>
+    <string name="flutter_discoverability_row_disabled_hint">Toca para ver c\u00f3mo activarla</string>
+    <string name="flutter_discoverability_disabled_title">Flutter desactivado</string>
+    <string name="flutter_discoverability_disabled_message">La funci\u00f3n Flutter (Dart) est\u00e1 desactivada en este dispositivo, por eso no hay nada que descargar todav\u00eda.\n\nAct\u00edvala en Ajustes \u203a Feature flags \u203a \u201cFlutter Experimental Enable\u201d (FLUTTER_EXPERIMENTAL_ENABLE) y vuelve a esta pantalla. El interruptor existe solo para quien quiera apagarla: la funci\u00f3n es estable y la descarga del toolchain siempre pide consentimiento.</string>
+    <string name="flutter_discoverability_open_flags">Abrir Feature flags</string>
+    <string name="flutter_discoverability_title">Flutter (Dart)</string>
+    <string name="flutter_discoverability_entry_title">Flutter: estado del toolchain</string>
+    <string name="flutter_discoverability_entry_subtitle">Descargar, actualizar o borrar el toolchain de Dart</string>
+
 
 </resources>

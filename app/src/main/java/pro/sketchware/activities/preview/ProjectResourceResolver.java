@@ -47,6 +47,8 @@ import pro.sketchware.utility.FileUtil;
  */
 public class ProjectResourceResolver {
 
+    private static final String TAG = "LayoutPreview";
+
     private static final Pattern COLOR_ENTRY = Pattern.compile(
             "<color\\s+name=\"([^\"]+)\"\\s*>\\s*(#[0-9a-fA-F]{6,8})</color>");
 
@@ -58,8 +60,32 @@ public class ProjectResourceResolver {
     private final Map<String, Integer> colorCache = new HashMap<>();
     private final Map<String, Drawable> drawableCache = new HashMap<>();
 
-    /** Cosas que la vista previa no ha podido resolver (para avisar en la barra de estado). */
-    private final Set<String> warnings = new LinkedHashSet<>();
+    /**
+     * Motivo por el que un recurso no se ha podido resolver. La vista previa agrupa el aviso por
+     * esta causa: antes se volcaba una lista plana de nombres ("... no disponibles: a, b, c, ...")
+     * que el usuario leia como "N vistas no disponibles" mezclando VISTAS con RECURSOS.
+     */
+    public enum Kind {
+        COLOR("colores"),
+        THEME("atributos de tema"),
+        DRAWABLE("drawables/imagenes"),
+        FONT("fuentes"),
+        OTHER("otros");
+
+        public final String label;
+
+        Kind(String label) {
+            this.label = label;
+        }
+    }
+
+    /** Cosas que la vista previa no ha podido resolver, agrupadas por causa. */
+    private final Map<Kind, Set<String>> warningsByKind = new java.util.EnumMap<>(Kind.class);
+
+    /** Drawables buscados solo en librerias/otras rutas (se indexa una vez por resolver). */
+    private List<File> libraryDrawableDirs;
+    /** Resumen de donde se ha buscado (para el detalle del aviso). */
+    private String searchedLocations = "";
 
     private boolean colorsLoaded;
 
@@ -68,18 +94,44 @@ public class ProjectResourceResolver {
         this.scId = scId;
     }
 
-    /** Avisos acumulados (recursos no resueltos). El que llama decide como mostrarlos. */
+    /** Avisos acumulados (recursos no resueltos), en texto plano para el log. */
     public List<String> getWarnings() {
-        return new ArrayList<>(warnings);
+        List<String> flat = new ArrayList<>();
+        for (Set<String> values : warningsByKind.values()) {
+            flat.addAll(values);
+        }
+        return flat;
+    }
+
+    /** Avisos agrupados por causa (para el resumen y el detalle en pantalla). */
+    public Map<Kind, Set<String>> getWarningsByKind() {
+        Map<Kind, Set<String>> copy = new java.util.EnumMap<>(Kind.class);
+        for (Map.Entry<Kind, Set<String>> entry : warningsByKind.entrySet()) {
+            copy.put(entry.getKey(), new LinkedHashSet<>(entry.getValue()));
+        }
+        return copy;
+    }
+
+    /** De donde ha buscado los drawables (proyecto, assets, librerias, IDE). */
+    public String getSearchedLocations() {
+        return searchedLocations;
     }
 
     public void clearWarnings() {
-        warnings.clear();
+        warningsByKind.clear();
     }
 
-    private void warning(String message) {
-        warnings.add(message);
-        android.util.Log.w("LayoutPreview", "warning: recurso no resuelto: " + message);
+    private void warning(Kind kind, String message) {
+        warningsByKind.computeIfAbsent(kind, k -> new LinkedHashSet<>()).add(message);
+        android.util.Log.w("LayoutPreview", "warning: recurso no resuelto [" + kind.label + "]: " + message);
+    }
+
+    /**
+     * Anota un recurso que no se ha podido resolver desde FUERA del resolvedor (la vista previa
+     * resuelve las fuentes por su cuenta). Asi el aviso agrupado incluye tambien las fuentes.
+     */
+    public void addExternalWarning(Kind kind, String message) {
+        warning(kind, message);
     }
 
     private void ensureColorsLoaded() {
@@ -124,6 +176,10 @@ public class ProjectResourceResolver {
      * @return el color resuelto, o el fallback si no se ha podido resolver.
      */
     public int resolveColor(View view, String value, int fallback) {
+        return resolveColor(view, value, fallback, Kind.COLOR);
+    }
+
+    public int resolveColor(View view, String value, int fallback, Kind kind) {
         if (value == null) {
             return fallback;
         }
@@ -135,7 +191,7 @@ public class ProjectResourceResolver {
             try {
                 return Color.parseColor(v);
             } catch (IllegalArgumentException e) {
-                warning("color invalido: " + v);
+                warning(kind, "color invalido: " + v);
                 return fallback;
             }
         }
@@ -145,7 +201,7 @@ public class ProjectResourceResolver {
             if (cached != null) {
                 return cached;
             }
-            warning(v + " (no esta en files/resource/values/colors.xml)");
+            warning(kind, v + " (no esta en files/resource/values/colors.xml)");
             return fallback;
         }
         if (v.startsWith("@android:color/")) {
@@ -153,7 +209,7 @@ public class ProjectResourceResolver {
             if (id != 0) {
                 return context.getColor(id);
             }
-            warning(v);
+            warning(kind, v);
             return fallback;
         }
         if (v.startsWith("?")) {
@@ -161,7 +217,7 @@ public class ProjectResourceResolver {
             if (color != 0) {
                 return color;
             }
-            warning(v + " (atributo del tema no resoluble en la vista previa)");
+            warning(Kind.THEME, v + " (atributo del tema no resoluble en la vista previa)");
             return fallback;
         }
         return fallback;
@@ -268,9 +324,35 @@ public class ProjectResourceResolver {
         if (resolved != null) {
             drawableCache.put(v, resolved);
         } else {
-            warning(value);
+            warning(Kind.DRAWABLE, value + searchedLocationsSuffix());
         }
         return resolved;
+    }
+
+    /** Sufijo con los sitios donde se ha buscado un drawable (para el detalle del aviso). */
+    private String searchedLocationsSuffix() {
+        String summary = librarySearchSummary();
+        return summary.isEmpty() ? "" : " (buscado en: " + summary + ")";
+    }
+
+    /** Resumen de los sitios de busqueda de drawables, para poder explicar el fallo. */
+    private String librarySearchSummary() {
+        if (!searchedLocations.isEmpty()) {
+            return searchedLocations;
+        }
+        List<String> parts = new ArrayList<>();
+        int projectDirs = projectDrawableDirs().size();
+        if (projectDirs > 0) {
+            parts.add(projectDirs + " carpetas drawable* del proyecto");
+        }
+        parts.add("assets del proyecto");
+        int libraries = libraryDrawableDirs().size();
+        if (libraries > 0) {
+            parts.add(libraries + " recursos de librerias");
+        }
+        parts.add("recursos del IDE");
+        searchedLocations = android.text.TextUtils.join(", ", parts);
+        return searchedLocations;
     }
 
     /** Busca "@drawable/lo_que_sea" en el proyecto y, si no esta, entre los drawables del IDE. */
@@ -298,8 +380,95 @@ public class ProjectResourceResolver {
         if (inFiles != null) {
             return inFiles;
         }
-        // 4) Drawables propios del IDE: default_image, iconos mtrl, etc.
+        // 4) Recursos de las LIBRERIAS del proyecto (AAR locales descargados por DependencyResolver
+        //    y librerias integradas del IDE ya extraidas). El compilador las enlaza con aapt2
+        //    (ResourceCompiler: "-R"), asi que en la app compilada SI existen: la vista previa debe
+        //    resolverlas igual, y antes no las miraba en absoluto.
+        for (File dir : libraryDrawableDirs()) {
+            Drawable inLibrary = findDrawableIn(dir, name);
+            if (inLibrary != null) {
+                return inLibrary;
+            }
+        }
+        // 5) Drawables propios del IDE: default_image, iconos mtrl, etc.
         return loadIdeDrawable(name);
+    }
+
+    /**
+     * Directorios de recursos (drawable*) de las librerias que usa el proyecto:
+     *
+     * <ul>
+     *   <li>Librerias locales del proyecto (JSON {@code files/local_library}: {@code resPath} /
+     *       {@code assetsPath}), que es donde {@code DependencyResolver} descomprime los AAR en
+     *       {@code .sketchware/libs/local_libs/&lt;nombre&gt;/}.</li>
+     *   <li>Ruta heredada {@code &lt;proyecto&gt;/files/library/res}.</li>
+     *   <li>Librerias integradas del IDE ya extraidas en {@code filesDir/libs/libs/&lt;lib&gt;/res}
+     *       (es la ruta que usa {@code BuiltInLibraries.getLibraryResourcesPath}).</li>
+     * </ul>
+     */
+    private List<File> libraryDrawableDirs() {
+        if (libraryDrawableDirs != null) {
+            return libraryDrawableDirs;
+        }
+        List<File> dirs = new ArrayList<>();
+        // 1) Librerias locales declaradas por el proyecto (lo hace ManageLocalLibrary/DependencyResolver).
+        File localLibraryFile = new File(new FilePathUtil().getPathLocalLibrary(scId));
+        if (localLibraryFile.isFile()) {
+            String content = FileUtil.readFile(localLibraryFile.getAbsolutePath());
+            if (content != null && !content.trim().isEmpty()) {
+                try {
+                    org.json.JSONArray libraries = new org.json.JSONArray(content);
+                    for (int i = 0; i < libraries.length(); i++) {
+                        org.json.JSONObject library = libraries.optJSONObject(i);
+                        if (library == null) {
+                            continue;
+                        }
+                        addIfDirectory(dirs, library.optString("resPath", null));
+                        addIfDirectory(dirs, library.optString("assetsPath", null));
+                        String name = library.optString("name", null);
+                        if (name != null && !name.isEmpty()) {
+                            addIfDirectory(dirs, new File(localLibsRoot(), name + "/res").getAbsolutePath());
+                            addIfDirectory(dirs, new File(localLibsRoot(), name + "/assets").getAbsolutePath());
+                        }
+                    }
+                } catch (Throwable throwable) {
+                    android.util.Log.w("LayoutPreview", "warning: local_library ilegible: " + throwable);
+                }
+            }
+        }
+        // 2) Ruta heredada por proyecto.
+        addIfDirectory(dirs, new FilePathUtil().getResPathLocalLibraryUser(scId));
+        addIfDirectory(dirs, new File(new FilePathUtil().getPathLocalLibrary(scId)).getParentFile() == null
+                ? null
+                : new File(new File(new FilePathUtil().getPathLocalLibrary(scId)).getParentFile(), "library/assets").getAbsolutePath());
+        // 3) Librerias integradas del IDE ya extraidas (Material, Firebase, ...).
+        File extractedBuiltInLibraries = new File(context.getFilesDir(), "libs/libs");
+        File[] builtIn = extractedBuiltInLibraries.listFiles();
+        if (builtIn != null) {
+            for (File library : builtIn) {
+                if (library.isDirectory()) {
+                    addIfDirectory(dirs, new File(library, "res").getAbsolutePath());
+                    addIfDirectory(dirs, new File(library, "assets").getAbsolutePath());
+                }
+            }
+        }
+        libraryDrawableDirs = dirs;
+        android.util.Log.i(TAG, "info: recursos de librerias indexados: " + dirs.size());
+        return dirs;
+    }
+
+    private static File localLibsRoot() {
+        return new File(android.os.Environment.getExternalStorageDirectory(), ".sketchware/libs/local_libs");
+    }
+
+    private static void addIfDirectory(List<File> dirs, String path) {
+        if (path == null || path.isEmpty()) {
+            return;
+        }
+        File dir = new File(path);
+        if (dir.isDirectory() && !dirs.contains(dir)) {
+            dirs.add(dir);
+        }
     }
 
     /** Directorios del proyecto que pueden contener drawables (drawable, drawable-xhdpi, ...). */
@@ -321,6 +490,25 @@ public class ProjectResourceResolver {
     @Nullable
     private Drawable findDrawableIn(File dir, String name) {
         if (dir == null || !dir.isDirectory()) {
+            return null;
+        }
+        // En una raiz de recursos de libreria solo interesan las carpetas drawable*/mipmap*.
+        if ("res".equals(dir.getName())) {
+            File[] resChildren = dir.listFiles();
+            if (resChildren != null) {
+                for (File child : resChildren) {
+                    if (!child.isDirectory()) {
+                        continue;
+                    }
+                    String folder = child.getName().toLowerCase(Locale.US);
+                    if (folder.startsWith("drawable") || folder.startsWith("mipmap")) {
+                        Drawable found = findDrawableIn(child, name);
+                        if (found != null) {
+                            return found;
+                        }
+                    }
+                }
+            }
             return null;
         }
         String lowerName = name.toLowerCase(Locale.US);

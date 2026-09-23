@@ -262,3 +262,129 @@ descartaban en silencio. Ahora se normalizan, así que funcionan. Regresión com
 
 El detalle completo (método, XML de los casos, evidencia cruda) está en `preview-r3.md` y en
 `preview-evidence/r3/`.
+
+---
+
+## 8. Ronda 4 (v7.0.10.0)
+
+Fecha: 2026-09-24 · Versión: **v7.0.10.0** (versionCode 167) · Release:
+<https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.0>
+
+Las rondas 1-3 están arriba (secciones 1-7) y **no se repiten aquí**. Esta ronda arregla un fallo real de resolución
+de recursos, hace útil el aviso de «vista previa parcial» y corrige una lectura equivocada del mensaje. Todo medido
+**píxel a píxel** sobre capturas de un emulador arm64 API 34.
+
+### 8.1 El «32» no eran 32 vistas rotas
+
+El reporte era `Preview PARCIAL · vistas: 32 · no disponibles: @drawable/ic_tune_white`. Son **tres cosas distintas**
+y solo una era un fallo de resolución de recursos:
+
+- el **32** son las vistas que **SÍ se dibujaron**, no las que fallaron. El mensaje juntaba `vistas: 32` con
+  `no disponibles: …` y se leía como «32 vistas no disponibles»; en la reproducción exacta (33 nodos en el XML = 32
+  vistas creadas) el único problema real era **1 drawable**.
+- la lista mezclaba en el mismo saco **clases no instanciables** y **recursos no resueltos**, sin motivo ni recuento.
+- **`@drawable/ic_tune_white` no existe en ninguna fuente de este IDE** (ver 8.3).
+
+Ahora el aviso es un **resumen corto y agrupado** —`Preview PARCIAL: <N> recursos no encontrados · <M> vistas no
+instanciables` (singular/plural correcto)— y **pulsando la barra** se abre un **diálogo de detalle** agrupado por causa
+(colores, atributos de tema, drawables/imágenes, fuentes, vistas no instanciables), con recuento por grupo, el motivo
+de cada elemento, **dónde se buscó** (`buscado en: N carpetas drawable* del proyecto, assets del proyecto, M recursos
+de librerías, recursos del IDE`) y un **tope de 12 líneas por grupo** (`…y N mas (ver log LayoutPreview)`). El detalle
+completo sigue en logcat (tag `LayoutPreview`). Medido con un XML mixto (color, atributo de tema, drawable y fuente
+rotos + 1 vista no instanciable):
+
+| | Barra de estado |
+| --- | --- |
+| Antes | `Preview PARCIAL · vistas: 6 · no disponibles: @font/no_existe_font, com.example.noexiste.OtroWidget, @color/no_existe_color (no esta en …), @drawable/no_existe_img, ?attr/noExisteEsteAttr (…)` (una línea larguísima) |
+| Después | `Preview PARCIAL: 4 recursos no encontrados · 1 vista no instanciable` |
+
+### 8.2 El fallo real: la vista previa no miraba las librerías del proyecto
+
+`ResourceCompiler` enlaza los recursos de las librerías con `aapt2` (`-R`): los AAR locales que
+`DependencyResolver` descomprime en `.sketchware/libs/local_libs/<lib>/` (paths `resPath` del JSON
+`files/local_library`, gestionados por `ManageLocalLibrary`) y las librerías integradas del IDE ya extraídas
+(`BuiltInLibraries.getLibraryResourcesPath()` → `<filesDir>/libs/libs/<lib>/res`). **La vista previa no miraba
+ninguna de las dos.**
+
+`ProjectResourceResolver` ahora indexa y busca (recursivo, solo `drawable*`/`mipmap*` dentro de `res/`) en el JSON
+`files/local_library` (`resPath`/`assetsPath` + `.sketchware/libs/local_libs/<name>/{res,assets}`), en la ruta heredada
+`<proyecto>/files/library/res` (+ `library/assets`) y en las librerías integradas ya extraídas.
+
+Probado con un **fixture de librería local** (`testlib` con
+`.sketchware/libs/local_libs/testlib/res/drawable/ic_tune_white.xml`, registrada en el JSON del proyecto):
+
+| caso | Antes | Después |
+| --- | --- | --- |
+| `@drawable/ic_tune_white` **de la librería** | marcador rojo `(176,0,32)` — 2.076 px | **icono dibujado** `(0,200,83)` — **6.174 px** |
+| `@drawable/ic_tune_white_24dp` (librería, `drawable-xhdpi`) | marcador rojo | **icono dibujado** (rojo del propio vector) |
+| `@drawable/ic_tune_24` (recurso del IDE) | visible | visible |
+| `@android:drawable/ic_menu_preferences` (framework) | visible | visible |
+| `@mipmap/ic_launcher` | marcador rojo | marcador rojo (no resoluble aquí, ver 8.6) |
+| `@drawable/noexiste_zzz` (no está) | marcador rojo | marcador rojo + motivo |
+
+Con el fixture, **el caso exacto del usuario pasa de «PARCIAL» a `Preview OK · vistas: 32`**:
+
+```
+I LayoutPreview: info: recursos de librerias indexados: 1
+I LayoutPreview: info: Preview OK · vistas: 32 · WebViews: 0 [linear1/LinearLayout/] [img1/ImageView/]
+```
+
+| Antes (v7.0.9.0) | Después (v7.0.10.0) |
+| --- | --- |
+| ![antes](assets/preview-r4-before.png) | ![después](assets/preview-r4-after.png) |
+
+En el «antes» (izquierda) los dos drawables de la librería salen con **marcador rojo** y la barra enumera todos los
+nombres en una línea; en el «después» (derecha) el drawable de la librería ya **se dibuja** y la barra es un resumen
+corto. `@mipmap/ic_launcher` y el nombre inexistente siguen en rojo, como debe ser.
+
+### 8.3 `@drawable/ic_tune_white`: de dónde sale y qué se puede arreglar
+
+| Fuente | ¿Está `ic_tune_white`? | Evidencia |
+| --- | --- | --- |
+| `res/drawable*` del proyecto | No | `ls` del proyecto en el dispositivo |
+| Recursos del IDE (APK debug) | **No** | `unzip -l …apk \| grep -i tune` → solo `ic_mtrl_tune.xml` y `ic_tune_24.xml` |
+| AAR de Material (`material-1.13.0`) | No | 84 entradas `res/drawable*`, ninguna `*tune*` |
+| `OldResourceIdMapper` (ids viejos de Sketchware) | El id viejo `2131166544` → `R.drawable.ic_mtrl_tune` | `app/src/main/java/mod/jbk/util/OldResourceIdMapper.java:1297` |
+
+**Conclusión honesta:** `ic_tune_white` es un **nombre heredado** (la vieja Sketchware usaba `ic_*_white`; el id
+viejo `2131166544` se mapea hoy a `ic_mtrl_tune`), **no un drawable de este IDE**, así que ese nombre concreto **no se
+puede dibujar**. Ahora la barra lo dice claro y se marca **solo el recurso**, sin marcar la vista entera. Lo que **sí**
+era un fallo real y queda arreglado es 8.2: si el nombre existe en una **librería del proyecto**, ahora se resuelve.
+
+### 8.4 Extras de la ronda
+
+- Las **fuentes rotas** (`@font/…`) pasan a la categoría «recurso»: ya **no cuentan como vistas** no instanciables.
+- La **barra de aviso respeta el inset de la barra de navegación**: antes el texto quedaba cortado por abajo (parte
+del «aviso ilegible»).
+
+### 8.5 Regresión (las rondas 1-3 siguen bien)
+
+| Comprobación | Resultado medido | Captura |
+| --- | --- | --- |
+| Color de texto de la paleta (`?colorPrimary`) | `(68,94,145)` 4.665 px + control rojo `(255,0,0)` 6.025 px | `reg_R4_B1_color_attr.png` |
+| Fondos: `?colorPrimary` / `@color/proyecto` / shape con borde | `(68,94,145)` 356.400 px · `(0,0,255)` 356.400 px · `(255,152,0)` + borde negro | `reg_R4_B3_fondos.png` |
+| Estilos de texto (cursiva, negrita+cursiva, monoespaciada) | los tres correctos | `reg_R4_B2_estilo.png` |
+| Imágenes (png/webp/jpeg/`drawable-xhdpi`/subcarpeta/assets/vector/gif) | 10 vistas dibujadas, todas las bandas de color visibles | `reg_R4_B6b_img_variantes.png` |
+| `MaterialButton` + `WebView` (HTML) | HTML `(0,187,85)` 698.570 px + `MaterialButton` índigo | `reg_R4_C_material_regresion.png` |
+| Layout real del proyecto (sin `--es xml`, con WebView) | `Preview OK · vistas: 3 · WebViews: 1` | `reg_R4_proyecto_real.png` |
+
+Todas salen con **`Preview OK`**, sin avisos.
+
+### 8.6 Pendientes honestos de la ronda 4
+
+- **`@drawable/ic_tune_white` sigue sin poder dibujarse** en este entorno: no existe en ninguna fuente disponible
+  (proyecto, librerías declaradas, IDE, Material). No se ha «inventado»: si el usuario lo tiene en una **librería
+  local de su proyecto**, ahora **sí** se resuelve (probado con fixture).
+- **Librerías integradas no extraídas**: si el IDE nunca ha compilado en ese dispositivo, `<filesDir>/libs/libs/` no
+  existe y sus recursos (material, firebase…) tampoco se pueden leer. **No** se ha añadido una ruta que lea los zips
+  de `assets/libs/libs.zip` del propio APK (copiar 26 MB a caché en cada preview no compensa); tras la primera
+  compilación del proyecto esos `res/` se extraen y entonces sí se resuelven.
+- **`@mipmap/ic_launcher`**: vive en el proyecto de compilación generado
+  (`.sketchware/mysc/<scId>/app/src/main/res/mipmap-*`), que no es una fuente de recursos de diseño (podría mostrar
+  recursos obsoletos de la última compilación); no se ha añadido.
+- **Nombres heredados** de Sketchware que el IDE ya no incluye: **no hay renombrado automático** en la preview (existe
+  `OldResourceIdMapper`, pero solo se usa para el selector de icono de app; un alias por nombre sería adivinar).
+- Siguen en pie los pendientes de las rondas 1-3 (selector/ripple/layer-list aproximados, vectores con `<group>`/
+  degradados, `.9.png` sin parches, `?atributo` con el tema del IDE, Material3 sin probar, nada en móvil físico).
+
+El detalle completo (método, XML de los casos, evidencia cruda) está en `preview-r4.md` y en `preview-evidence/r4/`.

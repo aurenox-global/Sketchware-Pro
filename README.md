@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.9.0-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.10.0-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -160,6 +160,29 @@ This repository is a personal fork. Every improvement is added here as it lands,
 - **Cost:** the two packed executables add **10.18 MB** to the `arm64-v8a` APK. Other ABIs have no AOT backend and
   say so instead of failing silently. The default mode is still **debug/JIT**, this stays experimental and there is
   still no hot reload.
+- **v7.0.10.0 (versionCode 167) — the Dart download you could not find, and preview round 4.** The complaint was that
+  the toolchain was nowhere to be seen, so the `FLUTTER_EXPERIMENTAL_ENABLE` flag is now **on by default** (anyone who
+  already changed it keeps their value), a **"Flutter (Dart)" card** in the project settings shows the real state
+  (`Toolchain Flutter: no instalado (~307.2 MB)` or `instalado (Dart <v>) · <N MB>`) and opens the
+  status/download/delete dialog, and the design screen **drawer** has a new item ("Flutter: estado del toolchain")
+  that opens the same dialog. With the flag off, both entries stay visible and explain how to turn it on, with a button
+  that opens Feature flags — nothing disappears silently. Verified on an arm64 API 34 emulator with screenshots and
+  `uiautomator`, without downloading anything; honest: the "installed" branch was never rendered on screen (there was
+  no toolchain and the 307 MB were not downloaded). **Preview round 4:** the old message
+  `Preview PARCIAL · vistas: 32 · no disponibles: @drawable/ic_tune_white` was read as "32 broken views" when the 32
+  were **drawn** views, so the notice is now a short grouped summary
+  (`Preview PARCIAL: N recursos no encontrados · M vistas no instanciables`) with a **detail dialog** when you tap the
+  bar (groups by cause, count, reason and where it was searched for, 12 per group) and the full detail in logcat; and a
+  **real bug is fixed**: the preview **did not look at the project's libraries at all** (local AARs from
+  `DependencyResolver`/`ManageLocalLibrary` and extracted built-in libraries) — now it does, measured with a local
+  library fixture where `@drawable/ic_tune_white` goes from a red marker (2,076 px) to a drawn icon (6,174 px) and the
+  case turns from PARCIAL into `Preview OK · vistas: 32`; broken fonts no longer count as views and the bar is no
+  longer covered by the navigation bar; regression fine (`colorPrimary`, backgrounds, styles, images/vectors/gif,
+  `MaterialButton`+WebView, real layout). Honest clarification: **`ic_tune_white` exists in no source of this IDE**
+  (the APK ships `ic_tune_24`/`ic_mtrl_tune`, it was an inherited name), so that exact name cannot be drawn — and now
+  it says so clearly instead of flagging the whole view. Release page:
+  [v7.0.10.0](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.0). Full write-ups (in Spanish):
+  [docs/preview-fix.md](docs/preview-fix.md) (round 4) and [docs/flutter-consent.md](docs/flutter-consent.md).
 - **v7.0.9.0 (versionCode 166) — preview round 3, and a Dart download you decide.** The four reported preview
   symptoms turned out to be **four different root causes**, all measured pixel by pixel on an arm64 API 34 emulator.
   (1) **Text colour**: the editor's colour picker stores `"?" + attr` (e.g. `?colorPrimary`) and the preview only

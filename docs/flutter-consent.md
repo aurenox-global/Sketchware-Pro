@@ -2,11 +2,37 @@
 
 Fecha: 2026-09-23 · Versión: **v7.0.9.0** (versionCode 166) · Repo: `Sketchware-Pro-main`
 
+Actualizado en **v7.0.10.0** (versionCode 167): el toolchain ya se encuentra sin buscar el flag (ver «Dónde está ahora»).
+
 Release: <https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.9.0>
 
 Antes, al compilar un proyecto Flutter (modo experimental, detrás del flag `FLUTTER_EXPERIMENTAL_ENABLE`) la app
 podía **descargar sola** el toolchain de Dart (~307 MB) sin avisar ni preguntar. Ahora la descarga **no ocurre nunca
 en silencio**: hay un diálogo que muestra qué falta, cuánto ocupa, dónde se guarda, y la decide el usuario.
+
+## Dónde está ahora / Where it is now
+
+Aunque este documento nació en **v7.0.9.0**, desde **v7.0.10.0** (versionCode 167) el toolchain de Dart ya no está
+escondido detrás de un feature flag ni de un menú del editor de lógica: hay **tres entradas** y, además, el flag
+`FLUTTER_EXPERIMENTAL_ENABLE` viene **activado por defecto** (a quien ya lo haya cambiado se le respeta su valor).
+
+| Dónde | Entrada | Qué hace |
+| --- | --- | --- |
+| Ajustes del proyecto (*Change project settings*) | Tarjeta **"Flutter (Dart)"** con la línea de estado real (`Toolchain Flutter: no instalado (~307.2 MB)` / `instalado (Dart <v>) · <N MB>`) | Al tocarla abre el diálogo de estado/descarga/borrado de arriba |
+| Pantalla de diseño → **drawer** | **"Flutter: estado del toolchain"** | Abre el mismo diálogo |
+| Editor de lógica → menú | **Flutter: estado del toolchain** (ya existía) | El mismo diálogo |
+
+El estado de la tarjeta se calcula en segundo plano (mientras tanto muestra `Toolchain Flutter: comprobando el
+estado…`, sin bloquear la pantalla). Si el flag está **apagado**, las dos entradas nuevas siguen visibles —muestran
+`Toolchain Flutter: función desactivada` y `Toca para ver cómo activarla`— y al pulsarlas aparece un diálogo que
+explica activarlo en *Ajustes › Feature flags › "Flutter Experimental Enable"*, con un botón **Abrir Feature flags**:
+nada desaparece en silencio.
+
+![Tarjeta "Flutter (Dart)" en los ajustes del proyecto: Toolchain Flutter: no instalado (~307.2 MB) y la pista "Toca para ver el estado, descargar el toolchain o liberar espacio"](assets/flutter-where.png)
+
+Honesto: la línea `instalado (Dart <v>) · <N MB>` **no se llegó a ver renderizada** en la prueba (el emulador no
+tenía toolchain y no se descargaron los ~307 MB); se construye con la misma API que ya usaba el diálogo del editor de
+lógica. La evidencia es de un emulador arm64 API 34 con `uiautomator` y capturas.
 
 ## 1. Qué se ve en el diálogo
 
