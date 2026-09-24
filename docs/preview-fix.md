@@ -447,3 +447,162 @@ color/estilos/fondos/imágenes/`MaterialButton`+WebView/layout real siguen en `P
 - `@mipmap/ic_launcher` y recursos generados por el compilador del proyecto: sin cambios (limitación de la ronda 4).
 - El mapa es **por nombre**, no por id (`OldResourceIdMapper` sigue siendo solo del selector de icono de app).
 - Todo probado en **emulador** arm64 API 34; nada en móvil físico ni con Material3 activado.
+
+## 10. Ronda 6 (v7.0.10.2)
+
+Release: <https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.2> · Fecha: 2026-09-24
+Dispositivo: emulador `emulator-5554` (`sdk_gphone64_arm64`, arm64-v8a, API 34) · Build del IDE: **release real**
+(`minifyEnabled = true`, R8). Evidencia: `preview-evidence/r6/` (`release/` antes, `final/` despues, `debug/`,
+`logcat_crudo_antes.txt`, `r6.diff`).
+
+### 10.1 El sintoma
+
+El aviso **`Preview PARCIAL · 10 vistas no instanciables`** era **exactamente reproducible** en el APK release del
+IDE. Las 10 clases eran `CoordinatorLayout`, `AppBarLayout`, `CollapsingToolbarLayout`, `MaterialToolbar`,
+`MaterialButton`, `CircleImageView`, `SwipeRefreshLayout`, `TabLayout`, `BottomNavigationView` y `CardView`, y el
+lienzo las pintaba como 10 cajas rojas identicas (*"⚠ CoordinatorLayout: no disponible en el editor"*, ...) con la
+barra en rojo: marcador rojo = **58.716 px**. En **debug** (`minifyEnabled = false`) las 10 funcionan, por eso el
+fallo **solo aparece en releases**, que es donde lo vio el usuario.
+
+### 10.2 La causa real (medida): R8 borra el constructor, no la clase
+
+**Las 10 clases SI estan en el dex con el nombre intacto** (`mapping.txt` da `X -> X:` para las diez y sus
+descriptores aparecen en `classes*.dex`). Lo que rompia era el **constructor que usa la reflexion**:
+
+1. **9 de las 10** (todo AndroidX/Material) habian perdido el constructor `<init>(android.content.Context)` por obra
+   de **R8**: nadie del bytecode lo llama (solo esta reflexion), asi que lo borra; el de inflado
+   `(Context, AttributeSet)` sobrevive porque lo piden las reglas de las propias librerias. `Class.forName`
+   funciona y `getDeclaredConstructor(Context.class)` lanza `NoSuchMethodException`.
+   **Logcat crudo** (`logcat_crudo_antes.txt`):
+   `java.lang.NoSuchMethodException: androidx.coordinatorlayout.widget.CoordinatorLayout.<init> [class
+   android.content.Context]` — **x9**, una por clase.
+2. **La decima**, `de.hdodenhof.circleimageview.CircleImageView`, si conservaba su constructor de 1 argumento, pero
+   **R8 optimizo la jerarquia** (`ItemCircleImageView extends CircleImageView`) y el constructor de la clase "plana"
+   revienta al ejecutarse: `InvocationTargetException → ClassCastException: CircleImageView cannot be cast to
+   dev.aldi.sayuti.editor.view.item.ItemCircleImageView`. Eso explica por que el usuario listaba **las 10**.
+
+| # | Clase | en el APK | nombre intacto | debug `(Context)` | release ANTES | release DESPUES |
+|---|---|---|---|---|---|---|
+| 1 | `androidx.coordinatorlayout.widget.CoordinatorLayout` | si | si | si | **NO** (solo `(C,AS)`) | si |
+| 2 | `com.google.android.material.appbar.AppBarLayout` | si | si | si | **NO** (solo `(C,AS)`) | si |
+| 3 | `com.google.android.material.appbar.CollapsingToolbarLayout` | si | si | si | **NO** (solo `(C,AS)`) | si |
+| 4 | `com.google.android.material.appbar.MaterialToolbar` | si | si | si | **NO** (solo `(C,AS)`) | si |
+| 5 | `com.google.android.material.button.MaterialButton` | si | si | si | **NO** (solo `(C,AS)` y `(C,AS,int)`) | si |
+| 6 | `de.hdodenhof.circleimageview.CircleImageView` | si | si | si | si… **pero roto** (CCE, ver arriba) | si |
+| 7 | `androidx.swiperefreshlayout.widget.SwipeRefreshLayout` | si | si | si | **NO** (solo `(C,AS)`) | si |
+| 8 | `com.google.android.material.tabs.TabLayout` | si | si | si | **NO** (solo `(C,AS)`) | si |
+| 9 | `com.google.android.material.bottomnavigation.BottomNavigationView` | si | si | si | **NO** (solo `(C,AS)`) | si |
+| 10 | `androidx.cardview.widget.CardView` | si | si | si | **NO** (solo `(C,AS)` y `(C,AS,int)`) | si |
+
+`C = Context`, `AS = AttributeSet`. Constructores extraidos con `dexdump` (build-tools 35.0.0).
+
+### 10.3 Arreglo 1 — la preview deja de depender de un constructor concreto
+
+- **Cadena de constructores (`InvokeUtil`):** prueba en orden
+  `(Context)` → `(Context, AttributeSet = null)` → `(Context, AttributeSet = null, int = 0)`, y devuelve
+  `CreateResult{ view, failureReason }` en vez de un `null` mudo. Motivos que produce:
+  `la clase no esta en el APK del editor (ClassNotFoundException)`,
+  `no hay constructor usable con Context: faltan ...`,
+  `el constructor <init>(...) fallo: IllegalArgumentException: ...`. Cuando cae al constructor de inflado lo deja
+  trazado en el log:
+  `I SketchwarePro: InvokeUtil: <clase> creada con <init>(Context, AttributeSet) (el de 1 argumento no esta en el APK)`.
+  Probado por separado con `com.airbnb.lottie.LottieAnimationView` (fuera de los paquetes con `-keep`, solo
+  `(Context, AttributeSet)` en el dex): **la cadena funciona sola** (`caseR6_fallback.xml`,
+  `final/after_R6_fallback.png`).
+- **Reglas `-keepclassmembers` acotadas (`app/proguard-rules.pro`):** el **conjunto minimo** que devuelve el
+  constructor a las 10 clases del aviso —
+  `androidx.**`, `com.google.android.material.**` y `de.hdodenhof.**`, siempre `extends android.view.View`, solo
+  `public <init>(android.content.Context)`. **No** impide el shrinking ni la ofuscacion de nada mas (`-keepclassmembers`,
+  no `-keep` de clases completas).
+- **Coste medido:** APK release arm64-v8a **115.922.740 B → 115.972.420 B = +49.680 B (+49,7 KB, +0,04 %)**.
+
+| | ANTES (release sin arreglar) | DESPUES (release con el arreglo) |
+|---|---|---|
+| Clases no instanciables | **10 / 10** | **0 / 10** |
+| Barra de estado | `⚠ Preview PARCIAL: 10 vistas no instanciables` (roja) | `ℹ Preview PARCIAL: 1 atributo no aplicado` (ambar) |
+| Cajas rojas "no disponible en el editor" | 10 (58.716 px rojos) | 0 |
+| Widgets reales dibujados | 0 | **10** (textos hijos rojos = 8.331 px) |
+| `(Context)` en el dex release | 1 / 10 (y el 1 roto) | **10 / 10** |
+
+![Antes: las 10 clases salen como cajas rojas "no disponible en el editor" y la barra en rojo](assets/preview-r6-before.png)
+![Despues: los 10 widgets reales dibujados con sus hijos (variante compacta) y la barra en ambar](assets/preview-r6-after.png)
+
+En la captura *despues* (variante compacta `final/after_R6_ten_compact.png`) se ven los 10 widgets de verdad:
+`CoordinatorLayout`/`AppBarLayout`/`CollapsingToolbarLayout`/`MaterialToolbar` con sus `HIJO-*` dentro,
+`MaterialButton` azul, `CircleImageView`, `SwipeRefreshLayout`, `TabLayout`, `BottomNavigationView` y `CardView` con
+`HIJO-CARD`; el log cierra con `Preview OK · vistas: 10`.
+
+### 10.4 Arreglo 2 — placeholders utiles (aproximado, con hijos)
+
+`createMissingViewPlaceholder()` (un `TextView` rojo que se comia a los hijos) se sustituye por
+`createApproximateView(className, bean)`:
+
+- Es un **`FrameLayout`** ⇒ sigue siendo un contenedor: los **hijos del XML se cuelgan dentro y se dibujan** (antes,
+  al no ser `ViewGroup`, se perdian).
+- Conserva **fondo, padding y tamano** declarados (mismo `applyBeanAppearance`).
+- Marca **discreta de "aproximado"**: **borde ambar de 1 dp** (foreground, no tapa a los hijos) + **pastilla
+  translucida `≈ NombreClase`** arriba-derecha (9 sp, sin simbolos raros). **Nada de rojo de error**: la app
+  compilada si tendra ese widget.
+- El **motivo** va al dialogo y al log.
+
+Fixture `caseR6_absent.xml` (`com.example.noexiste.OtroWidget`, fondo `#FFDDEE`, padding 12 dp y dos niveles de
+hijos dentro):
+
+| Medicion (captura, PIL) | ANTES | DESPUES |
+|---|---|---|
+| Fondo del contenedor `#FFDDEE` | **AUSENTE** | **169.875 px** |
+| Hijo azul `HIJO-NIVEL-2` | **AUSENTE (0 px)** | **1.418 px** |
+| Hijo verde `HIJO-NIVEL-2-BIS` | **AUSENTE (0 px)** | **1.915 px** |
+| Marcador rojo de error | 8.093 px | 0 |
+| Barra | `⚠ Preview PARCIAL: 2 vistas no instanciables` | `ℹ Preview PARCIAL: 1 vista aproximada · 1 atributo no aplicado` |
+
+El dialogo de detalle (texto real) separa **"Vistas aproximadas (clase no disponible en el editor; se dibujan sus
+hijos)"** de **"Atributos no aplicados (la vista SI se ha dibujado)"**, con el motivo de cada una, y explica que el
+resto del diseno si se ha dibujado.
+
+### 10.5 Extra encontrado probando: un atributo no admitido ya no aborta todo
+
+`CircleImageView` solo admite `CENTER_CROP`/`CENTER_INSIDE`; el bean usa `scaleType = CENTER` por defecto y
+`setScaleType` lanzaba `IllegalArgumentException` que **escapaba de `tryInflateRealLayout`**: la preview nativa se
+abortaba entera (medido en debug: `Preview FAIL: ScaleType FIT_CENTER not supported`). Ahora `applyScaleType()` lo
+captura y se anota en la barra/dialogo como **"atributo no aplicado (la vista SI se ha dibujado)"**, en ambar. El
+`applyBeanAppearance` de cada vista va tambien en `try/catch` por el mismo motivo: un atributo raro en un widget no
+puede ocultar el resto del diseno.
+
+### 10.6 Regresion (rondas 1-5)
+
+Todo con el **release arreglado** (mas exigente que debug), 8 casos:
+
+| Caso | Resultado | Medicion (px, PIL) |
+|---|---|---|
+| `caseB1_color_attr` (colores/`?attr`) | `Preview OK · vistas: 4` | `(68,94,145)`=**4.665** y `(255,0,0)`=**6.025** → identico a r4 |
+| `caseB2_estilo` (cursiva/negrita/mono) | `Preview OK · vistas: 5` | textos correctos |
+| `caseB3_fondos` (`?colorPrimary`, color de proyecto, shape) | `Preview OK · vistas: 4` | **356.400** px + `(255,152,0)`=325.572 → identico a r4 |
+| `caseB6b_img_variantes` (png/webp/jpeg/dpi/vector/gif) | `Preview OK · vistas: 10` | 10 vistas dibujadas |
+| `caseC_material_regresion` (**HTML/WebView** + MaterialButton) | `Preview OK · vistas: 5 · WebViews: 1` | HTML `(0,187,85)`=**698.570** → identico a r4 |
+| `caseE_extra` | `Preview OK · vistas: 6` | — |
+| `caseR4_variants` (drawables) | `Preview PARCIAL: 2 recursos no encontrados` | mismo recuento que r4 |
+| `caseR4_mixed` (color+tema+drawable+fuente+1 vista no instanciable) | `Preview PARCIAL: 4 recursos no encontrados · 1 vista aproximada` | mismo recuento; cambia la palabra "no instanciable" → "aproximada" |
+
+Tambien comprobado en **debug** con el arreglo: `debug_R6_ten` → `Preview PARCIAL: 1 atributo no aplicado`
+(0 no instanciables) — **release y debug se comportan igual** (antes divergian).
+
+### 10.7 Pendientes honestos de la ronda 6
+
+- **`CircleImageView` + `android:scaleType` (sin arreglar, es del generador):** el generador del IDE escribe
+  `android:scaleType="center"` **por defecto** para cualquier `ImageBean` (`a.a.a.Ox:569-571`), y `CircleImageView`
+  **solo** acepta `CENTER_CROP`/`CENTER_INSIDE`. En la preview se captura y se explica, pero **es probable que ese
+  layout tambien falle al inflarse en la app compilada** (es un `IllegalArgumentException` en el constructor del
+  widget). No se ha tocado: es del generador, no de la vista previa.
+- **`MaterialButton` con `wrap_content`:** se dibuja, pero el texto sale algo recortado por los *insets* por defecto
+  del widget (material 1.14.0-alpha05); solo se ve ahora que la vista se crea de verdad.
+- **`"vistas dibujadas: N"`** cuenta vistas creadas, incluidas las que quedan huerfanas si el padre no es un
+  contenedor (p. ej. el hijo de un `LottieAnimationView`, que no admite hijos). Es un matiz de conteo
+  **preexistente**.
+- **`ViewBeanParser`** sondea el tipo creando la vista con el **contexto de aplicacion** (tema no AppCompat): 4 de
+  las 10 lanzan ahi `The style on this component requires your app theme to be Theme.AppCompat`. **No afecta a la
+  preview** (que crea con el contexto de la Activity) y el parser conserva el tipo por defecto; queda documentado
+  porque aparece en el log.
+- Siguen vigentes los pendientes de las rondas 1-5: `?atributo` se resuelve con el tema del IDE,
+  `<selector>`/`<ripple>`/`<layer-list>` se aproximan, Material3 del proyecto sin probar, y todo medido en emulador
+  (no en movil fisico).

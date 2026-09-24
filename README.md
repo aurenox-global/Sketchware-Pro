@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.10.1-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.10.2-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -160,6 +160,30 @@ This repository is a personal fork. Every improvement is added here as it lands,
 - **Cost:** the two packed executables add **10.18 MB** to the `arm64-v8a` APK. Other ABIs have no AOT backend and
   say so instead of failing silently. The default mode is still **debug/JIT**, this stays experimental and there is
   still no hot reload.
+- **v7.0.10.2 (versionCode 169) — the ten views the editor could not instantiate work again, and a view it still
+  cannot build is no longer a mute red hole.** The preview was reporting `Preview PARCIAL: 10 vistas no
+  instanciables` for `CoordinatorLayout`, `AppBarLayout`, `CollapsingToolbarLayout`, `MaterialToolbar`,
+  `MaterialButton`, `CircleImageView`, `SwipeRefreshLayout`, `TabLayout`, `BottomNavigationView` and `CardView` —
+  and **the classes were not the problem**: all ten are in the release dex with their name intact. What R8 had
+  dropped was the constructor the preview asks for **through reflection**: `<init>(Context)` was gone in **9 of the
+  10** (only the inflation `<init>(Context, AttributeSet)` survived, because the libraries themselves ask for it),
+  and logcat said it plainly — `NoSuchMethodException … <init> [class android.content.Context]`. In the tenth,
+  `CircleImageView`, hierarchy optimisation made the one-argument constructor throw
+  `ClassCastException: CircleImageView cannot be cast to …ItemCircleImageView`. **Fix 1:** `InvokeUtil` now tries
+  `(Context)` → `(Context, AttributeSet)` → `(Context, AttributeSet, int)` and reports the exact reason each failure
+  gives, and three narrow `-keepclassmembers` rules in `app/proguard-rules.pro` give the one-argument constructor
+  back: measured in release, **10/10 instantiable** (it was 0/10) for **+49.7 KB (+0.04 %)** of APK. **Fix 2 (useful
+  degradation):** when a class really is not in the editor's APK there is no mute red gap any more — a generic
+  container keeps the declared background, padding and size and **draws its children** (measured: children 0 px
+  before → **1,418 + 1,915 px** after), with a thin amber border and an `≈ Class` pill instead of alarming red, and
+  the exact reason in the detail dialog. Also fixed on the way: a single unsupported attribute (`CircleImageView`
+  with `scaleType` center, which the generator writes by default) used to abort the whole native preview, and is now
+  caught and noted in amber. Regression rounds 1-5 fine **in release** (HTML/WebView unchanged, colours
+  4,665/6,025 px, backgrounds 356,400 px, images 10/10), and debug and release now behave the same.
+  **Honest pending:** the generator writes `android:scaleType="center"` for every image by default and
+  `CircleImageView` only accepts `CENTER_CROP`/`CENTER_INSIDE`, so that layout may still fail inside the app you
+  compile. Release page: [v7.0.10.2](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.2). Full
+  write-up (in Spanish): [docs/preview-fix.md](docs/preview-fix.md) (round 6).
 - **v7.0.10.1 (versionCode 168) — the toolchain no longer says "not installed", and the inherited icon names are told
   apart.** The Flutter toolchain bug was ours, not yours: the app checked the installation by **running**
   `<filesDir>/flutter-toolchain/dart/bin/dart --version`, and SELinux forbids executing an ELF that lives in the app's

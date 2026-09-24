@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.10.1-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.10.2-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -160,6 +160,31 @@ Este repositorio es un fork personal. Cada mejora se añade aquí según entra, 
 - **Coste:** los dos ejecutables empaquetados suman **10,18 MB** al APK `arm64-v8a`. Las otras ABIs no tienen
   backend AOT y lo dicen, en vez de fallar en silencio. El modo por defecto sigue siendo **debug/JIT**, esto
   continua siendo experimental y todavia no hay hot reload.
+- **v7.0.10.2 (versionCode 169) — las diez vistas que el editor no podia instanciar vuelven a funcionar, y una vista
+  que aun no se pueda crear ya no es un hueco rojo mudo.** La vista previa avisaba `Preview PARCIAL: 10 vistas no
+  instanciables` para `CoordinatorLayout`, `AppBarLayout`, `CollapsingToolbarLayout`, `MaterialToolbar`,
+  `MaterialButton`, `CircleImageView`, `SwipeRefreshLayout`, `TabLayout`, `BottomNavigationView` y `CardView` — y
+  **las clases no eran el problema**: las diez estan en el dex de release con el nombre intacto. Lo que R8 habia
+  borrado era el constructor que la vista previa pide **por reflexion**: `<init>(Context)` habia desaparecido en
+  **9 de las 10** (solo sobrevivia el de inflado `<init>(Context, AttributeSet)`, porque lo piden las propias
+  librerias) y el logcat lo decia tal cual — `NoSuchMethodException … <init> [class android.content.Context]`. En la
+  decima, `CircleImageView`, la optimizacion de jerarquia hacia que el constructor de un argumento lanzara
+  `ClassCastException: CircleImageView cannot be cast to …ItemCircleImageView`. **Arreglo 1:** `InvokeUtil` prueba
+  ahora `(Context)` → `(Context, AttributeSet)` → `(Context, AttributeSet, int)` y explica el motivo exacto de cada
+  fallo, y tres reglas `-keepclassmembers` acotadas en `app/proguard-rules.pro` devuelven el constructor de un
+  argumento: medido en release, **10/10 instanciables** (antes 0/10) por **+49,7 KB (+0,04 %)** de APK. **Arreglo 2
+  (degradacion util):** cuando una clase de verdad no esta en el APK del editor ya no hay hueco rojo mudo — un
+  contenedor generico conserva el fondo, el padding y el tamano declarados y **dibuja sus hijos** (medido: hijos 0 px
+  antes → **1.418 + 1.915 px** despues), con un borde ambar fino y una pastilla `≈ Clase` en vez de rojo de alarma, y
+  el motivo exacto en el dialogo de detalle. Arreglado tambien por el camino: un solo atributo no admitido
+  (`CircleImageView` con `scaleType` center, que el generador escribe por defecto) abortaba toda la vista previa
+  nativa; ahora se captura y se anota en ambar. Regresion de las rondas 1-5 bien **en release** (HTML/WebView igual,
+  colores 4.665/6.025 px, fondos 356.400 px, imagenes 10/10), y debug y release ya se comportan igual.
+  **Pendiente honesto:** el generador escribe `android:scaleType="center"` por defecto para cualquier imagen y
+  `CircleImageView` solo admite `CENTER_CROP`/`CENTER_INSIDE`, asi que ese layout puede seguir fallando en la app que
+  compile el usuario. Pagina de la release:
+  [v7.0.10.2](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.2). Todos los detalles:
+  [docs/preview-fix.md](docs/preview-fix.md) (ronda 6).
 - **v7.0.10.1 (versionCode 168) — el toolchain ya no dice "no instalado", y los nombres heredados de iconos se
   distinguen.** El fallo del toolchain de Flutter era nuestro, no tuyo: la app comprobaba la instalacion **ejecutando**
   `<filesDir>/flutter-toolchain/dart/bin/dart --version`, y SELinux prohibe ejecutar un ELF que vive en el directorio de

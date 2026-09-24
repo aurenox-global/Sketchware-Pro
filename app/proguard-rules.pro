@@ -89,6 +89,40 @@
 -keep class com.android.apksig.** { *; }
 -keep class com.android.apksigner.** { *; }
 
+# --- Hotfix v7.0.10.1: cuarto fallo R8 (vista previa de disenos "no instanciable") ---
+# La vista previa crea las vistas del XML POR REFLEXION
+# (pro.sketchware.utility.InvokeUtil -> Class.forName + getDeclaredConstructor(Context.class)).
+# R8 no ve esa llamada, y los constructores de un argumento de las vistas de AndroidX/Material
+# (el recurso "new X(context)" que solo usa la reflexion) tampoco los usa NADIE del bytecode: los
+# borra. Los de inflado (Context, AttributeSet) SI sobreviven, porque son los que piden las reglas
+# de las propias librerias; por eso el nombre de la clase seguia intacto y el fallo era un
+# NoSuchMethodException, no un ClassNotFoundException.
+#
+# MEDIDO en el APK release (arm64-v8a, v7.0.10.1, minifyEnabled=true): de las 10 clases del aviso
+# del usuario, 9 habian perdido <init>(Context) y solo de.hdodenhof...CircleImageView lo conservaba
+# (el IDE lo usa en codigo, no solo por reflexion). En debug (minifyEnabled=false) todas lo tienen.
+# Consecuencia: "Preview PARCIAL: 10 vistas no instanciables" con el layout dibujado a medias.
+#
+# Dos arreglos complementarios (cualquiera de los dos basta; se ponen los dos a proposito):
+#  1. InvokeUtil tambien prueba (Context, AttributeSet) con AttributeSet null y
+#     (Context, AttributeSet, int): asi la preview funciona aunque R8 borre el constructor de 1
+#     argumento de una clase que nadie haya previsto aqui.
+#  2. Estas reglas conservan el constructor de 1 argumento de las vistas que YA estan en el APK, que
+#     es el contrato historico de la reflexion del IDE.
+# Acotadas a "extends android.view.View" y a los paquetes de las vistas afectadas: NO es una
+# desactivacion global de R8 ni un -keep de clases completas (no impide el shrinking de las clases
+# que no se usan). Si en el futuro aparece otra clase de libreria con el mismo sintoma, hay que
+# anadir su paquete aqui SOLO si procede (el arreglo 1 ya la cubriria igualmente).
+-keepclassmembers class androidx.** extends android.view.View {
+    public <init>(android.content.Context);
+}
+-keepclassmembers class com.google.android.material.** extends android.view.View {
+    public <init>(android.content.Context);
+}
+-keepclassmembers class de.hdodenhof.** extends android.view.View {
+    public <init>(android.content.Context);
+}
+
 -dontwarn com.google.errorprone.**
 -dontwarn javax.xml.stream.**
 -dontwarn org.codehaus.stax2.**

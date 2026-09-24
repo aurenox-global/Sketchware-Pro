@@ -78,7 +78,30 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
      */
     private final java.util.List<String> renderWarnings = new ArrayList<>();
 
+    /**
+     * Motivo por clase no instanciable (clase\u2192explicacion): "no esta en el APK del editor",
+     * "sin constructor usable..." etc. Lo pone {@link pro.sketchware.utility.InvokeUtil}. Sirve para
+     * que el aviso diga POR QUE, no solo QUE.
+     */
+    private final Map<String, String> renderWarningReasons = new HashMap<>();
+
+    /**
+     * Vistas que SI se han dibujado pero con algun atributo no aplicable (p.ej. CircleImageView solo
+     * admite CENTER_CROP/CENTER_INSIDE y el XML pide FIT_CENTER). No son vistas perdidas: se anotan
+     * para no ensenar una preview silenciosamente distinta a la del editor.
+     */
+    private final java.util.List<String> appearanceWarnings = new ArrayList<>();
+
     private static final String TAG = "LayoutPreview";
+
+    /** Nombre corto de una clase (lo ultimo tras el punto). */
+    private static String shortClassName(String className) {
+        if (className == null) {
+            return "";
+        }
+        int dot = className.lastIndexOf('.');
+        return dot >= 0 ? className.substring(dot + 1) : className;
+    }
 
     private void debug(String message) {
         binding.debugStatus.setVisibility(android.view.View.VISIBLE);
@@ -286,6 +309,8 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
         // por el renderizador del editor de diseno, que si no encuentra el nombre del layout en los datos
         // del proyecto pinta una raiz vacia: de ahi las vistas previas en blanco.
         renderWarnings.clear();
+        renderWarningReasons.clear();
+        appearanceWarnings.clear();
         resourceResolver.clearWarnings();
         if (!tryInflateRealLayout(layoutName, xml) && !renderWithViewPane(layoutName, xml)) {
             // Nada de pantallas mudas: motivo visible en la barra de estado y toast.
@@ -311,6 +336,8 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
             final Map<String, View> viewsById = new HashMap<>();
             viewIdNames.clear();
             renderWarnings.clear();
+            renderWarningReasons.clear();
+            appearanceWarnings.clear();
             for (ViewBean bean : beans) {
                 View view = createRealView(bean);
                 if (view != null) {
@@ -363,7 +390,8 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
                 sample += " [" + bean.id + "/" + bean.convert + "/" + (beanText == null ? "-" : beanText) + "]";
                 shown++;
             }
-            if (renderWarnings.isEmpty() && resourceResolver.getWarnings().isEmpty()
+            if (renderWarnings.isEmpty() && appearanceWarnings.isEmpty()
+                    && resourceResolver.getWarnings().isEmpty()
                     && resourceResolver.getLegacyResolutions().isEmpty()) {
                 hidePreviewWarning();
                 debug("Preview OK · vistas: " + viewsById.size() + " · WebViews: " + webViewCount + sample);
@@ -389,14 +417,15 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
      * que el usuario leia como "32 vistas no disponibles" (cuando "32" eran las vistas SI dibujadas)
      * y el resto era un muro de nombres de recursos, sin decir que tipo de problema era cada uno.
      *
-     * Ahora: la barra dice CUANTOS recursos no se encontraron y CUANTAS vistas no se pudieron
-     * instanciar (dos categorias distintas), y el detalle agrupado por causa sale en un dialogo
-     * (y completo en el log, tag LayoutPreview).
+     * Ahora: la barra dice CUANTOS recursos no se encontraron, CUANTAS vistas se han dibujado de
+     * forma aproximada y CUANTOS atributos no se han podido aplicar (categorias distintas), y el
+     * detalle agrupado por causa sale en un dialogo (y completo en el log, tag LayoutPreview).
      */
     private void showPreviewWarningSummary(int views, int webViews) {
         Map<ProjectResourceResolver.Kind, java.util.Set<String>> byKind = resourceResolver.getWarningsByKind();
         int resourceCount = resourceResolver.getWarnings().size();
         int viewCount = renderWarnings.size();
+        int appearanceCount = appearanceWarnings.size();
         List<ProjectResourceResolver.LegacyResolution> legacy = resourceResolver.getLegacyResolutions();
 
         List<String> parts = new ArrayList<>();
@@ -404,18 +433,27 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
             parts.add(resourceCount + (resourceCount == 1 ? " recurso no encontrado" : " recursos no encontrados"));
         }
         if (viewCount > 0) {
-            parts.add(viewCount + (viewCount == 1 ? " vista no instanciable" : " vistas no instanciables"));
+            // "aproximada", no "no instanciable": ahora el lienzo SI conserva su hueco, su aspecto y
+            // sus hijos (con marca discreta), asi que decir "no instanciable" y pintar un hueco mudo
+            // era pesimista y, ademas, enganoso (parecia que se perdia el contenido).
+            parts.add(viewCount + (viewCount == 1 ? " vista aproximada" : " vistas aproximadas"));
+        }
+        if (appearanceCount > 0) {
+            parts.add(appearanceCount + (appearanceCount == 1
+                    ? " atributo no aplicado" : " atributos no aplicados"));
         }
         if (!legacy.isEmpty()) {
             parts.add(legacy.size() + (legacy.size() == 1 ? " nombre heredado resuelto" : " nombres heredados resueltos"));
         }
-        // "PARCIAL" y rojo SOLO cuando algo ha fallado de verdad. Un nombre heredado que se ha
-        // podido mapear se explica, pero en tono informativo (no es un fallo).
-        boolean partial = resourceCount > 0 || viewCount > 0;
+        // "PARCIAL" y rojo SOLO cuando algo ha fallado de verdad (recurso que no existe en ninguna
+        // fuente). Una vista aproximada o un atributo no aplicable no son un fallo del diseno: se
+        // avisan en ambar. Un nombre heredado mapeado es informativo.
+        boolean partial = resourceCount > 0 || viewCount > 0 || appearanceCount > 0;
+        boolean error = resourceCount > 0;
         String summary = (partial ? "Preview PARCIAL: " : "Preview: ") + android.text.TextUtils.join(" · ", parts);
         binding.debugStatus.setVisibility(android.view.View.VISIBLE);
-        binding.debugStatus.setBackgroundColor(partial ? 0xB3B00020 : 0xB3B26A00);
-        binding.debugStatus.setText((partial ? "⚠ " : "ℹ ") + summary);
+        binding.debugStatus.setBackgroundColor(error ? 0xB3B00020 : 0xB3B26A00);
+        binding.debugStatus.setText((error ? "⚠ " : "ℹ ") + summary);
         binding.debugStatus.setOnClickListener(v -> showPreviewWarningDetail());
         binding.debugStatus.setClickable(true);
         if (partial) {
@@ -436,7 +474,12 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
                     + " -> @drawable/" + resolution.resolved + " (" + resolution.rule + ")");
         }
         for (String className : renderWarnings) {
-            android.util.Log.w(TAG, "warning: [vista no instanciable] " + className);
+            String reason = renderWarningReasons.get(className);
+            android.util.Log.w(TAG, "warning: [vista aproximada] " + className
+                    + (reason == null || reason.isEmpty() ? "" : " · " + reason));
+        }
+        for (String warning : appearanceWarnings) {
+            android.util.Log.w(TAG, "warning: [atributo no aplicado] " + warning);
         }
     }
 
@@ -456,7 +499,17 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
         Map<String, List<String>> groups = new LinkedHashMap<>();
 
         if (!renderWarnings.isEmpty()) {
-            groups.put("Vistas no instanciables (clase no disponible en el editor)", new ArrayList<>(renderWarnings));
+            // Con el motivo de cada clase: "clase no encontrada", "sin constructor usable..." etc. Es
+            // la diferencia entre entender el aviso y tener que adivinar.
+            List<String> lines = new ArrayList<>();
+            for (String className : renderWarnings) {
+                String reason = renderWarningReasons.get(className);
+                lines.add(reason == null || reason.isEmpty() ? className : className + "  ·  " + reason);
+            }
+            groups.put("Vistas aproximadas (clase no disponible en el editor; se dibujan sus hijos)", lines);
+        }
+        if (!appearanceWarnings.isEmpty()) {
+            groups.put("Atributos no aplicados (la vista SI se ha dibujado)", new ArrayList<>(appearanceWarnings));
         }
         for (Map.Entry<ProjectResourceResolver.Kind, java.util.Set<String>> entry : byKind.entrySet()) {
             groups.put("Recursos no encontrados · " + entry.getKey().label, new ArrayList<>(entry.getValue()));
@@ -493,9 +546,17 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
         if (!searched.isEmpty()) {
             text.append("\nDrawables buscados en: ").append(searched);
         }
-        boolean partial = !renderWarnings.isEmpty() || !resourceResolver.getWarnings().isEmpty();
+        boolean partial = !renderWarnings.isEmpty() || !appearanceWarnings.isEmpty()
+                || !resourceResolver.getWarnings().isEmpty();
         if (partial) {
-            text.append("\n\nEl resto del diseno SI se ha dibujado; solo falta lo listado arriba,").append(" que se marca en rojo en el lienzo.");
+            text.append("\n\nEl resto del diseno SI se ha dibujado; solo falta lo listado arriba.");
+            if (!renderWarnings.isEmpty()) {
+                text.append(" Las vistas aproximadas conservan fondo, padding y tamano, y sus hijos se")
+                        .append(" dibujan dentro (se marcan con un borde ambar y una pastilla en el lienzo).");
+            }
+            if (!resourceResolver.getWarnings().isEmpty()) {
+                text.append(" Los recursos no resueltos se marcan en rojo en el lienzo.");
+            }
         }
         if (!legacy.isEmpty()) {
             text.append("\n\nLos nombres heredados de arriba SI se han dibujado, usando el icono actual").append(" del editor (la version vieja de Sketchware los llamaba de otra forma).");
@@ -536,19 +597,44 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
         if (className.isEmpty()) {
             className = android.widget.LinearLayout.class.getName();
         }
-        View view = pro.sketchware.utility.InvokeUtil.createView(this, className);
+        pro.sketchware.utility.InvokeUtil.CreateResult result =
+                pro.sketchware.utility.InvokeUtil.createViewDetailed(this, className);
+        View view = result.view;
         if (view == null) {
-            // La clase no se puede instanciar en el editor (normalmente una libreria/widat que el
-            // IDE no incluye, o una vista propia del proyecto). Antes se saltaba en silencio, asi que
-            // el layout aparecia "vacio" sin explicacion: ahora pintamos un marcador visible y lo
-            // anotamos para avisar en la barra de estado.
+            // La clase no se puede instanciar en el editor (libreria/widat que el IDE no incluye, una
+            // vista propia del proyecto, o -caso de la release minificada- un constructor que R8
+            // elimino por usarse solo desde esta reflexion). Antes se saltaba en silencio y el layout
+            // parecia "vacio"; luego se pinto un hueco rojo mudo que ADEMAS se comia a los hijos.
+            // Ahora: contenedor generico que conserva fondo/padding/tamano y DIBUJA LOS HIJOS, con una
+            // marca discreta de "aproximado" y el motivo en el detalle.
+            String reason = result.failureReason == null || result.failureReason.isEmpty()
+                    ? "clase no disponible en el editor" : result.failureReason;
             renderWarnings.add(className);
-            android.util.Log.w(TAG, "warning: no se pudo crear la vista " + className + " (id=" + bean.id + ")");
-            return createMissingViewPlaceholder(className);
+            renderWarningReasons.put(className, reason);
+            android.util.Log.w(TAG, "warning: no se pudo crear la vista " + className
+                    + " (id=" + bean.id + ") · " + reason);
+            return createApproximateView(className, bean);
         }
         view.setId(android.view.View.generateViewId());
-        applyBeanAppearance(view, bean);
+        try {
+            applyBeanAppearance(view, bean);
+        } catch (Throwable throwable) {
+            // Una vista que SI se ha creado pero con un atributo no aplicable no debe tumbar el resto
+            // del diseno (los hijos de un contenedor se quedarian sin dibujar). Se anota y se sigue.
+            appearanceWarnings.add(shortClassName(className) + ": " + conciseMessage(throwable));
+            android.util.Log.w(TAG, "warning: atributos no aplicados en " + className
+                    + " (id=" + bean.id + ")", throwable);
+        }
         return view;
+    }
+
+    /** Motivo corto y legible de un fallo (para el dialogo): sin paquetes ni stacktrace. */
+    private static String conciseMessage(Throwable throwable) {
+        Throwable cause = throwable.getCause() != null ? throwable.getCause() : throwable;
+        String message = cause.getMessage();
+        return message == null || message.isEmpty()
+                ? cause.getClass().getSimpleName()
+                : cause.getClass().getSimpleName() + ": " + message;
     }
 
     /**
@@ -565,23 +651,51 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
     }
 
     /**
-     * Marcador visible que sustituye a una vista que el editor no sabe inflar. Mantiene el hueco en
-     * la jerarquia (para no romper el layout del resto) y explica que falta.
+     * Contenedor "aproximado" que sustituye a una vista que el editor no sabe inflar.
+     *
+     * <p>Requisitos que cumple (los tres importan):
+     * <ul>
+     *   <li>Sigue siendo un {@link android.view.ViewGroup}, asi que los HIJOS del XML se cuelgan
+     *       dentro y se dibujan: un MaterialToolbar no dibujable ya no oculta el TextView que lleva
+     *       dentro (antes el marcador era un TextView, no un contenedor, asi que los hijos se perdian
+     *       o acababan colgados de la raiz, deformando el diseno).</li>
+     *   <li>Conserva fondo, padding y tamano declarados, aplicando el mismo aspecto del bean.</li>
+     *   <li>Se marca como APROXIMADO con un borde ambar fino y una pastilla con el nombre de la
+     *       clase: nada de rojo de error (la app compilada SI tendra ese widget) y nada de huecos
+     *       mudos. El motivo exacto va al detalle (y al log).</li>
+     * </ul>
      */
-    private View createMissingViewPlaceholder(String className) {
-        android.widget.TextView placeholder = new android.widget.TextView(this);
-        String shortName = className.contains(".")
-                ? className.substring(className.lastIndexOf('.') + 1)
-                : className;
-        placeholder.setText("⚠ " + shortName + ": no disponible en el editor");
-        placeholder.setTextSize(11f);
-        placeholder.setTextColor(0xFFB00020);
-        placeholder.setPadding(dp(6), dp(6), dp(6), dp(6));
+    private View createApproximateView(String className, ViewBean bean) {
+        android.widget.FrameLayout container = new android.widget.FrameLayout(this);
+        try {
+            applyBeanAppearance(container, bean);
+        } catch (Throwable throwable) {
+            appearanceWarnings.add(shortClassName(className) + ": " + conciseMessage(throwable));
+        }
+        // Borde ambar discreto (foreground: se pinta encima del fondo pero no tapa a los hijos).
         android.graphics.drawable.GradientDrawable border = new android.graphics.drawable.GradientDrawable();
-        border.setColor(0x14B00020);
-        border.setStroke(dp(1), 0xFFB00020);
-        placeholder.setBackground(border);
-        return placeholder;
+        border.setColor(0x00000000);
+        border.setStroke(dp(1), 0x66FF9800);
+        container.setForeground(border);
+        container.setForegroundGravity(android.view.Gravity.FILL);
+
+        android.widget.TextView badge = new android.widget.TextView(this);
+        badge.setText("≈ " + shortClassName(className));
+        badge.setTextSize(9f);
+        badge.setTextColor(0xCC8A5000);
+        badge.setPadding(dp(4), dp(1), dp(4), dp(1));
+        android.graphics.drawable.GradientDrawable chip = new android.graphics.drawable.GradientDrawable();
+        chip.setColor(0x1FFFB300);
+        chip.setStroke(dp(1), 0x66FF9800);
+        chip.setCornerRadius(dp(3));
+        badge.setBackground(chip);
+        badge.setClickable(false);
+        badge.setFocusable(false);
+        android.widget.FrameLayout.LayoutParams badgeParams = new android.widget.FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        badgeParams.gravity = android.view.Gravity.TOP | android.view.Gravity.END;
+        container.addView(badge, badgeParams);
+        return container;
     }
 
     /**
@@ -656,12 +770,12 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
                     if (drawable != null) {
                         imageView.setImageDrawable(drawable);
                     } else {
-                        // Hueco mudo no: marcador visible con el motivo (ver createMissingViewPlaceholder).
+                        // Hueco mudo no: marcador visible con el motivo (ver createApproximateView).
                         imageView.setImageDrawable(createMissingDrawable(image.resName));
                     }
                 }
                 if (image.scaleType != null && !image.scaleType.isEmpty()) {
-                    imageView.setScaleType(parseScaleType(image.scaleType));
+                    applyScaleType(imageView, image.scaleType);
                 }
                 if (image.rotate != 0) {
                     imageView.setRotation(image.rotate);
@@ -941,7 +1055,7 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
                     }
                     case "scaleType": {
                         if (view instanceof android.widget.ImageView imageView) {
-                            imageView.setScaleType(parseScaleType(pair.second));
+                            applyScaleType(imageView, pair.second);
                         }
                         break;
                     }
@@ -990,6 +1104,27 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
         if (value.contains("end")) gravity |= android.view.Gravity.END;
         if (value.contains("start")) gravity |= android.view.Gravity.START;
         return gravity;
+    }
+
+    /**
+     * Aplica scaleType sin que un widget que no lo admita tumbe la vista previa.
+     *
+     * <p>{@code de.hdodenhof.circleimageview.CircleImageView} solo acepta CENTER_CROP/CENTER_INSIDE y
+     * lanza {@code IllegalArgumentException: ScaleType FIT_CENTER not supported} con cualquier otro
+     * (el bean usa FIT_CENTER por defecto). Antes esa excepcion escapaba de tryInflateRealLayout y
+     * abortaba TODA la preview nativa: una sola vista con un atributo no admitido ocultaba el resto
+     * del diseno (hijos incluidos). Ahora se anota como aviso y se sigue dibujando.
+     */
+    private void applyScaleType(android.widget.ImageView imageView, String value) {
+        android.widget.ImageView.ScaleType scaleType = parseScaleType(value);
+        try {
+            imageView.setScaleType(scaleType);
+        } catch (Throwable throwable) {
+            appearanceWarnings.add(shortClassName(imageView.getClass().getName())
+                    + ": scaleType " + value + " no admitido (" + conciseMessage(throwable) + ")");
+            android.util.Log.w(TAG, "warning: scaleType " + value + " no admitido por "
+                    + imageView.getClass().getName(), throwable);
+        }
     }
 
     private android.widget.ImageView.ScaleType parseScaleType(String value) {

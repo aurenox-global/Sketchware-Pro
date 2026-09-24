@@ -37,14 +37,14 @@
 
   <!-- ============================================================ hero -->
   <section class="hero" style="border-top:none">
-    <div class="tag">● v7.0.10.1 · versionCode 168 · source-available</div>
+    <div class="tag">● v7.0.10.2 · versionCode 169 · source-available</div>
     <h1>Crea apps Android reales<br><span class="accent">desde tu móvil.</span></h1>
     <p class="lead">
       Sketchware Pro es un IDE de Android que funciona sobre Android: arrastra bloques, escribe Java o Kotlin,
       compila en el propio dispositivo y obtén un APK instalable — sin necesidad de ordenador.
     </p>
     <div class="btns">
-      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.1" target="_blank" rel="noopener">⬇ Descargar APK</a>
+      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.2" target="_blank" rel="noopener">⬇ Descargar APK</a>
       <a class="btn ghost" href="https://github.com/aurenox-global/Sketchware-Pro" target="_blank" rel="noopener">Ver el código en GitHub</a>
     </div>
 
@@ -134,12 +134,66 @@
       <span class="k">Hitos destacados</span>
       <p>
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.0">Flutter corriendo en el dispositivo, release/AOT incluido</a> &middot;
-        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.1">la vista previa de diseños arreglada, rondas 1 a 5</a> &middot;
+        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.2">la vista previa de diseños arreglada, rondas 1 a 6</a> &middot;
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.1">la descarga del toolchain de Dart ahora la decides tú, y el toolchain ya no dice "no instalado"</a> &middot;
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.9">soporte de Kotlin en el IDE de la app</a>.
       </p>
     </div>
     <div class="log" id="change-log">
+      <div class="item done featured">
+        <span class="when">2026-09-24 · vista previa</span>
+        <h3>Las diez vistas que el editor no podía instanciar vuelven a funcionar, y una vista que aún no se pueda crear ya no es un hueco rojo mudo  <span class="pill feat">destacado</span> <span class="pill ok">arreglado</span></h3>
+        <ul class="clean">
+          <li><strong>La barra decía <code>Preview PARCIAL: 10 vistas no instanciables</code>.</strong>
+          <code>CoordinatorLayout</code>, <code>AppBarLayout</code>, <code>CollapsingToolbarLayout</code>,
+          <code>MaterialToolbar</code>, <code>MaterialButton</code>, <code>CircleImageView</code>,
+          <code>SwipeRefreshLayout</code>, <code>TabLayout</code>, <code>BottomNavigationView</code> y
+          <code>CardView</code> salían como diez cajas rojas idénticas (“no disponible en el editor”, 58.716 px de
+          rojo) y la barra de estado también estaba en rojo.</li>
+          <li><strong>Las clases estaban; el constructor no.</strong> Las diez están en el dex de
+          <strong>release</strong> con el nombre intacto (<code>mapping.txt</code> mapea cada una a sí misma), y lo que
+          R8 había borrado era el constructor que la vista previa pide <strong>por reflexión</strong>:
+          <code>&lt;init&gt;(Context)</code> había desaparecido en <strong>9 de las 10</strong> — solo sobrevivía el de
+          inflado <code>&lt;init&gt;(Context, AttributeSet)</code>, porque lo piden las propias librerías — y el logcat
+          lo dice tal cual:
+          <code>java.lang.NoSuchMethodException: androidx.coordinatorlayout.widget.CoordinatorLayout.&lt;init&gt; [class android.content.Context]</code>
+          (×9). En la décima, <code>CircleImageView</code>, la optimización de jerarquía hacía que el constructor de un
+          argumento lanzara <code>ClassCastException: CircleImageView cannot be cast to …ItemCircleImageView</code>. En
+          debug nunca se vio: sin R8 las diez conservan sus tres constructores, por eso el fallo solo aparece en
+          releases.</li>
+          <li><strong>Arreglo 1 — la vista previa deja de depender de un constructor concreto.</strong>
+          <code>InvokeUtil</code> prueba <code>(Context)</code> → <code>(Context, AttributeSet)</code> →
+          <code>(Context, AttributeSet, int)</code> y devuelve el <strong>motivo exacto</strong> en vez de un
+          <code>null</code> mudo (y deja trazado el log cuando cae al constructor de inflado), y tres reglas
+          <code>-keepclassmembers</code> acotadas en <code>app/proguard-rules.pro</code> — <code>androidx.**</code>,
+          <code>com.google.android.material.**</code> y <code>de.hdodenhof.**</code>, siempre
+          <code>extends android.view.View</code> — devuelven el constructor de un argumento. Medido en release:
+          <strong>10/10 instanciables</strong> (antes 0/10) por <strong>+49,7 KB, +0,04 %</strong> de APK, y
+          <strong>debug y release ya se comportan igual</strong>.</li>
+          <li><strong>Arreglo 2 — degradación útil.</strong> Cuando una clase de verdad no está en el APK del editor ya
+          no hay hueco rojo mudo: un <code>FrameLayout</code> genérico conserva el fondo, el padding y el tamaño
+          declarados y <strong>dibuja los hijos</strong> (antes, al no ser <code>ViewGroup</code>, se perdían) —
+          medido: hijos <strong>0 px → 1.418 + 1.915 px</strong> — con un <strong>borde ámbar</strong> fino y una
+          pastilla <code>≈ Clase</code> en vez de rojo de alarma, y el motivo en el diálogo de detalle. Arreglado
+          también: un <strong>solo</strong> atributo no admitido abortaba toda la vista previa nativa; ahora se captura
+          y se anota en ámbar (“la vista SI se ha dibujado”).</li>
+          <li><strong>Regresión de las rondas 1-5 bien, en release:</strong> HTML/WebView idéntico, colores de texto
+          4.665/6.025 px, fondos de proyecto/tema 356.400 px, imágenes 10/10, <code>MaterialButton</code>+WebView
+          698.570 px, y los casos vivos que decían “no instanciable” ahora dicen “aproximada” con los mismos
+          recuentos.</li>
+          <li><strong>Pendiente honesto:</strong> el generador de layouts escribe <code>android:scaleType="center"</code>
+          por defecto para cualquier imagen y <code>CircleImageView</code> solo admite <code>CENTER_CROP</code>/
+          <code>CENTER_INSIDE</code>, así que ese layout puede seguir fallando en la app que compile el usuario — es
+          cosa del generador, no de la vista previa, y aquí no se ha tocado.</li>
+        </ul>
+        <p>
+          <img src="assets/preview-r6-before.png" alt="Antes: las diez clases salen como cajas rojas idénticas diciendo no disponible en el editor, con la barra en rojo" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)">
+          <img src="assets/preview-r6-after.png" alt="Después: los diez widgets reales se dibujan con sus hijos, incluidos MaterialButton, CircleImageView y CardView, y la barra es ámbar" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)">
+        </p>
+        <p>Versión <strong>v7.0.10.2</strong> (versionCode 169). El detalle de la ronda 6 está al final de
+        <a href="preview-fix.md">docs/preview-fix.md</a>.</p>
+      </div>
+
       <div class="item done featured">
         <span class="when">2026-09-24 · Flutter + vista previa</span>
         <h3>El toolchain ya no dice "no instalado", y los nombres heredados de iconos  <span class="pill feat">destacado</span> <span class="pill ok">arreglado</span></h3>
