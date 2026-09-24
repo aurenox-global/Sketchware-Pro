@@ -602,6 +602,15 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
         pro.sketchware.utility.InvokeUtil.CreateResult result =
                 pro.sketchware.utility.InvokeUtil.createViewDetailed(this, className);
         View view = result.view;
+        if (view instanceof android.widget.ProgressBar && !(view instanceof android.widget.SeekBar)) {
+            // Un ProgressBar creado por reflexion trae el estilo del tema del IDE (circulo
+            // INDETERMINADO) y ademas ProgressBar no deja pasar a determinado si el estilo es
+            // "solo indeterminado": por eso el progreso y el tinte configurados no se veian
+            // ("no se ven los colores"). Cuando el XML pide la barra horizontal (lo que escribe el
+            // editor: style="?android:progressBarStyleHorizontal") se construye con ESE estilo del
+            // framework, que es exactamente el widget que tendra la app compilada.
+            view = createHorizontalProgressBarIfNeeded(bean, view);
+        }
         if (view == null) {
             // La clase no se puede instanciar en el editor (libreria/widat que el IDE no incluye, una
             // vista propia del proyecto, o -caso de la release minificada- un constructor que R8
@@ -628,6 +637,28 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
                     + " (id=" + bean.id + ")", throwable);
         }
         return view;
+    }
+
+    /**
+     * Devuelve un ProgressBar HORIZONTAL cuando el bean lo pide (style del XML o progressStyle del
+     * bean). Si no, devuelve el mismo que le han pasado (circulo indeterminado), sin tocarlo.
+     */
+    private View createHorizontalProgressBarIfNeeded(ViewBean bean, View progressBar) {
+        var handler = new pro.sketchware.utility.InjectAttributeHandler(bean);
+        String style = handler.getAttributeValueOf("style");
+        boolean horizontal = style.toLowerCase(Locale.US).contains("horizontal")
+                || com.besome.sketch.beans.ViewBean.PROGRESSBAR_STYLE_HORIZONTAL.equals(bean.progressStyle)
+                || handler.contains("progressTint");
+        if (!horizontal) {
+            return progressBar;
+        }
+        try {
+            return new android.widget.ProgressBar(this, null,
+                    android.R.attr.progressBarStyleHorizontal);
+        } catch (Throwable throwable) {
+            android.util.Log.w(TAG, "warning: no se pudo crear el ProgressBar horizontal", throwable);
+            return progressBar;
+        }
     }
 
     /** Motivo corto y legible de un fallo (para el dialogo): sin paquetes ni stacktrace. */
@@ -682,6 +713,11 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
         container.setForegroundGravity(android.view.Gravity.FILL);
 
         android.widget.TextView badge = new android.widget.TextView(this);
+        // El boton de Google (SignInButton) no tiene constructor usable en el editor, pero SI tiene
+        // atributos configurables (buttonSize/colorScheme). En vez de un hueco mudo, se dibuja un
+        // boton equivalente con esos valores aplicados (igual que hace el editor de diseno con su
+        // ItemSignInButton), marcado con la pastilla ambar de "aproximado".
+        addSignInButtonStubIfNeeded(container, className, bean);
         badge.setText("≈ " + shortClassName(className));
         badge.setTextSize(9f);
         badge.setTextColor(0xCC8A5000);
@@ -698,6 +734,40 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
         badgeParams.gravity = android.view.Gravity.TOP | android.view.Gravity.END;
         container.addView(badge, badgeParams);
         return container;
+    }
+
+    /**
+     * Boton de respaldo para {@code com.google.android.gms.common.SignInButton} (no instanciable en
+     * el editor): aplica {@code app:buttonSize} y {@code app:colorScheme} a un boton equivalente para
+     * que el usuario vea el efecto de esos atributos en la vista previa.
+     */
+    private void addSignInButtonStubIfNeeded(android.widget.FrameLayout container, String className, ViewBean bean) {
+        if (className == null || !className.endsWith("SignInButton")) {
+            return;
+        }
+        var handler = new pro.sketchware.utility.InjectAttributeHandler(bean);
+        String size = handler.getAttributeValueOf("buttonSize");
+        String scheme = handler.getAttributeValueOf("colorScheme");
+        boolean wide = "wide".equals(size);
+        boolean iconOnly = "icon_only".equals(size);
+        boolean dark = "dark".equals(scheme);
+        android.widget.TextView stub = new android.widget.TextView(this);
+        stub.setText(iconOnly ? "G" : "Iniciar sesion con Google");
+        stub.setTextSize(14f);
+        stub.setGravity(android.view.Gravity.CENTER);
+        stub.setTextColor(dark ? 0xFFF1F1F1 : 0xFF3C4043);
+        android.graphics.drawable.GradientDrawable background = new android.graphics.drawable.GradientDrawable();
+        background.setColor(dark ? 0xFF4285F4 : 0xFFFFFFFF);
+        background.setStroke(dp(1), 0xFF747775);
+        background.setCornerRadius(dp(4));
+        stub.setBackground(background);
+        int minWidth = wide ? dp(200) : dp(48);
+        stub.setMinWidth(minWidth);
+        stub.setPadding(dp(12), dp(10), dp(12), dp(10));
+        android.widget.FrameLayout.LayoutParams params = new android.widget.FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        params.gravity = android.view.Gravity.START | android.view.Gravity.TOP;
+        container.addView(stub, params);
     }
 
     /**
@@ -761,7 +831,7 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
             linearLayout.setGravity(layout.gravity);
         }
         if (view instanceof androidx.cardview.widget.CardView cardView) {
-            applyCardViewInject(cardView, bean.inject);
+            applyCardViewInject(cardView, bean);
         }
         if (view instanceof android.widget.ImageView imageView) {
             com.besome.sketch.beans.ImageBean image = bean.image;
@@ -938,151 +1008,71 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
         return null;
     }
 
+    /**
+     * Atributos "extra" del widget ({@code ViewBean.inject}: todo lo que el XML trae como
+     * {@code app:x} / {@code android:x} y no cabe en los beans fondo/texto/imagen).
+     *
+     * <p>Antes esto era una lista blanca de ~19 nombres dentro de un switch y TODO lo demas se
+     * descartaba en silencio: por eso "los colores no se ven" en las familias AndroidX/Library/Google
+     * (tabIndicatorColor, cardCornerRadius, civ_border_color, cornerRadius, progressTint...). Ahora:
+     * <ol>
+     *   <li>Se aplican primero las familias que ya sabia pintar el editor de diseno
+     *       ({@link pro.sketchware.utility.WidgetInjectApplier}: TabLayout, CircleImageView,
+     *       MaterialButton, CardView).</li>
+     *   <li>El resto pasa por un aplicador GENERICO por tipo de vista (TextView, ImageView,
+     *       Progress/Seek/Rating, CompoundButton, ListView/GridView/Spinner, BottomNavigationView,
+     *       TextInputLayout, CalendarView/DatePicker/TimePicker, SearchView...).</li>
+     *   <li>Lo que sigue sin aplicarse intenta un setter por REFLEXION (atributos de librerias:
+     *       {@code app:loQueSea} -> {@code setLoQueSea}), resolviendo colores/medidas/booleanos
+     *       segun el tipo del parametro.</li>
+     *   <li>Si nada de lo anterior funciona, el atributo se ANOTA en el aviso ambar con el motivo
+     *       (nada de descartes silenciosos).</li>
+     * </ol>
+     * Los {@code @color}/{@code @dimen}/{@code @drawable} del proyecto se resuelven en el camino
+     * (ver {@link #sharedResolver}).
+     */
     private void applyInjectAttributes(View view, ViewBean bean) {
+        java.util.List<String> notApplied = new ArrayList<>();
+        java.util.Set<String> handled = new java.util.HashSet<>();
         try {
             var injectHandler = new pro.sketchware.utility.InjectAttributeHandler(bean);
-            for (android.util.Pair<String, String> pair : injectHandler.getAttributes()) {
-                switch (localAttrName(pair.first)) {
-                    case "background": {
-                        String value = pair.second;
-                        if (value.startsWith("#") || value.startsWith("@color/")
-                                || value.startsWith("@android:color/") || value.startsWith("?")) {
-                            int color = resourceResolver.resolveColor(view, value, 0);
-                            if (!isColorNotSet(color)) {
-                                view.setBackgroundColor(color);
-                            }
-                        } else {
-                            android.graphics.drawable.Drawable drawable = resourceResolver.resolveDrawable(value);
-                            if (drawable != null) {
-                                view.setBackground(drawable);
-                            }
-                        }
-                        break;
-                    }
-                    case "backgroundTint": {
-                        int color = resourceResolver.resolveColor(view, pair.second, 0);
-                        if (!isColorNotSet(color)) {
-                            view.setBackgroundTintList(android.content.res.ColorStateList.valueOf(color));
-                        }
-                        break;
-                    }
-                    case "textColor": {
-                        int color = resourceResolver.resolveColor(view, pair.second, 0);
-                        if (!isColorNotSet(color) && view instanceof android.widget.TextView textView) {
-                            textView.setTextColor(color);
-                        }
-                        break;
-                    }
-                    case "gravity": {
-                        if (view instanceof android.widget.TextView textView) {
-                            textView.setGravity(parseGravity(pair.second));
-                        } else {
-                            view.setForegroundGravity(parseGravity(pair.second));
-                        }
-                        break;
-                    }
-                    case "orientation": {
-                        if (view instanceof android.widget.LinearLayout linearLayout) {
-                            linearLayout.setOrientation("horizontal".equalsIgnoreCase(pair.second)
-                                    ? android.widget.LinearLayout.HORIZONTAL
-                                    : android.widget.LinearLayout.VERTICAL);
-                        }
-                        break;
-                    }
-                    case "elevation": {
-                        view.setElevation(parseDimen(pair.second));
-                        break;
-                    }
-                    case "alpha": {
-                        try {
-                            view.setAlpha(Float.parseFloat(pair.second));
-                        } catch (NumberFormatException ignored) {
-                            android.util.Log.d("SketchwarePro", "LayoutPreviewActivity: NumberFormatException ignored", ignored);
-                        }
-                        break;
-                    }
-                    case "visibility": {
-                        if ("gone".equalsIgnoreCase(pair.second)) {
-                            view.setVisibility(android.view.View.GONE);
-                        } else if ("invisible".equalsIgnoreCase(pair.second)) {
-                            view.setVisibility(android.view.View.INVISIBLE);
-                        }
-                        break;
-                    }
-                    case "padding": {
-                        int pad = parseDimen(pair.second);
-                        view.setPadding(pad, pad, pad, pad);
-                        break;
-                    }
-                    case "paddingLeft": {
-                        view.setPadding(parseDimen(pair.second), view.getPaddingTop(), view.getPaddingRight(), view.getPaddingBottom());
-                        break;
-                    }
-                    case "paddingTop": {
-                        view.setPadding(view.getPaddingLeft(), parseDimen(pair.second), view.getPaddingRight(), view.getPaddingBottom());
-                        break;
-                    }
-                    case "paddingRight": {
-                        view.setPadding(view.getPaddingLeft(), view.getPaddingTop(), parseDimen(pair.second), view.getPaddingBottom());
-                        break;
-                    }
-                    case "paddingBottom": {
-                        view.setPadding(view.getPaddingLeft(), view.getPaddingTop(), view.getPaddingRight(), parseDimen(pair.second));
-                        break;
-                    }
-                    case "textSize": {
-                        if (view instanceof android.widget.TextView textView) {
-                            textView.setTextSize(parseSp(pair.second));
-                        }
-                        break;
-                    }
-                    case "hint": {
-                        if (view instanceof android.widget.EditText editText) {
-                            editText.setHint(pair.second);
-                        }
-                        break;
-                    }
-                    // android:src y app:srcCompat: el mismo tratamiento que en el resto de la
-                    // preview (drawable del proyecto, de assets o del propio IDE). Si no se puede
-                    // resolver, marcador visible en vez de un hueco vacio.
-                    case "src":
-                    case "srcCompat": {
-                        if (view instanceof android.widget.ImageView imageView) {
-                            android.graphics.drawable.Drawable drawable = resourceResolver.resolveDrawable(pair.second);
-                            imageView.setImageDrawable(drawable != null
-                                    ? drawable
-                                    : createMissingDrawable(pair.second));
-                        }
-                        break;
-                    }
-                    case "scaleType": {
-                        if (view instanceof android.widget.ImageView imageView) {
-                            applyScaleType(imageView, pair.second);
-                        }
-                        break;
-                    }
-                    case "singleLine": {
-                        if (view instanceof android.widget.TextView textView) {
-                            textView.setSingleLine("true".equalsIgnoreCase(pair.second));
-                        }
-                        break;
-                    }
-                    case "maxLines": {
-                        if (view instanceof android.widget.TextView textView) {
-                            try {
-                                textView.setMaxLines(Integer.parseInt(pair.second));
-                            } catch (NumberFormatException ignored) {
-                                android.util.Log.d("SketchwarePro", "LayoutPreviewActivity: NumberFormatException ignored", ignored);
-                            }
-                        }
-                        break;
-                    }
-                    default:
-                        break;
-                }
+            if (view instanceof android.widget.TextView) {
+                // La fuente y el estilo de texto NO se aplican en el bucle generico: los aplica
+                // applyTextTypeface (al final, con el catalogo de fuentes del proyecto). Se marcan
+                // como atendidos para no avisar de un "setter" que no existe.
+                handled.add("fontFamily");
+                handled.add("textStyle");
+                handled.add("typeface");
             }
-        } catch (Throwable ignored) {
-            android.util.Log.d("SketchwarePro", "LayoutPreviewActivity: Throwable ignored", ignored);
+            applyFamilyAttributes(view, bean, injectHandler, handled);
+            for (android.util.Pair<String, String> pair : injectHandler.getAttributes()) {
+                String name = localAttrName(pair.first);
+                String value = pair.second;
+                if (name.isEmpty() || handled.contains(name) || isLayoutOnlyAttribute(name)) {
+                    continue;
+                }
+                String reason = applyGenericAttribute(view, name, value);
+                if (reason == null) {
+                    continue;
+                }
+                // Segundo intento: setter generico por reflexion (atributos de librerias).
+                String reflectionReason = applyViaReflection(view, name, value);
+                if (reflectionReason == null) {
+                    continue;
+                }
+                notApplied.add(name + "=\"" + value + "\" · " + reflectionReason);
+            }
+        } catch (Throwable throwable) {
+            // Un atributo raro no debe tumbar el resto del diseno (los hijos incluidos).
+            appearanceWarnings.add(shortClassName(view.getClass().getName())
+                    + ": atributos extra no procesados (" + conciseMessage(throwable) + ")");
+            android.util.Log.w(TAG, "warning: fallo procesando los atributos extra de "
+                    + view.getClass().getName(), throwable);
+        }
+        for (String warning : notApplied) {
+            appearanceWarnings.add(shortClassName(view.getClass().getName()) + ": " + warning);
+            android.util.Log.w(TAG, "warning: [atributo no aplicado] "
+                    + shortClassName(view.getClass().getName()) + ": " + warning);
         }
         // Fuente y estilo del texto: se aplican aqui, al final, para cubrir tanto los atributos del
         // bean como los "extra" (android:fontFamily) y cualquier TextView, no solo los reconocidos.
@@ -1090,6 +1080,1109 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
             applyTextTypeface(textView, bean);
         }
     }
+
+    /** Resolucion de colores/medidas de la vista previa para los appliers compartidos. */
+    private pro.sketchware.utility.WidgetInjectApplier.ValueResolver sharedResolver(View view) {
+        return new pro.sketchware.utility.WidgetInjectApplier.ValueResolver() {
+            @Override
+            public int color(String value, int fallback) {
+                if (value == null || value.trim().isEmpty()) {
+                    return fallback;
+                }
+                int color = resourceResolver.resolveColor(view, value.trim(), 0);
+                return isColorNotSet(color) ? fallback : color;
+            }
+
+            @Override
+            public int dimension(String value, int fallback) {
+                if (value == null || value.trim().isEmpty()) {
+                    return fallback;
+                }
+                String v = value.trim();
+                int resolved = resourceResolver.resolveDimen(v, -1);
+                if (resolved >= 0) {
+                    return resolved;
+                }
+                int parsed = parseDimen(v);
+                return parsed == 0 && !v.startsWith("0") ? fallback : parsed;
+            }
+        };
+    }
+
+    /**
+     * Aplica las familias con semantica propia usando los MISMOS appliers que el editor de diseno
+     * (ver {@link pro.sketchware.utility.WidgetInjectApplier}). Los nombres aplicados se anotan en
+     * {@code handled} para que el aplicador generico no los vuelva a procesar (ni los avise).
+     */
+    private void applyFamilyAttributes(View view, ViewBean bean,
+                                       pro.sketchware.utility.InjectAttributeHandler handler,
+                                       java.util.Set<String> handled) {
+        var resolver = sharedResolver(view);
+        if (view instanceof com.google.android.material.tabs.TabLayout tabLayout) {
+            // El editor de diseno muestra 3 pestanas de ejemplo (ItemTabLayout); sin pestanas no hay
+            // NADA que pintar, asi que los colores del TabLayout eran invisibles en la vista previa.
+            // Se replican las mismas pestanas de ejemplo para que el color configurado se vea.
+            ensureTabLayoutHasSampleTabs(tabLayout);
+            pro.sketchware.utility.WidgetInjectApplier.applyTabLayout(tabLayout, handler, resolver);
+            handled.addAll(TAB_LAYOUT_ATTRIBUTES);
+        }
+        if (view instanceof de.hdodenhof.circleimageview.CircleImageView circleImageView) {
+            pro.sketchware.utility.WidgetInjectApplier.applyCircleImageView(circleImageView, handler, resolver);
+            handled.addAll(CIRCLE_IMAGE_VIEW_ATTRIBUTES);
+        }
+        if (view instanceof com.google.android.material.button.MaterialButton materialButton) {
+            pro.sketchware.utility.WidgetInjectApplier.applyMaterialButton(materialButton, handler, resolver);
+            handled.addAll(MATERIAL_BUTTON_ATTRIBUTES);
+        }
+        if (view instanceof androidx.cardview.widget.CardView cardView) {
+            pro.sketchware.utility.WidgetInjectApplier.applyCardView(cardView, handler, resolver, 0);
+            handled.addAll(CARD_VIEW_ATTRIBUTES);
+        }
+        if (view instanceof android.widget.ProgressBar progressBar && !(view instanceof android.widget.SeekBar)) {
+            applyProgressBarAttributes(progressBar, bean, handler, resolver, handled);
+        }
+        if (view instanceof android.widget.SeekBar seekBar) {
+            applySeekBarAttributes(seekBar, bean, handler, resolver, handled);
+        }
+        if (view instanceof android.widget.RatingBar ratingBar) {
+            applyRatingBarAttributes(ratingBar, handler, resolver, handled);
+        }
+        if (view instanceof android.widget.CompoundButton compoundButton) {
+            applyCompoundButtonAttributes(compoundButton, bean, handler, resolver, handled);
+        }
+        if (view instanceof android.widget.CalendarView calendarView) {
+            // firstDayOfWeek tiene valor por defecto 1 en el bean, asi que casi nunca llega por
+            // inject: hay que leerlo del bean (igual que hace el editor de diseno).
+            calendarView.setFirstDayOfWeek(bean.firstDayOfWeek);
+        }
+        if (view instanceof com.google.android.material.bottomnavigation.BottomNavigationView bottomNavigationView) {
+            applyBottomNavigationAttributes(bottomNavigationView, handler, resolver, handled);
+        }
+        if (view instanceof com.google.android.material.textfield.TextInputLayout textInputLayout) {
+            applyTextInputLayoutAttributes(textInputLayout, handler, resolver, handled);
+        }
+        if (view instanceof com.google.android.gms.common.SignInButton signInButton) {
+            applySignInButtonAttributes(signInButton, handler, handled);
+        }
+    }
+
+    /**
+     * Pestanas de ejemplo para un TabLayout sin pestanas: es lo que hace el editor de diseno
+     * (ItemTabLayout anade "Tab 1..3"). Sin esto, los colores configurados del TabLayout
+     * (indicador, texto, texto seleccionado) no se podrian ver en la vista previa.
+     */
+    private void ensureTabLayoutHasSampleTabs(com.google.android.material.tabs.TabLayout tabLayout) {
+        if (tabLayout.getTabCount() > 0) {
+            return;
+        }
+        for (int i = 1; i <= 3; i++) {
+            tabLayout.addTab(tabLayout.newTab().setText("Tab " + i), i == 1);
+        }
+    }
+
+    private void applyProgressBarAttributes(android.widget.ProgressBar progressBar, ViewBean bean,
+            pro.sketchware.utility.InjectAttributeHandler handler,
+            pro.sketchware.utility.WidgetInjectApplier.ValueResolver resolver,
+            java.util.Set<String> handled) {
+        // El estilo horizontal (style="?android:attr/progressBarStyleHorizontal") decide si la barra
+        // es una barra o un circulo indeterminado: sin esto, el progreso y el tinte no se veian.
+        boolean horizontal = ViewBean.PROGRESSBAR_STYLE_HORIZONTAL.equals(bean.progressStyle)
+                || handler.contains("progressTint") || handler.contains("progress");
+        if (horizontal) {
+            progressBar.setIndeterminate(false);
+            try {
+                progressBar.setProgressDrawable(getResources().getDrawable(
+                        android.R.drawable.progress_horizontal, getTheme()));
+            } catch (Throwable throwable) {
+                android.util.Log.d(TAG, "no se pudo aplicar la barra horizontal", throwable);
+            }
+        }
+        int progress = bean.progress;
+        String progressValue = handler.getAttributeValueOf("progress");
+        android.util.Log.i(TAG, "info: ProgressBar " + bean.id + " clase=" + progressBar.getClass().getName()
+                + " horizontal=" + horizontal + " progressStyle=" + bean.progressStyle);
+        if (!progressValue.isEmpty()) {
+            try {
+                progress = Integer.parseInt(progressValue);
+            } catch (NumberFormatException ignored) {
+                android.util.Log.d(TAG, "progress no numerico", ignored);
+            }
+        }
+        progressBar.setProgress(progress);
+        handled.add("progress");
+        int max = bean.max > 0 ? bean.max : 100;
+        String maxValue = handler.getAttributeValueOf("max");
+        if (!maxValue.isEmpty()) {
+            try {
+                max = Integer.parseInt(maxValue);
+            } catch (NumberFormatException ignored) {
+                android.util.Log.d(TAG, "max no numerico", ignored);
+            }
+        }
+        progressBar.setMax(max);
+        handled.add("max");
+        if (handler.contains("indeterminate")) {
+            progressBar.setIndeterminate(Boolean.parseBoolean(handler.getAttributeValueOf("indeterminate")));
+            handled.add("indeterminate");
+        }
+        applyTint(progressBar::setProgressTintList, handler, resolver, "progressTint", handled);
+        applyTint(progressBar::setSecondaryProgressTintList, handler, resolver, "secondaryProgressTint", handled);
+        applyTint(progressBar::setProgressBackgroundTintList, handler, resolver, "progressBackgroundTint", handled);
+        applyTint(progressBar::setIndeterminateTintList, handler, resolver, "indeterminateTint", handled);
+        handled.add("progressStyle");
+        handled.add("style");
+    }
+
+    private void applySeekBarAttributes(android.widget.SeekBar seekBar, ViewBean bean,
+            pro.sketchware.utility.InjectAttributeHandler handler,
+            pro.sketchware.utility.WidgetInjectApplier.ValueResolver resolver,
+            java.util.Set<String> handled) {
+        int progress = bean.progress;
+        String progressValue = handler.getAttributeValueOf("progress");
+        if (!progressValue.isEmpty()) {
+            try {
+                progress = Integer.parseInt(progressValue);
+            } catch (NumberFormatException ignored) {
+                android.util.Log.d(TAG, "progress no numerico", ignored);
+            }
+        }
+        seekBar.setProgress(progress);
+        handled.add("progress");
+        int max = bean.max > 0 ? bean.max : 100;
+        String maxValue = handler.getAttributeValueOf("max");
+        if (!maxValue.isEmpty()) {
+            try {
+                max = Integer.parseInt(maxValue);
+            } catch (NumberFormatException ignored) {
+                android.util.Log.d(TAG, "max no numerico", ignored);
+            }
+        }
+        seekBar.setMax(max);
+        handled.add("max");
+        if (handler.contains("splitTrack")) {
+            seekBar.setSplitTrack(Boolean.parseBoolean(handler.getAttributeValueOf("splitTrack")));
+            handled.add("splitTrack");
+        }
+        applyTint(seekBar::setProgressTintList, handler, resolver, "progressTint", handled);
+        applyTint(seekBar::setProgressBackgroundTintList, handler, resolver, "progressBackgroundTint", handled);
+        applyTint(seekBar::setThumbTintList, handler, resolver, "thumbTint", handled);
+    }
+
+    private void applyRatingBarAttributes(android.widget.RatingBar ratingBar,
+            pro.sketchware.utility.InjectAttributeHandler handler,
+            pro.sketchware.utility.WidgetInjectApplier.ValueResolver resolver,
+            java.util.Set<String> handled) {
+        if (handler.contains("rating")) {
+            try {
+                ratingBar.setRating(Float.parseFloat(handler.getAttributeValueOf("rating")));
+            } catch (NumberFormatException ignored) {
+                android.util.Log.d(TAG, "rating no numerico", ignored);
+            }
+            handled.add("rating");
+        }
+        if (handler.contains("numStars")) {
+            try {
+                ratingBar.setNumStars(Integer.parseInt(handler.getAttributeValueOf("numStars")));
+            } catch (NumberFormatException ignored) {
+                android.util.Log.d(TAG, "numStars no numerico", ignored);
+            }
+            handled.add("numStars");
+        }
+        if (handler.contains("stepSize")) {
+            try {
+                ratingBar.setStepSize(Float.parseFloat(handler.getAttributeValueOf("stepSize")));
+            } catch (NumberFormatException ignored) {
+                android.util.Log.d(TAG, "stepSize no numerico", ignored);
+            }
+            handled.add("stepSize");
+        }
+        if (handler.contains("isIndicator")) {
+            ratingBar.setIsIndicator(Boolean.parseBoolean(handler.getAttributeValueOf("isIndicator")));
+            handled.add("isIndicator");
+        }
+        applyTint(ratingBar::setProgressTintList, handler, resolver, "progressTint", handled);
+        applyTint(ratingBar::setSecondaryProgressTintList, handler, resolver, "secondaryProgressTint", handled);
+    }
+
+    private void applyCompoundButtonAttributes(android.widget.CompoundButton button, ViewBean bean,
+            pro.sketchware.utility.InjectAttributeHandler handler,
+            pro.sketchware.utility.WidgetInjectApplier.ValueResolver resolver,
+            java.util.Set<String> handled) {
+        boolean checked = bean.checked != 0;
+        if (handler.contains("checked")) {
+            checked = Boolean.parseBoolean(handler.getAttributeValueOf("checked"));
+            handled.add("checked");
+        }
+        button.setChecked(checked);
+        applyTint(button::setButtonTintList, handler, resolver, "buttonTint", handled);
+        if (button instanceof android.widget.Switch switchView) {
+            applyTint(switchView::setThumbTintList, handler, resolver, "thumbTint", handled);
+            applyTint(switchView::setTrackTintList, handler, resolver, "trackTint", handled);
+            if (handler.contains("splitTrack")) {
+                switchView.setSplitTrack(Boolean.parseBoolean(handler.getAttributeValueOf("splitTrack")));
+                handled.add("splitTrack");
+            }
+        }
+    }
+
+    private void applyBottomNavigationAttributes(
+            com.google.android.material.bottomnavigation.BottomNavigationView view,
+            pro.sketchware.utility.InjectAttributeHandler handler,
+            pro.sketchware.utility.WidgetInjectApplier.ValueResolver resolver,
+            java.util.Set<String> handled) {
+        applyTint(view::setItemIconTintList, handler, resolver, "itemIconTint", handled);
+        applyTint(view::setItemTextColor, handler, resolver, "itemTextColor", handled);
+        applyTint(view::setItemRippleColor, handler, resolver, "itemRippleColor", handled);
+        String itemBackground = handler.getAttributeValueOf("itemBackground");
+        if (!itemBackground.isEmpty()) {
+            android.graphics.drawable.Drawable drawable = resourceResolver.resolveDrawable(itemBackground);
+            if (drawable != null) {
+                view.setItemBackground(drawable);
+            }
+            handled.add("itemBackground");
+        }
+        String labelVisibility = handler.getAttributeValueOf("labelVisibilityMode");
+        if (!labelVisibility.isEmpty()) {
+            switch (labelVisibility) {
+                case "labeled" -> view.setLabelVisibilityMode(
+                        com.google.android.material.bottomnavigation.LabelVisibilityMode.LABEL_VISIBILITY_LABELED);
+                case "unlabeled" -> view.setLabelVisibilityMode(
+                        com.google.android.material.bottomnavigation.LabelVisibilityMode.LABEL_VISIBILITY_UNLABELED);
+                case "selected" -> view.setLabelVisibilityMode(
+                        com.google.android.material.bottomnavigation.LabelVisibilityMode.LABEL_VISIBILITY_SELECTED);
+                default -> view.setLabelVisibilityMode(
+                        com.google.android.material.bottomnavigation.LabelVisibilityMode.LABEL_VISIBILITY_AUTO);
+            }
+            handled.add("labelVisibilityMode");
+        }
+    }
+
+    private void applyTextInputLayoutAttributes(
+            com.google.android.material.textfield.TextInputLayout view,
+            pro.sketchware.utility.InjectAttributeHandler handler,
+            pro.sketchware.utility.WidgetInjectApplier.ValueResolver resolver,
+            java.util.Set<String> handled) {
+        applyTint(view::setBoxStrokeColorStateList, handler, resolver, "boxStrokeColor", handled);
+        applyTint(view::setHintTextColor, handler, resolver, "hintTextColor", handled);
+        applyTint(view::setBoxBackgroundColorStateList, handler, resolver, "boxBackgroundColor", handled);
+        applyTint(view::setBoxStrokeErrorColor, handler, resolver, "boxStrokeErrorColor", handled);
+        for (String corner : new String[]{"boxCornerRadiusTopStart", "boxCornerRadiusTopEnd",
+                "boxCornerRadiusBottomStart", "boxCornerRadiusBottomEnd"}) {
+            if (!handler.contains(corner)) {
+                continue;
+            }
+            int size = resolver.dimension(handler.getAttributeValueOf(corner), 0);
+            switch (corner) {
+                case "boxCornerRadiusTopStart" -> view.setBoxCornerRadii(size, view.getBoxCornerRadiusTopEnd(),
+                        view.getBoxCornerRadiusBottomEnd(), view.getBoxCornerRadiusBottomStart());
+                case "boxCornerRadiusTopEnd" -> view.setBoxCornerRadii(view.getBoxCornerRadiusTopStart(), size,
+                        view.getBoxCornerRadiusBottomEnd(), view.getBoxCornerRadiusBottomStart());
+                case "boxCornerRadiusBottomEnd" -> view.setBoxCornerRadii(view.getBoxCornerRadiusTopStart(),
+                        view.getBoxCornerRadiusTopEnd(), size, view.getBoxCornerRadiusBottomStart());
+                default -> view.setBoxCornerRadii(view.getBoxCornerRadiusTopStart(),
+                        view.getBoxCornerRadiusTopEnd(), view.getBoxCornerRadiusBottomEnd(), size);
+            }
+            handled.add(corner);
+        }
+        String placeholder = handler.getAttributeValueOf("placeholderText");
+        if (!placeholder.isEmpty()) {
+            view.setPlaceholderText(placeholder);
+            handled.add("placeholderText");
+        }
+    }
+
+    private void applySignInButtonAttributes(com.google.android.gms.common.SignInButton button,
+            pro.sketchware.utility.InjectAttributeHandler handler, java.util.Set<String> handled) {
+        String size = handler.getAttributeValueOf("buttonSize");
+        if (!size.isEmpty()) {
+            switch (size) {
+                case "wide" -> button.setSize(com.google.android.gms.common.SignInButton.SIZE_WIDE);
+                case "icon_only" -> button.setSize(com.google.android.gms.common.SignInButton.SIZE_ICON_ONLY);
+                default -> button.setSize(com.google.android.gms.common.SignInButton.SIZE_STANDARD);
+            }
+            handled.add("buttonSize");
+        }
+        String scheme = handler.getAttributeValueOf("colorScheme");
+        if (!scheme.isEmpty()) {
+            switch (scheme) {
+                case "light" -> button.setColorScheme(com.google.android.gms.common.SignInButton.COLOR_LIGHT);
+                case "auto" -> button.setColorScheme(com.google.android.gms.common.SignInButton.COLOR_AUTO);
+                default -> button.setColorScheme(com.google.android.gms.common.SignInButton.COLOR_DARK);
+            }
+            handled.add("colorScheme");
+        }
+    }
+
+    /** Aplica un tinte (ColorStateList) resuelto de un atributo, si esta presente. */
+    private void applyTint(java.util.function.Consumer<android.content.res.ColorStateList> setter,
+            pro.sketchware.utility.InjectAttributeHandler handler,
+            pro.sketchware.utility.WidgetInjectApplier.ValueResolver resolver,
+            String name, java.util.Set<String> handled) {
+        if (!handler.contains(name)) {
+            return;
+        }
+        int color = resolver.color(handler.getAttributeValueOf(name), 0);
+        if (color != 0) {
+            setter.accept(android.content.res.ColorStateList.valueOf(color));
+        }
+        handled.add(name);
+    }
+
+    /**
+     * Atributos de tipos de vista concretos del framework. Devuelve {@code null} si se ha aplicado
+     * y, si no, el motivo por el que no (para el aviso ambar).
+     */
+    private String applyGenericAttribute(View view, String name, String value) {
+        try {
+            switch (name) {
+                // ------------------------------------------------ comunes a cualquier vista
+                case "background": {
+                    if (value.startsWith("#") || value.startsWith("@color/")
+                            || value.startsWith("@android:color/") || value.startsWith("?")) {
+                        int color = resourceResolver.resolveColor(view, value, 0);
+                        if (!isColorNotSet(color)) {
+                            view.setBackgroundColor(color);
+                        }
+                    } else {
+                        android.graphics.drawable.Drawable drawable = resourceResolver.resolveDrawable(value);
+                        if (drawable != null) {
+                            view.setBackground(drawable);
+                        }
+                    }
+                    return null;
+                }
+                case "backgroundTint": {
+                    int color = resourceResolver.resolveColor(view, value, 0);
+                    if (isColorNotSet(color)) {
+                        return "color no resoluble (" + value + ")";
+                    }
+                    view.setBackgroundTintList(android.content.res.ColorStateList.valueOf(color));
+                    return null;
+                }
+                case "foregroundTint": {
+                    int color = resourceResolver.resolveColor(view, value, 0);
+                    if (isColorNotSet(color)) {
+                        return "color no resoluble (" + value + ")";
+                    }
+                    view.getForeground().setTint(color);
+                    return null;
+                }
+                case "elevation":
+                    view.setElevation(sharedResolver(view).dimension(value, 0));
+                    return null;
+                case "translationZ":
+                    view.setTranslationZ(sharedResolver(view).dimension(value, 0));
+                    return null;
+                case "alpha": {
+                    try {
+                        view.setAlpha(Float.parseFloat(value));
+                    } catch (NumberFormatException e) {
+                        return "alpha no numerico (" + value + ")";
+                    }
+                    return null;
+                }
+                case "visibility": {
+                    if ("gone".equalsIgnoreCase(value)) {
+                        view.setVisibility(android.view.View.GONE);
+                    } else if ("invisible".equalsIgnoreCase(value)) {
+                        view.setVisibility(android.view.View.INVISIBLE);
+                    } else {
+                        view.setVisibility(android.view.View.VISIBLE);
+                    }
+                    return null;
+                }
+                case "padding": {
+                    int pad = sharedResolver(view).dimension(value, 0);
+                    view.setPadding(pad, pad, pad, pad);
+                    return null;
+                }
+                case "paddingLeft":
+                    view.setPadding(sharedResolver(view).dimension(value, 0), view.getPaddingTop(),
+                            view.getPaddingRight(), view.getPaddingBottom());
+                    return null;
+                case "paddingTop":
+                    view.setPadding(view.getPaddingLeft(), sharedResolver(view).dimension(value, 0),
+                            view.getPaddingRight(), view.getPaddingBottom());
+                    return null;
+                case "paddingRight":
+                    view.setPadding(view.getPaddingLeft(), view.getPaddingTop(),
+                            sharedResolver(view).dimension(value, 0), view.getPaddingBottom());
+                    return null;
+                case "paddingBottom":
+                    view.setPadding(view.getPaddingLeft(), view.getPaddingTop(), view.getPaddingRight(),
+                            sharedResolver(view).dimension(value, 0));
+                    return null;
+                case "paddingStart":
+                    if (view instanceof android.view.View && android.os.Build.VERSION.SDK_INT >= 17) {
+                        view.setPaddingRelative(sharedResolver(view).dimension(value, 0), view.getPaddingTop(),
+                                view.getPaddingEnd(), view.getPaddingBottom());
+                        return null;
+                    }
+                    return "paddingStart requiere API 17+";
+                case "paddingEnd":
+                    if (view instanceof android.view.View && android.os.Build.VERSION.SDK_INT >= 17) {
+                        view.setPaddingRelative(view.getPaddingStart(), view.getPaddingTop(),
+                                sharedResolver(view).dimension(value, 0), view.getPaddingBottom());
+                        return null;
+                    }
+                    return "paddingEnd requiere API 17+";
+                case "rotation":
+                    view.setRotation(parseFloatOr(value, 0f));
+                    return null;
+                case "rotationX":
+                    view.setRotationX(parseFloatOr(value, 0f));
+                    return null;
+                case "rotationY":
+                    view.setRotationY(parseFloatOr(value, 0f));
+                    return null;
+                case "scaleX":
+                    view.setScaleX(parseFloatOr(value, 1f));
+                    return null;
+                case "scaleY":
+                    view.setScaleY(parseFloatOr(value, 1f));
+                    return null;
+                case "translationX":
+                    view.setTranslationX(sharedResolver(view).dimension(value, 0));
+                    return null;
+                case "translationY":
+                    view.setTranslationY(sharedResolver(view).dimension(value, 0));
+                    return null;
+                case "minWidth":
+                    view.setMinimumWidth(sharedResolver(view).dimension(value, 0));
+                    return null;
+                case "minHeight":
+                    view.setMinimumHeight(sharedResolver(view).dimension(value, 0));
+                    return null;
+                case "clipToPadding":
+                    if (view instanceof android.view.ViewGroup group) {
+                        group.setClipToPadding(Boolean.parseBoolean(value));
+                        return null;
+                    }
+                    return "clipToPadding solo aplica a contenedores";
+                case "clickable":
+                    view.setClickable(Boolean.parseBoolean(value));
+                    return null;
+                case "enabled":
+                    view.setEnabled(Boolean.parseBoolean(value));
+                    return null;
+                case "focusable":
+                    view.setFocusable(Boolean.parseBoolean(value));
+                    return null;
+                case "selected":
+                    view.setSelected(Boolean.parseBoolean(value));
+                    return null;
+                case "keepScreenOn":
+                    view.setKeepScreenOn(Boolean.parseBoolean(value));
+                    return null;
+
+                // ------------------------------------------------ TextView y derivados
+                case "text":
+                    if (view instanceof android.widget.TextView textView) {
+                        textView.setText(value);
+                        return null;
+                    }
+                    return "text solo aplica a vistas de texto";
+                case "textColor": {
+                    int color = resourceResolver.resolveColor(view, value, 0);
+                    if (isColorNotSet(color)) {
+                        return "color no resoluble (" + value + ")";
+                    }
+                    if (view instanceof android.widget.TextView textView) {
+                        textView.setTextColor(color);
+                        return null;
+                    }
+                    if (view instanceof android.widget.ImageView imageView) {
+                        imageView.setImageTintList(android.content.res.ColorStateList.valueOf(color));
+                        return null;
+                    }
+                    return "textColor no aplicable a " + shortClassName(view.getClass().getName());
+                }
+                case "textSize":
+                    if (view instanceof android.widget.TextView textView) {
+                        textView.setTextSize(parseSp(value));
+                        return null;
+                    }
+                    return "textSize solo aplica a vistas de texto";
+                case "textColorHint":
+                case "hintTextColor": {
+                    int color = resourceResolver.resolveColor(view, value, 0);
+                    if (isColorNotSet(color)) {
+                        return "color no resoluble (" + value + ")";
+                    }
+                    if (view instanceof android.widget.TextView textView) {
+                        textView.setHintTextColor(color);
+                        return null;
+                    }
+                    return "color de hint no aplicable a " + shortClassName(view.getClass().getName());
+                }
+                case "gravity": {
+                    int gravity = parseGravity(value);
+                    if (view instanceof android.widget.TextView textView) {
+                        textView.setGravity(gravity);
+                        return null;
+                    }
+                    view.setForegroundGravity(gravity);
+                    return null;
+                }
+                case "textAlignment": {
+                    if (view instanceof android.widget.TextView textView) {
+                        textView.setTextAlignment(switch (value) {
+                            case "center" -> android.view.View.TEXT_ALIGNMENT_CENTER;
+                            case "viewStart" -> android.view.View.TEXT_ALIGNMENT_VIEW_START;
+                            case "viewEnd" -> android.view.View.TEXT_ALIGNMENT_VIEW_END;
+                            default -> android.view.View.TEXT_ALIGNMENT_GRAVITY;
+                        });
+                        return null;
+                    }
+                    return "textAlignment solo aplica a vistas de texto";
+                }
+                case "singleLine":
+                    if (view instanceof android.widget.TextView textView) {
+                        textView.setSingleLine("true".equalsIgnoreCase(value));
+                        return null;
+                    }
+                    return "singleLine solo aplica a vistas de texto";
+                case "maxLines":
+                    if (view instanceof android.widget.TextView textView) {
+                        try {
+                            textView.setMaxLines(Integer.parseInt(value));
+                            return null;
+                        } catch (NumberFormatException e) {
+                            return "maxLines no numerico (" + value + ")";
+                        }
+                    }
+                    return "maxLines solo aplica a vistas de texto";
+                case "lines": {
+                    if (view instanceof android.widget.TextView textView) {
+                        try {
+                            int lines = Integer.parseInt(value);
+                            textView.setLines(lines);
+                            textView.setMinLines(lines);
+                            textView.setMaxLines(lines);
+                            return null;
+                        } catch (NumberFormatException e) {
+                            return "lines no numerico (" + value + ")";
+                        }
+                    }
+                    return "lines solo aplica a vistas de texto";
+                }
+                case "ellipsize":
+                    if (view instanceof android.widget.TextView textView) {
+                        textView.setEllipsize(switch (value) {
+                            case "start" -> android.text.TextUtils.TruncateAt.START;
+                            case "middle" -> android.text.TextUtils.TruncateAt.MIDDLE;
+                            case "end" -> android.text.TextUtils.TruncateAt.END;
+                            case "marquee" -> android.text.TextUtils.TruncateAt.MARQUEE;
+                            default -> null;
+                        });
+                        return null;
+                    }
+                    return "ellipsize solo aplica a vistas de texto";
+                case "letterSpacing":
+                    if (view instanceof android.widget.TextView textView) {
+                        if (android.os.Build.VERSION.SDK_INT >= 21) {
+                            textView.setLetterSpacing(parseFloatOr(value, 0f));
+                            return null;
+                        }
+                        return "letterSpacing requiere API 21+";
+                    }
+                    return "letterSpacing solo aplica a vistas de texto";
+                case "lineSpacingExtra":
+                    if (view instanceof android.widget.TextView textView) {
+                        textView.setLineSpacing(sharedResolver(view).dimension(value, 0), textView.getLineSpacingMultiplier());
+                        return null;
+                    }
+                    return "lineSpacingExtra solo aplica a vistas de texto";
+                case "textAllCaps":
+                    if (view instanceof android.widget.TextView textView) {
+                        textView.setAllCaps(Boolean.parseBoolean(value));
+                        return null;
+                    }
+                    return "textAllCaps solo aplica a vistas de texto";
+                case "maxLength":
+                    if (view instanceof android.widget.TextView textView) {
+                        try {
+                            int max = Integer.parseInt(value);
+                            textView.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(max)});
+                            return null;
+                        } catch (NumberFormatException e) {
+                            return "maxLength no numerico (" + value + ")";
+                        }
+                    }
+                    return "maxLength solo aplica a campos de texto";
+                case "inputType":
+                    if (view instanceof android.widget.TextView textView) {
+                        textView.setInputType(parseInputType(value));
+                        return null;
+                    }
+                    return "inputType solo aplica a campos de texto";
+                case "imeOptions":
+                    if (view instanceof android.widget.TextView textView) {
+                        textView.setImeOptions(parseImeOptions(value));
+                        return null;
+                    }
+                    return "imeOptions solo aplica a campos de texto";
+                case "hint":
+                    if (view instanceof android.widget.EditText editText) {
+                        editText.setHint(value);
+                        return null;
+                    }
+                    if (view instanceof com.google.android.material.textfield.TextInputLayout layout) {
+                        layout.setHint(value);
+                        return null;
+                    }
+                    return "hint solo aplica a campos de texto";
+                case "textIsSelectable":
+                    if (view instanceof android.widget.TextView textView) {
+                        textView.setTextIsSelectable(Boolean.parseBoolean(value));
+                        return null;
+                    }
+                    return "textIsSelectable solo aplica a vistas de texto";
+
+                // ------------------------------------------------ ImageView
+                case "src":
+                case "srcCompat":
+                    if (view instanceof android.widget.ImageView imageView) {
+                        android.graphics.drawable.Drawable drawable = resourceResolver.resolveDrawable(value);
+                        imageView.setImageDrawable(drawable != null ? drawable : createMissingDrawable(value));
+                        return null;
+                    }
+                    return "src solo aplica a imagenes";
+                case "scaleType":
+                    if (view instanceof android.widget.ImageView imageView) {
+                        applyScaleType(imageView, value);
+                        return null;
+                    }
+                    return "scaleType solo aplica a imagenes";
+                case "adjustViewBounds":
+                    if (view instanceof android.widget.ImageView imageView) {
+                        imageView.setAdjustViewBounds(Boolean.parseBoolean(value));
+                        return null;
+                    }
+                    return "adjustViewBounds solo aplica a imagenes";
+                case "tint":
+                    if (view instanceof android.widget.ImageView imageView) {
+                        int color = resourceResolver.resolveColor(view, value, 0);
+                        if (isColorNotSet(color)) {
+                            return "color no resoluble (" + value + ")";
+                        }
+                        imageView.setImageTintList(android.content.res.ColorStateList.valueOf(color));
+                        return null;
+                    }
+                    return "tint solo aplica a imagenes";
+
+                // ------------------------------------------------ listas / contenedores
+                case "divider": {
+                    // El valor puede ser un COMO color ("#FFFF0000") o un drawable ("@drawable/x"):
+                    // antes solo se intentaba como drawable y un color de separador se perdia.
+                    android.graphics.drawable.Drawable drawable;
+                    if (value.startsWith("#") || value.startsWith("@color/")
+                            || value.startsWith("@android:color/") || value.startsWith("?")) {
+                        int color = resourceResolver.resolveColor(view, value, 0);
+                        drawable = isColorNotSet(color) ? null
+                                : new android.graphics.drawable.ColorDrawable(color);
+                    } else {
+                        drawable = resourceResolver.resolveDrawable(value);
+                    }
+                    if (view instanceof android.widget.ListView listView) {
+                        listView.setDivider(drawable);
+                        return null;
+                    }
+                    if (view instanceof android.widget.LinearLayout linearLayout) {
+                        linearLayout.setDividerDrawable(drawable);
+                        return null;
+                    }
+                    return "divider no aplicable a " + shortClassName(view.getClass().getName());
+                }
+                case "dividerHeight":
+                    if (view instanceof android.widget.ListView listView) {
+                        listView.setDividerHeight(sharedResolver(view).dimension(value, 0));
+                        return null;
+                    }
+                    return "dividerHeight solo aplica a ListView";
+                case "dividerPadding":
+                    if (view instanceof android.widget.LinearLayout linearLayout) {
+                        linearLayout.setDividerPadding(sharedResolver(view).dimension(value, 0));
+                        return null;
+                    }
+                    return "dividerPadding solo aplica a contenedores lineales";
+                case "showDividers": {
+                    int flags = 0;
+                    if (value.contains("beginning")) flags |= android.widget.LinearLayout.SHOW_DIVIDER_BEGINNING;
+                    if (value.contains("middle")) flags |= android.widget.LinearLayout.SHOW_DIVIDER_MIDDLE;
+                    if (value.contains("end")) flags |= android.widget.LinearLayout.SHOW_DIVIDER_END;
+                    if (view instanceof android.widget.LinearLayout linearLayout) {
+                        linearLayout.setShowDividers(flags);
+                        return null;
+                    }
+                    return "showDividers solo aplica a contenedores lineales";
+                }
+                case "orientation":
+                    if (view instanceof android.widget.LinearLayout linearLayout) {
+                        linearLayout.setOrientation("horizontal".equalsIgnoreCase(value)
+                                ? android.widget.LinearLayout.HORIZONTAL
+                                : android.widget.LinearLayout.VERTICAL);
+                        return null;
+                    }
+                    return "orientation solo aplica a contenedores lineales";
+                case "numColumns":
+                    if (view instanceof android.widget.GridView gridView) {
+                        try {
+                            gridView.setNumColumns(Integer.parseInt(value));
+                            return null;
+                        } catch (NumberFormatException e) {
+                            return "numColumns no numerico (" + value + ")";
+                        }
+                    }
+                    return "numColumns solo aplica a GridView";
+                case "horizontalSpacing":
+                    if (view instanceof android.widget.GridView gridView) {
+                        gridView.setHorizontalSpacing(sharedResolver(view).dimension(value, 0));
+                        return null;
+                    }
+                    return "horizontalSpacing solo aplica a GridView";
+                case "verticalSpacing":
+                    if (view instanceof android.widget.GridView gridView) {
+                        gridView.setVerticalSpacing(sharedResolver(view).dimension(value, 0));
+                        return null;
+                    }
+                    return "verticalSpacing solo aplica a GridView";
+                case "stretchMode":
+                    if (view instanceof android.widget.GridView gridView) {
+                        gridView.setStretchMode(switch (value) {
+                            case "columnWidth" -> android.widget.GridView.STRETCH_COLUMN_WIDTH;
+                            case "spacingWidth" -> android.widget.GridView.STRETCH_SPACING;
+                            case "spacingWidthUniform" -> android.widget.GridView.STRETCH_SPACING_UNIFORM;
+                            default -> android.widget.GridView.STRETCH_COLUMN_WIDTH;
+                        });
+                        return null;
+                    }
+                    return "stretchMode solo aplica a GridView";
+                case "choiceMode":
+                    if (view instanceof android.widget.ListView listView) {
+                        listView.setChoiceMode("multiple".equalsIgnoreCase(value)
+                                ? android.widget.ListView.CHOICE_MODE_MULTIPLE
+                                : android.widget.ListView.CHOICE_MODE_SINGLE);
+                        return null;
+                    }
+                    return "choiceMode solo aplica a ListView";
+                case "cacheColorHint":
+                    if (view instanceof android.widget.AbsListView listView) {
+                        listView.setCacheColorHint(resourceResolver.resolveColor(view, value, 0));
+                        return null;
+                    }
+                    return "cacheColorHint solo aplica a listas";
+                case "spinnerMode":
+                    if (view instanceof android.widget.Spinner spinner) {
+                        spinner.setPrompt(value);
+                        return null;
+                    }
+                    return "spinnerMode solo aplica a Spinner";
+                case "popupBackground":
+                    if (view instanceof android.widget.Spinner spinner) {
+                        android.graphics.drawable.Drawable drawable = resourceResolver.resolveDrawable(value);
+                        if (drawable != null) {
+                            spinner.setPopupBackgroundDrawable(drawable);
+                        }
+                        return null;
+                    }
+                    return "popupBackground solo aplica a Spinner";
+                case "weightSum":
+                    if (view instanceof android.widget.LinearLayout linearLayout) {
+                        try {
+                            linearLayout.setWeightSum(Float.parseFloat(value));
+                            return null;
+                        } catch (NumberFormatException e) {
+                            return "weightSum no numerico (" + value + ")";
+                        }
+                    }
+                    return "weightSum solo aplica a contenedores lineales";
+
+                // ------------------------------------------------ fecha y hora
+                case "firstDayOfWeek":
+                    if (view instanceof android.widget.CalendarView calendarView) {
+                        try {
+                            calendarView.setFirstDayOfWeek(Integer.parseInt(value));
+                            return null;
+                        } catch (NumberFormatException e) {
+                            return "firstDayOfWeek no numerico (" + value + ")";
+                        }
+                    }
+                    if (view instanceof android.widget.DatePicker datePicker) {
+                        try {
+                            datePicker.setFirstDayOfWeek(Integer.parseInt(value));
+                            return null;
+                        } catch (NumberFormatException e) {
+                            return "firstDayOfWeek no numerico (" + value + ")";
+                        }
+                    }
+                    return "firstDayOfWeek solo aplica a CalendarView/DatePicker";
+                case "shownWeekCount":
+                    if (view instanceof android.widget.CalendarView calendarView) {
+                        try {
+                            calendarView.setShownWeekCount(Integer.parseInt(value));
+                            return null;
+                        } catch (NumberFormatException e) {
+                            return "shownWeekCount no numerico (" + value + ")";
+                        }
+                    }
+                    return "shownWeekCount solo aplica a CalendarView";
+                case "dayOfWeekBackground":
+                case "selectedWeekBackgroundColor":
+                case "focusedMonthDateColor":
+                case "weekNumberColor": {
+                    int color = resourceResolver.resolveColor(view, value, 0);
+                    if (isColorNotSet(color)) {
+                        return "color no resoluble (" + value + ")";
+                    }
+                    if (view instanceof android.widget.CalendarView calendarView) {
+                        switch (name) {
+                            case "selectedWeekBackgroundColor" -> calendarView.setSelectedWeekBackgroundColor(color);
+                            case "focusedMonthDateColor" -> calendarView.setFocusedMonthDateColor(color);
+                            case "weekNumberColor" -> calendarView.setWeekNumberColor(color);
+                            default -> calendarView.setUnfocusedMonthDateColor(color);
+                        }
+                        return null;
+                    }
+                    return name + " solo aplica a CalendarView";
+                }
+                case "datePickerMode":
+                case "timePickerMode":
+                    return "el modo (calendar/spinner) se elige por codigo en la app compilada";
+                case "calendarViewShown":
+                    if (view instanceof android.widget.DatePicker datePicker) {
+                        datePicker.setCalendarViewShown(Boolean.parseBoolean(value));
+                        return null;
+                    }
+                    return "calendarViewShown solo aplica a DatePicker";
+                case "spinnersShown":
+                    if (view instanceof android.widget.DatePicker datePicker) {
+                        datePicker.setSpinnersShown(Boolean.parseBoolean(value));
+                        return null;
+                    }
+                    return "spinnersShown solo aplica a DatePicker";
+                case "iconifiedByDefault":
+                    if (view instanceof android.widget.SearchView searchView) {
+                        searchView.setIconifiedByDefault(Boolean.parseBoolean(value));
+                        return null;
+                    }
+                    return "iconifiedByDefault solo aplica a SearchView";
+                case "queryHint":
+                    if (view instanceof android.widget.SearchView searchView) {
+                        searchView.setQueryHint(value);
+                        return null;
+                    }
+                    return "queryHint solo aplica a SearchView";
+
+                // ------------------------------------------------ piezas que la vista previa no
+                // puede resolver porque se configuran por CODIGO en la app compilada
+                case "menu":
+                case "itemCount":
+                case "listitem":
+                    return "se configura por codigo en la app (no hay XML equivalente)";
+                case "colorScheme":
+                case "colorSchemeColors":
+                    return "SwipeRefreshLayout define sus colores en codigo (setColorSchemeColors)";
+
+                default:
+                    return "atributo no reconocido por la lista de la vista previa";
+            }
+        } catch (Throwable throwable) {
+            return conciseMessage(throwable);
+        }
+    }
+
+    // ------------------------------------------------------------------ reflexion
+
+    /**
+     * Ultimo recurso: aplicar el atributo llamando a un setter del PROPIO widget.
+     *
+     * <p>Con esto, un atributo de libreria ({@code app:loQueSea}) se aplica si la clase destino
+     * tiene un setter convencional, sin necesidad de conocerlo de antemano: se prueban variantes del
+     * nombre de mas especifica a mas generica ({@code civ_border_color} -> {@code setCivBorderColor},
+     * {@code setBorderColor}) y el valor se convierte segun el tipo del parametro (int de color,
+     * int de medida, boolean, float, CharSequence, ColorStateList).
+     *
+     * @return {@code null} si se ha aplicado; si no, el motivo para el aviso ambar.
+     */
+    private String applyViaReflection(View view, String name, String value) {
+        String[] tokens = name.split("[_.]");
+        if (tokens.length == 0) {
+            return "nombre de atributo vacio";
+        }
+        java.util.List<String> candidates = new ArrayList<>();
+        for (int start = 0; start < tokens.length; start++) {
+            StringBuilder candidate = new StringBuilder();
+            for (int i = start; i < tokens.length; i++) {
+                if (tokens[i].isEmpty()) {
+                    continue;
+                }
+                candidate.append(Character.toUpperCase(tokens[i].charAt(0)))
+                        .append(tokens[i].substring(1));
+            }
+            if (candidate.length() > 0 && !candidates.contains(candidate.toString())) {
+                candidates.add(candidate.toString());
+            }
+        }
+        for (String candidate : candidates) {
+            for (Class<?> clazz = view.getClass(); clazz != null && clazz != Object.class;
+                 clazz = clazz.getSuperclass()) {
+                java.lang.reflect.Method method = findSingleArgSetter(clazz, "set" + candidate);
+                if (method == null) {
+                    continue;
+                }
+                Object argument = convertForSetter(method.getParameterTypes()[0], view, name, value);
+                if (argument == null) {
+                    continue;
+                }
+                try {
+                    method.invoke(view, argument);
+                    android.util.Log.i(TAG, "info: atributo " + name + " aplicado con " + clazz.getSimpleName()
+                            + "." + method.getName());
+                    return null;
+                } catch (Throwable throwable) {
+                    return "el setter " + method.getName() + " rechazo el valor (" + conciseMessage(throwable) + ")";
+                }
+            }
+        }
+        return "no se ha encontrado un setter equivalente en "
+                + shortClassName(view.getClass().getName());
+    }
+
+    private static java.lang.reflect.Method findSingleArgSetter(Class<?> clazz, String methodName) {
+        for (java.lang.reflect.Method method : clazz.getMethods()) {
+            if (method.getName().equals(methodName)
+                    && method.getParameterCount() == 1
+                    && !java.lang.reflect.Modifier.isStatic(method.getModifiers())) {
+                return method;
+            }
+        }
+        return null;
+    }
+
+    /** Convierte el valor del XML al tipo del parametro del setter; null = no sabemos convertirlo. */
+    private Object convertForSetter(Class<?> type, View view, String name, String value) {
+        String lowerName = name.toLowerCase(Locale.US);
+        boolean colorishName = lowerName.contains("color") || lowerName.contains("tint")
+                || lowerName.contains("colour");
+        boolean colorishValue = value.startsWith("#") || value.startsWith("@color/")
+                || value.startsWith("@android:color/") || value.startsWith("?");
+        if (type == int.class || type == Integer.class) {
+            if (colorishValue || colorishName) {
+                int color = resourceResolver.resolveColor(view, value, 0);
+                return isColorNotSet(color) ? null : color;
+            }
+            return sharedResolver(view).dimension(value, 0);
+        }
+        if (type == float.class || type == Float.class) {
+            if (colorishValue) {
+                return null;
+            }
+            return (float) sharedResolver(view).dimension(value, 0);
+        }
+        if (type == boolean.class || type == Boolean.class) {
+            return Boolean.parseBoolean(value);
+        }
+        if (type == android.content.res.ColorStateList.class) {
+            int color = resourceResolver.resolveColor(view, value, 0);
+            return isColorNotSet(color) ? null : android.content.res.ColorStateList.valueOf(color);
+        }
+        if (CharSequence.class.isAssignableFrom(type) || type == String.class) {
+            return value;
+        }
+        if (type == android.graphics.drawable.Drawable.class) {
+            return isResourceReference(value) ? resourceResolver.resolveDrawable(value) : null;
+        }
+        return null;
+    }
+
+    // ------------------------------------------------------------------ utilidades
+
+    /**
+     * Atributos que NO son "aspecto" sino posicion/tamano en el padre: los aplica el parser (bean de
+     * layout) y {@link #applyLayoutParams}. Se ignoran a proposito para no ensuciar el aviso ambar.
+     */
+    private static boolean isLayoutOnlyAttribute(String name) {
+        return LAYOUT_ONLY_ATTRIBUTES.contains(name) || name.startsWith("layout_") || name.startsWith("tools:");
+    }
+
+    private static final java.util.Set<String> LAYOUT_ONLY_ATTRIBUTES = java.util.Set.of(
+            "id", "layout", "weightSum", "listitem", "orientation_");
+
+    private float parseFloatOr(String value, float fallback) {
+        try {
+            return Float.parseFloat(value.trim());
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
+    }
+
+    private int parseInputType(String value) {
+        int type = android.text.InputType.TYPE_CLASS_TEXT;
+        if (value == null) {
+            return type;
+        }
+        if (value.contains("number")) {
+            type = value.contains("decimal")
+                    ? android.text.InputType.TYPE_CLASS_NUMBER | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+                    : android.text.InputType.TYPE_CLASS_NUMBER;
+        }
+        if (value.contains("phone")) {
+            type = android.text.InputType.TYPE_CLASS_PHONE;
+        }
+        if (value.contains("textEmailAddress")) {
+            type = android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS;
+        }
+        if (value.contains("textPassword")) {
+            type = android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD;
+        }
+        if (value.contains("textMultiLine")) {
+            type = android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE;
+        }
+        if (value.contains("textPersonName")) {
+            type = android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PERSON_NAME;
+        }
+        return type;
+    }
+
+    private int parseImeOptions(String value) {
+        if (value == null) {
+            return android.view.inputmethod.EditorInfo.IME_ACTION_NONE;
+        }
+        if (value.contains("actionDone")) {
+            return android.view.inputmethod.EditorInfo.IME_ACTION_DONE;
+        }
+        if (value.contains("actionSearch")) {
+            return android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH;
+        }
+        if (value.contains("actionNext")) {
+            return android.view.inputmethod.EditorInfo.IME_ACTION_NEXT;
+        }
+        if (value.contains("actionGo")) {
+            return android.view.inputmethod.EditorInfo.IME_ACTION_GO;
+        }
+        if (value.contains("actionSend")) {
+            return android.view.inputmethod.EditorInfo.IME_ACTION_SEND;
+        }
+        return android.view.inputmethod.EditorInfo.IME_ACTION_NONE;
+    }
+
+    // ---------------------------------------------- atributos de las familias compartidas
+
+    private static final java.util.Set<String> TAB_LAYOUT_ATTRIBUTES = java.util.Set.of(
+            "tabGravity", "tabMode", "tabIndicatorHeight", "tabIndicatorColor", "tabTextColor",
+            "tabSelectedTextColor");
+
+    private static final java.util.Set<String> CIRCLE_IMAGE_VIEW_ATTRIBUTES = java.util.Set.of(
+            "civ_border_color", "civ_circle_background_color", "civ_border_width", "civ_border_overlay",
+            "civ_fill_color");
+
+    private static final java.util.Set<String> MATERIAL_BUTTON_ATTRIBUTES = java.util.Set.of(
+            "cornerRadius", "strokeWidth", "strokeColor", "iconTint", "iconSize", "insetTop", "insetBottom");
+
+    private static final java.util.Set<String> CARD_VIEW_ATTRIBUTES = java.util.Set.of(
+            "cardBackgroundColor", "cardElevation", "cardCornerRadius", "cardUseCompatPadding",
+            "cardMaxElevation", "cardPreventCornerOverlap", "strokeColor", "strokeWidth");
 
     private int parseGravity(String value) {
         int gravity = android.view.Gravity.NO_GRAVITY;
@@ -1219,26 +2312,31 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
         return value.startsWith("@") || value.startsWith("?");
     }
 
-    private void applyCardViewInject(androidx.cardview.widget.CardView cardView, String inject) {
-        if (inject == null || inject.isEmpty()) {
+    /**
+     * CardView: radio, elevacion y borde. Se delega en el applier compartido con el editor de
+     * diseno ({@link pro.sketchware.utility.WidgetInjectApplier#applyCardView}) para que las dos
+     * vistas previas no se contradigan. El fondo de la tarjeta sale del bean de layout (que es donde
+     * el parser guarda {@code app:cardBackgroundColor} y {@code android:background}).
+     */
+    private void applyCardViewInject(androidx.cardview.widget.CardView cardView, ViewBean bean) {
+        if (bean == null) {
             return;
         }
-        Matcher radiusMatcher = Pattern.compile("cardCornerRadius=\"(\\d+)(?:dp|px)?\"").matcher(inject);
-        if (radiusMatcher.find()) {
-            try {
-                cardView.setRadius(dp(Integer.parseInt(radiusMatcher.group(1))));
-            } catch (NumberFormatException ignored) {
-                android.util.Log.d("SketchwarePro", "LayoutPreviewActivity: NumberFormatException ignored", ignored);
+        var handler = new pro.sketchware.utility.InjectAttributeHandler(bean);
+        int fallbackBackground = 0;
+        if (handler.getAttributeValueOf("cardBackgroundColor").isEmpty() && bean.layout != null) {
+            String resColor = bean.layout.backgroundResColor;
+            if (resColor != null && !resColor.isEmpty()) {
+                int resolved = resourceResolver.resolveColor(cardView, resColor, 0);
+                if (!isColorNotSet(resolved)) {
+                    fallbackBackground = resolved;
+                }
+            } else if (!isColorNotSet(bean.layout.backgroundColor)) {
+                fallbackBackground = bean.layout.backgroundColor;
             }
         }
-        Matcher elevationMatcher = Pattern.compile("cardElevation=\"(\\d+)(?:dp|px)?\"").matcher(inject);
-        if (elevationMatcher.find()) {
-            try {
-                cardView.setCardElevation(dp(Integer.parseInt(elevationMatcher.group(1))));
-            } catch (NumberFormatException ignored) {
-                android.util.Log.d("SketchwarePro", "LayoutPreviewActivity: NumberFormatException ignored", ignored);
-            }
-        }
+        pro.sketchware.utility.WidgetInjectApplier.applyCardView(
+                cardView, handler, sharedResolver(cardView), fallbackBackground);
     }
 
     private void applyLayoutParams(View view, ViewBean bean, ViewGroup parent) {

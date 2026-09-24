@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.10.3-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.10.4-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -160,6 +160,36 @@ Este repositorio es un fork personal. Cada mejora se añade aquí según entra, 
 - **Coste:** los dos ejecutables empaquetados suman **10,18 MB** al APK `arm64-v8a`. Las otras ABIs no tienen
   backend AOT y lo dicen, en vez de fallar en silencio. El modo por defecto sigue siendo **debug/JIT**, esto
   continua siendo experimental y todavia no hay hot reload.
+- **v7.0.10.4 (versionCode 171) — "los colores no se ven en ninguno", y la causa era una lista blanca de 19
+  atributos.** La vista previa resolvia los atributos `app:*`/`android:*` con un `switch` fijo de **19 nombres** y
+  **descartaba todo lo demas en silencio** — ni aviso ni log — mientras el editor de diseno (`ViewPane`) si los
+  aplicaba con sus propios handlers; el motor bueno era el del editor y la vista previa usaba casi siempre el otro
+  camino (`tryInflateRealLayout`). Por eso ningun color configurado en un widget — indicador de tab, borde del
+  circulo, stroke del card, tinte de la barra, divider del spinner — llegaba a verse. **Que ha cambiado:** los
+  appliers de `TabLayout`, `CircleImageView`, `MaterialButton` y `CardView` se extraen del editor a un unico helper
+  compartido (`pro.sketchware.utility.WidgetInjectApplier`) para que los dos motores apliquen lo mismo, y el resto
+  pasa por un **aplicador generico por tipo de vista** (TextView, ImageView, Progress/Seek/Rating, CompoundButton,
+  List/Grid/Spinner, BottomNavigationView, TextInputLayout, Calendar/Date/TimePicker, SearchView, LinearLayout…) con
+  **ultimo recurso por reflexion** (`app:loQueSea` -> `setLoQueSea`); y lo que no se puede aplicar sale ahora en la
+  **barra ambar con su motivo** — nunca mas en silencio. Encontrado por el camino: soporte de `@dimen` (nuevo
+  `resolveDimen`), `@drawable`/`@color` en esos atributos, `<size>` de un shape con solo alto (el divider invisible),
+  `textColor`/`textSize` de `AnalogClock`/`DigitalClock` (el parser los tiraba), un `TabLayout` sin pestanas (se
+  anaden 3 de ejemplo, exactamente como hace el editor) y `ProgressBar` horizontal cuando el XML lo pide.
+  **Verificado (PIL/numpy, 7 casos, uno por familia, en claro y en oscuro, contando los pixeles del color dominante
+  donde debe estar), antes -> despues:** stroke del card **0 -> 19.988 px**; indicador de tab **0 -> 1.496**; texto
+  seleccionado del tab **0 -> 689**; borde del circulo **0 -> 11.924**; fondo del circulo **0 -> 90.660**;
+  `progressTint` **0 -> 18.907**; un `divider` con `@drawable` del proyecto **0 -> 11.880**; `DigitalClock`
+  `#CC0000` **0 -> 3.060** — **7/7 casos en claro y 7/7 en oscuro**. La barra ambar dice `Preview OK` sin atributos
+  pendientes en los casos A/B/C/D/G, en E lista solo los cinco atributos de libreria que una clase ausente no puede
+  recibir (con el motivo) y en F no queda ningun atributo pendiente. Regresion de las rondas 1-7: **17/17 iguales**
+  al resumen del baseline (incluidos el `CircleImageView` de la ronda 7 y las diez vistas de la ronda 6), y de paso
+  se corrige un **aviso falso de `fontFamily`** que desviaba dos casos. El editor de diseno queda intacto
+  (`ViewPane.java` sin tocar, `DesignActivity` abre sin crash). **Honesto:** no se ha probado con *tu* proyecto ni tu
+  APK; el "antes" es la release previa y el "despues" el debug de esta ronda; los widgets cuya clase no esta en el
+  editor (Library/Google/ads/map/lottie) conservan fondo y tamano pero no sus atributos propios (se listan); y no se
+  han medido grosores ni radios por pixel, solo colores. Pagina de la release:
+  [v7.0.10.4](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.4). Todos los detalles:
+  [docs/preview-fix.md](docs/preview-fix.md) (ronda 8).
 - **v7.0.10.3 (versionCode 170) — el `CircleImageView` que rompia la vista previa ya no puede romper tampoco la app
   que compilas.** El aviso era `CircleImageView: scaleType CENTER no admitido`, con
   `java.lang.IllegalArgumentException: ScaleType FIT_CENTER not supported` y `Preview PARCIAL: 1 atributo no aplicado`,

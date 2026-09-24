@@ -127,7 +127,12 @@ public class ViewBeanFactory {
         applyGravity(attributes, injectAttributes);
 
         applyBackgroundResource(attributes, injectAttributes);
-        if (bean.getClassInfo().a("TextView")) {
+        // AnalogClock/DigitalClock son TextView (su classInfo no lo dice), pero SI admiten
+        // android:textColor/textSize: sin esto, el color de un reloj se descartaba en silencio
+        // (no es un atributo "extra", asi que no llegaba ni al inject ni a la vista previa).
+        if (bean.getClassInfo().a("TextView")
+                || bean.type == mod.agus.jcoderz.beans.ViewBeans.VIEW_TYPE_WIDGET_DIGITALCLOCK
+                || bean.type == mod.agus.jcoderz.beans.ViewBeans.VIEW_TYPE_WIDGET_ANALOGCLOCK) {
             applyText(attributes, injectAttributes);
         }
         if (bean.getClassInfo().a("ImageView")) {

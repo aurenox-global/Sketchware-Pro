@@ -1063,8 +1063,11 @@ public class ProjectResourceResolver {
                         case "size" -> {
                             int width = parseDimen(parser.getAttributeValue(null, "android:width"));
                             int height = parseDimen(parser.getAttributeValue(null, "android:height"));
-                            if (width > 0 && height > 0) {
-                                drawable.setSize(width, height);
+                            // Un <size> puede traer SOLO el alto (tipico en un separador) o solo el
+                            // ancho: antes se exigian los dos, asi que un divider con solo
+                            // android:height="4dp" quedaba con altura intrinseca 0 y no se veia.
+                            if (width > 0 || height > 0) {
+                                drawable.setSize(width > 0 ? width : -1, height > 0 ? height : -1);
                             }
                         }
                         default -> {

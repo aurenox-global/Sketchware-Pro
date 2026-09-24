@@ -724,3 +724,120 @@ esta aislado: basta devolver `FIT_CENTER` como valor por defecto en `parseScaleT
   medir; **no es el proyecto del usuario**.
 - Siguen vigentes los pendientes de las rondas 1-6 (tema del IDE para los `?atributo`, `MaterialButton` con
   `wrap_content`, Material3 del proyecto sin probar, todo medido en emulador y no en movil fisico).
+
+---
+
+## 12. Ronda 8 (v7.0.10.4)
+
+Release: <https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.4> · Fecha: 2026-09-24
+Dispositivo: emulador `emulator-5554` (`sdk_gphone64_arm64`, arm64-v8a, API 34, densidad 2.75) · Build del IDE:
+**debug** (`:app:assembleDebug`, arm64-v8a) · Baseline «antes»: **release** pre-cambio (rondas 1-7) sobre los MISMOS
+XML. Evidencia: `preview-evidence/r8/` (`pre8_*`, `after_*`, `dark_pre8_*`, `dark_after_*`, `reg8/`, `reg8b/`,
+`measure8.py`, `run_case8.sh`, `run_regression8.sh`).
+
+### 12.1 El síntoma
+
+La queja del usuario era una sola frase: *«los colores no se ven en ninguno»*. En la vista previa, los widgets con
+color o tamaño configurado (`TabLayout`, `CircleImageView`, `MaterialButton`, `CardView`, `ProgressBar`, `DigitalClock`…)
+salían sin ese color y **sin ningún aviso**: la vista previa cerraba con `Preview OK` como si todo estuviese bien.
+
+### 12.2 La causa: `applyInjectAttributes` era una lista blanca de 19 atributos
+
+`LayoutPreviewActivity.applyInjectAttributes()` resolvía los atributos `app:*`/`android:*` con un `switch` literal de
+**19 nombres** (`background`, `backgroundTint`, `textColor`, `gravity`, `orientation`, `elevation`, `alpha`,
+`visibility`, `padding`, `paddingLeft/Top/Right/Bottom`, `textSize`, `hint`, `src`/`srcCompat`, `scaleType`,
+`singleLine`, `maxLines`) y **descartaba todo lo demás en silencio**: ni aviso ámbar, ni log, ni nada. El editor de
+diseño (`ViewPane`) **sí** tenía handlers propios para esas propiedades (`updateTabLayout`, `updateCircleImageView`,
+`updateMaterialButton`, `updateCardView`) — el motor bueno era el del editor, y la vista previa usaba casi siempre el
+otro camino (`tryInflateRealLayout`, el principal). De ahí que el mismo diseño se viera bien en el editor de diseño y
+sin ningún color en la vista previa.
+
+### 12.3 El diseño del arreglo
+
+| # | Cambio | Fichero |
+|---|---|---|
+| 1 | **Appliers compartidos** (`TabLayout`, `CircleImageView`, `MaterialButton`, `CardView`) extraídos del editor de diseño: un solo sitio para los dos motores | **NUEVO** `pro/sketchware/utility/WidgetInjectApplier.java` |
+| 2 | `applyInjectAttributes` reescrito: familias + **aplicador genérico por tipo de vista** (TextView, ImageView, Progress/Seek/Rating, CompoundButton, ListView/GridView/Spinner, BottomNavigationView, TextInputLayout, Calendar/Date/TimePicker, SearchView, LinearLayout…) + **último recurso por reflexión** (`app:loQueSea` → `setLoQueSea`) | `LayoutPreviewActivity.java` |
+| 3 | Lo que NO se aplica → **aviso ámbar con el motivo**, nunca más un descarte mudo | `LayoutPreviewActivity.java` |
+| 4 | `@dimen`/`@color`/`@drawable`/`?attr` resueltos también en estos atributos: nuevo `resolveDimen()` (dimens.xml del proyecto, `@android:dimen/`, dp/sp/px) | `activities/preview/ProjectResourceResolver.java` |
+| 5 | `<size>` de un shape con **solo alto o solo ancho** (un divider `android:height="4dp"` quedaba con altura intrínseca 0 → invisible) | `ProjectResourceResolver.java` |
+| 6 | `AnalogClock`/`DigitalClock` son `TextView` para el parser: `android:textColor`/`textSize` ya no se descartan | `tools/ViewBeanFactory.java` |
+| 7 | Un `ProgressBar` creado por reflexión heredaba el estilo «círculo indeterminado» del tema: cuando el XML pide la barra horizontal se construye con `progressBarStyleHorizontal` | `LayoutPreviewActivity.java` |
+| 8 | Un `TabLayout` **sin pestañas** no pintaba NADA (ni indicador ni textos): se le añaden 3 pestañas de ejemplo, exactamente lo que hace el editor de diseño | `LayoutPreviewActivity.java` |
+
+**`ViewPane` NO se ha tocado** (mtime 10:48, anterior al inicio de la ronda): el editor de diseño sigue siendo el
+mismo motor y `DesignActivity` abre sin crash.
+
+### 12.4 Medición: antes → después
+
+XML de cada caso: `preview-evidence/r8/caseX_*.xml` (uno por familia, colores y tamaños explícitos). Método:
+`measure8.py` (numpy) cuenta los píxeles del color elegido en el lienzo (zona útil, sin barra de herramientas ni
+barra de aviso) y comprueba > 0 px. Las ocho filas que pasan de 0 a visible:
+
+| Propiedad medida | Caso | ANTES | DESPUÉS |
+|---|---|---|---|
+| `strokeColor` `#1100AA` + `strokeWidth` 3dp del card (borde exterior) | B AndroidX | 0 px | **19.988 px** |
+| `tabIndicatorColor` `#FF0000` + `tabIndicatorHeight` 6dp | B | 0 px | **1.496 px** |
+| `tabSelectedTextColor` `#00FF00` | B | 0 px | **689 px** |
+| `civ_border_color` `#00FF00` 4dp (borde del círculo) | C Widgets | 0 px | **11.924 px** |
+| `civ_circle_background_color` `#0000FF` (fondo del círculo) | C | 0 px | **90.660 px** |
+| `progressTint` `#FF00FF` (barra horizontal, progress 40/100) | C | 0 px | **18.907 px** |
+| `divider="@drawable/r8_divider"` (shape del proyecto) | D List | 0 px | **11.880 px** |
+| `DigitalClock` `textColor` `#CC0000` 24sp | G Date & Time | 0 px | **3.060 px** |
+
+**7/7 casos: todos los colores obligatorios presentes**, en claro y en oscuro (`/tmp/r8_final_light.txt`,
+`/tmp/r8_final_dark.txt`). En oscuro los colores **con alfa** del caso D se mezclan con el lienzo oscuro: el padre
+mide `#410F12` y el `ListView` `#343F0E` antes y después (el color sigue aplicándose; solo cambia la mezcla).
+
+| Antes (release pre-cambio) | Después (debug de la ronda 8) |
+| --- | --- |
+| ![antes](assets/preview-r8-before.png) | ![después](assets/preview-r8-after.png) |
+
+Caso C: el `CircleImageView` salía sin borde ni fondo de círculo y el `ProgressBar` salía como **círculo
+indeterminado** en vez de barra; después se ven el borde verde (11.924 px), el fondo azul del círculo (90.660 px) y
+la barra horizontal magenta (18.907 px).
+
+### 12.5 El aviso ámbar: ni calla, ni miente
+
+| Caso | Resumen de la barra (después) |
+|---|---|
+| A, B, C, D, G | `Preview OK` (ningún atributo de color o tamaño en el aviso) |
+| E Library | `Preview PARCIAL: 4 vistas aproximadas · 5 atributos no aplicados` → son los atributos **de librería** que la clase ausente no puede recibir |
+| F Google | `Preview PARCIAL: 2 vistas aproximadas` (AdView y YouTubePlayerView; **0** atributos no aplicados) |
+
+Antes estas mismas propiedades **no salían en el aviso porque se descartaban en silencio**; ahora, o se aplican (y no
+se listan) o se listan con el motivo exacto (`sidebar_text_size="14sp" · no se ha encontrado un setter equivalente
+en FrameLayout`).
+
+### 12.6 Regresión de las rondas 1-7
+
+17 casos re-ejecutados con el APK nuevo → `preview-evidence/r8/reg8/` (+ `reg8b/` para los afectados por el aviso de
+fuente). **17/17 con el mismo resumen que el baseline**, incluidos el `CircleImageView` de la ronda 7 y los 10
+widgets de la ronda 6 (`caseR6_ten` y `caseR6_ten_compact` → `Preview OK · vistas: 17`).
+
+**Desviación encontrada y corregida dentro de la ronda:** en la primera pasada, `fontFamily="monospace"` /
+`@font/no_existe_font` aparecían como *«no se ha encontrado un setter equivalente en TextView»* — un **aviso ámbar
+falso**, porque la fuente la aplica `applyTextTypeface`. Se marcaron `fontFamily`/`textStyle` como atendidos y
+`caseB2_estilo` (→ `Preview OK · vistas: 5`) y `caseR4_mixed` vuelven a su resumen exacto de la ronda 7 (`reg8b/`).
+
+### 12.7 Pendientes honestos de la ronda 8
+
+- **El proyecto del usuario y su APK no se han probado.** Todo está medido con el proyecto de pruebas 601 (al que se
+  añadieron `dimens.xml`, `r8_anillo.png` y `r8_divider.xml` como material de prueba).
+- **Tipos de build mezclados:** el «antes» es el APK **release** pre-cambio y el «después» el **debug** de esta ronda
+  (firmar distinto obliga a desinstalar). Los widgets de estos casos se dibujan igual en los dos builds.
+- **Medir color ≠ medir tamaño:** la tabla mide el COLOR. Los tamaños (`cornerRadius`, `strokeWidth`,
+  `tabIndicatorHeight`, `textSize`, `firstDayOfWeek`…) se verifican por el mismo camino (el applier compartido) y por
+  la ausencia de aviso, pero **no se han medido píxeles de grosor ni de radio** salvo donde el color revela la forma
+  (borde / indicador / barra).
+- **Cambios de aspecto intencionados** en diseños ya existentes: (i) un `TabLayout` sin pestañas ahora muestra 3
+  pestañas de ejemplo; (ii) un `ProgressBar` con `progress`/`progressTint` se dibuja horizontal; (iii)
+  `AnalogClock`/`DigitalClock` reciben sus atributos de texto. Son las tres cosas que hacían «que no se viera» lo
+  configurado.
+- **Widgets cuya clase no está en el editor** (Library/Google/ads/map/lottie): el contenedor aproximado conserva
+  fondo, padding, tamaño y alpha, pero sus atributos propios no tienen dónde aplicarse; se listan uno a uno con el
+  motivo.
+- **Rendimiento:** `applyInjectAttributes` recorre ahora todos los atributos y, en el peor caso, prueba reflexión. En
+  los 7 casos + 17 de regresión no ha habido lentitud perceptible, pero no se han medido tiempos.
+- Siguen vigentes los pendientes de las rondas 1-7 (tema del IDE para los `?atributo`, Material3 del proyecto sin
+  probar, `<selector>`/`<ripple>`/`<layer-list>` aproximados, todo medido en emulador y no en móvil físico).

@@ -7,6 +7,7 @@ import android.widget.ImageView;
 import androidx.cardview.widget.CardView;
 
 import com.google.android.material.button.MaterialButton;
+import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.tabs.TabLayout;
 
 import de.hdodenhof.circleimageview.CircleImageView;
@@ -107,13 +108,8 @@ public final class WidgetInjectApplier {
                 handler.getAttributeValueOf("civ_border_width"), DEFAULT_CIV_BORDER_WIDTH));
         imageView.setBorderOverlay(Boolean.parseBoolean(
                 emptyTo(handler.getAttributeValueOf("civ_border_overlay"), "false")));
-        String fill = handler.getAttributeValueOf("civ_fill_color");
-        if (!TextUtils.isEmpty(fill)) {
-            int fillColor = resolver.color(fill, 0);
-            if (fillColor != 0) {
-                imageView.setFillColor(fillColor);
-            }
-        }
+        // Ojo: la libreria 3.1.0 ya no tiene setFillColor (civ_fill_color de versiones viejas), asi
+        // que ese atributo cae al aviso ambar en vez de aplicarse en silencio a otro color.
     }
 
     /**
@@ -204,14 +200,14 @@ public final class WidgetInjectApplier {
             cardView.setPreventCornerOverlap(Boolean.parseBoolean(preventOverlap));
         }
         String strokeWidth = handler.getAttributeValueOf("strokeWidth");
-        if (!TextUtils.isEmpty(strokeWidth)) {
-            cardView.setStrokeWidth(resolver.dimension(strokeWidth, 0));
+        if (!TextUtils.isEmpty(strokeWidth) && cardView instanceof MaterialCardView materialCardView) {
+            materialCardView.setStrokeWidth(resolver.dimension(strokeWidth, 0));
         }
         String strokeColor = handler.getAttributeValueOf("strokeColor");
-        if (!TextUtils.isEmpty(strokeColor)) {
+        if (!TextUtils.isEmpty(strokeColor) && cardView instanceof MaterialCardView materialCardView) {
             int color = resolver.color(strokeColor, 0);
             if (color != 0) {
-                cardView.setStrokeColor(color);
+                materialCardView.setStrokeColor(color);
             }
         }
     }

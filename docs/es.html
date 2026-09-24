@@ -37,14 +37,14 @@
 
   <!-- ============================================================ hero -->
   <section class="hero" style="border-top:none">
-    <div class="tag">● v7.0.10.3 · versionCode 170 · source-available</div>
+    <div class="tag">● v7.0.10.4 · versionCode 171 · source-available</div>
     <h1>Crea apps Android reales<br><span class="accent">desde tu móvil.</span></h1>
     <p class="lead">
       Sketchware Pro es un IDE de Android que funciona sobre Android: arrastra bloques, escribe Java o Kotlin,
       compila en el propio dispositivo y obtén un APK instalable — sin necesidad de ordenador.
     </p>
     <div class="btns">
-      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.3" target="_blank" rel="noopener">⬇ Descargar APK</a>
+      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.4" target="_blank" rel="noopener">⬇ Descargar APK</a>
       <a class="btn ghost" href="https://github.com/aurenox-global/Sketchware-Pro" target="_blank" rel="noopener">Ver el código en GitHub</a>
     </div>
 
@@ -134,12 +134,59 @@
       <span class="k">Hitos destacados</span>
       <p>
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.0">Flutter corriendo en el dispositivo, release/AOT incluido</a> &middot;
-        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.3">la vista previa de diseños arreglada, rondas 1 a 7</a> &middot;
+        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.4">la vista previa de diseños arreglada, rondas 1 a 8</a> &middot;
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.1">la descarga del toolchain de Dart ahora la decides tú, y el toolchain ya no dice "no instalado"</a> &middot;
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.9">soporte de Kotlin en el IDE de la app</a>.
       </p>
     </div>
     <div class="log" id="change-log">
+      <div class="item done featured">
+        <span class="when">2026-09-24 · vista previa</span>
+        <h3>Los colores que "no se ven en ninguno": una lista blanca de 19 atributos los tiraba  <span class="pill feat">destacado</span> <span class="pill ok">arreglado</span></h3>
+        <ul class="clean">
+          <li><strong>La queja:</strong> <em>"los colores no se ven en ninguno"</em>. La vista previa resolvía los
+          atributos <code>app:*</code>/<code>android:*</code> con un <code>switch</code> fijo de
+          <strong>19 nombres</strong> y <strong>descartaba el resto en silencio</strong> — ni aviso ni log — mientras
+          el editor de diseño (<code>ViewPane</code>) sí los aplicaba con handlers propios. El motor bueno era el del
+          editor y la vista previa usaba casi siempre el otro camino (<code>tryInflateRealLayout</code>), así que
+          ningún color configurado en un widget llegaba a verse.</li>
+          <li><strong>Appliers compartidos + aplicador genérico + reflexión.</strong> Los appliers de
+          <code>TabLayout</code>, <code>CircleImageView</code>, <code>MaterialButton</code> y <code>CardView</code>
+          se extraen del editor de diseño a un único helper compartido
+          (<code>pro.sketchware.utility.WidgetInjectApplier</code>) para que los dos motores apliquen lo mismo, y el
+          resto pasa por un <strong>aplicador genérico por tipo de vista</strong> (TextView, ImageView,
+          Progress/Seek/Rating, CompoundButton, List/Grid/Spinner, BottomNavigationView, TextInputLayout,
+          Calendar/Date/TimePicker, SearchView, LinearLayout…) con <strong>último recurso por reflexión</strong>
+          (<code>app:loQueSea</code> → <code>setLoQueSea</code>). Lo que no se puede aplicar sale ahora en la
+          <strong>barra ámbar con su motivo</strong> — nunca más en silencio.</li>
+          <li><strong>Encontrado por el camino.</strong> Soporte de <code>@dimen</code> (nuevo
+          <code>resolveDimen</code>), <code>@drawable</code>/<code>@color</code> en esos atributos,
+          <code>&lt;size&gt;</code> de un shape con solo alto (el divider invisible),
+          <code>textColor</code>/<code>textSize</code> de <code>AnalogClock</code>/<code>DigitalClock</code> (el
+          parser los tiraba), un <code>TabLayout</code> sin pestañas (se añaden 3 de ejemplo, exactamente como hace
+          el editor) y <code>ProgressBar</code> horizontal cuando el XML lo pide.</li>
+          <li><strong>Medido (PIL/numpy, 7 casos, uno por familia, en claro y en oscuro), antes → después:</strong>
+          stroke del card <strong>0 → 19.988 px</strong>; indicador de tab <strong>0 → 1.496</strong>; texto
+          seleccionado del tab <strong>0 → 689</strong>; borde del círculo <strong>0 → 11.924</strong>; fondo del
+          círculo <strong>0 → 90.660</strong>; <code>progressTint</code> <strong>0 → 18.907</strong>; un
+          <code>divider</code> con <code>@drawable</code> del proyecto <strong>0 → 11.880</strong>;
+          <code>DigitalClock</code> <code>#CC0000</code> <strong>0 → 3.060</strong> — <strong>7/7 casos en claro y
+          7/7 en oscuro</strong>. La barra ámbar dice <code>Preview OK</code> sin atributos pendientes en los casos
+          A/B/C/D/G, en E lista solo los cinco atributos de librería que una clase ausente no puede recibir (con el
+          motivo) y en F no queda ningún atributo pendiente.</li>
+          <li><strong>Regresión y honestidad.</strong> Las rondas 1-7 salen <strong>17/17 iguales</strong> al resumen
+          del baseline (incluidos el <code>CircleImageView</code> de la ronda 7 y las diez vistas de la ronda 6), y
+          de paso se corrige un <strong>aviso falso de <code>fontFamily</code></strong> que desviaba dos casos; el
+          editor de diseño queda intacto (<code>ViewPane.java</code> sin tocar, <code>DesignActivity</code> abre sin
+          crash). <strong>Pendientes honestos:</strong> no se ha probado con <em>tu</em> proyecto ni tu APK; el
+          "antes" es la release previa y el "después" el debug de esta ronda; los widgets cuya clase no está en el
+          editor (Library/Google/ads/map/lottie) conservan fondo y tamaño pero no sus atributos propios (se listan);
+          y no se han medido grosores ni radios por píxel, solo colores.</li>
+        </ul>
+        <p><img src="assets/preview-r8-before.png" alt="Antes: el CircleImageView sin borde ni fondo de círculo y el ProgressBar como círculo indeterminado" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)"> <img src="assets/preview-r8-after.png" alt="Después: el CircleImageView con borde verde y fondo azul y el ProgressBar como barra horizontal magenta" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)"></p>
+        <p>Versión <strong>v7.0.10.4</strong> (versionCode 171). El detalle de la ronda 8 está al final de
+        <a href="preview-fix.md">docs/preview-fix.md</a>.</p>
+      </div>
       <div class="item done featured">
         <span class="when">2026-09-24 · vista previa</span>
         <h3>El <code>CircleImageView</code> que mataba la vista previa ya no puede matar la app que compilas  <span class="pill feat">destacado</span> <span class="pill ok">arreglado</span></h3>

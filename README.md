@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.10.3-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.10.4-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -160,6 +160,36 @@ This repository is a personal fork. Every improvement is added here as it lands,
 - **Cost:** the two packed executables add **10.18 MB** to the `arm64-v8a` APK. Other ABIs have no AOT backend and
   say so instead of failing silently. The default mode is still **debug/JIT**, this stays experimental and there is
   still no hot reload.
+- **v7.0.10.4 (versionCode 171) — "the colours show up in none of them", and the reason was a whitelist of 19
+  names.** The preview applied the `app:*`/`android:*` attributes through a fixed `switch` of **19 names** and
+  **discarded everything else in silence** — no warning, no log — while the design editor (`ViewPane`) did apply them
+  with its own handlers; the good engine was the editor's and the preview was almost always using the other path
+  (`tryInflateRealLayout`). That is why no colour configured on a widget — tab indicator, circle border, card stroke,
+  progress tint, spinner divider — ever showed up. **What changed:** the appliers of `TabLayout`, `CircleImageView`,
+  `MaterialButton` and `CardView` are extracted from the editor into a single shared helper
+  (`pro.sketchware.utility.WidgetInjectApplier`) so both engines apply the same thing, and the rest goes through a
+  **generic applier per view type** (TextView, ImageView, Progress/Seek/Rating, CompoundButton, List/Grid/Spinner,
+  BottomNavigationView, TextInputLayout, Calendar/Date/TimePicker, SearchView, LinearLayout…) with a **last-resort
+  reflection pass** (`app:loQueSea` → `setLoQueSea`); and whatever cannot be applied now ends up in the **amber bar
+  with its reason** — never in silence again. Found on the way: `@dimen` support (new `resolveDimen`),
+  `@drawable`/`@color` in those attributes, a shape `<size>` with height only (the invisible divider),
+  `textColor`/`textSize` of `AnalogClock`/`DigitalClock` (the parser was throwing them away), a `TabLayout` with no
+  tabs (three sample tabs are added, exactly as the editor does) and a horizontal `ProgressBar` when the XML asks for
+  it. **Verified (PIL/numpy, 7 cases, one per family, light and dark, counting the pixels of the dominant colour
+  where it belongs), before → after:** card stroke **0 → 19,988 px**; tab indicator **0 → 1,496**; selected tab text
+  **0 → 689**; circle border **0 → 11,924**; circle background **0 → 90,660**; `progressTint` **0 → 18,907**; a
+  `divider` set to a project `@drawable` **0 → 11,880**; `DigitalClock` `#CC0000` **0 → 3,060** — **7/7 cases in
+  light and 7/7 in dark**. The amber bar reads `Preview OK` with no pending attribute in cases A/B/C/D/G, in E it
+  lists only the five library attributes an absent class cannot receive (with the reason) and in F no attribute is
+  left pending. Rounds 1-7 regression: **17/17 identical** to the baseline summary (including the round-7
+  `CircleImageView` and the round-6 ten views), and a **false `fontFamily` warning** that was throwing two cases off
+  is fixed on the way. The design editor stays untouched (`ViewPane.java` not modified, `DesignActivity` opens
+  without a crash). **Honest:** not tested with *your* project or APK; "before" is the previous release and "after"
+  the debug build of this round; widgets whose class is not in the editor (Library/Google/ads/map/lottie) keep their
+  background and size but not their own attributes (they are listed); and no stroke width or radius was measured by
+  pixels, only colours. Release page:
+  [v7.0.10.4](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.4). Full write-up (in Spanish):
+  [docs/preview-fix.md](docs/preview-fix.md) (round 8).
 - **v7.0.10.3 (versionCode 170) — the `CircleImageView` that broke the preview can no longer break the app you
   compile either.** The warning was `CircleImageView: scaleType CENTER no admitido`, with
   `java.lang.IllegalArgumentException: ScaleType FIT_CENTER not supported` and `Preview PARCIAL: 1 atributo no
