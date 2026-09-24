@@ -1125,3 +1125,170 @@ con `--arch x64c --mode product --os android`, porque Android x64 exige **compre
 (release 112.136.131 → 116.476.809), arm64 idéntico. **Honesto: la ejecución real en x86_64 no está verificada** — no
 hay imagen x86_64 disponible y compilar/ejecutar en Apple Silicon es inviable. Detalle completo:
 [docs/flutter-consent.md](flutter-consent.md).
+
+---
+
+## 15. Ronda 11 (v7.0.12.0)
+
+Fecha: 2026-09-24 · Versión: **v7.0.12.0** (versionCode 174) · Repo: `Sketchware-Pro-main`
+
+Release: <https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.12.0>
+
+Tres piezas de la vista previa de diseños: el botón **Copiar** del diálogo de avisos (petición del usuario), la
+causa confirmada de "no veo los colores" (**el permiso de almacenamiento**) con su arreglo, y una **segunda causa
+real** medida (`colors.xml` solo se leía de `values/`). Ficheros tocados:
+`app/src/main/java/pro/sketchware/activities/preview/LayoutPreviewActivity.java` (+221) y
+`app/src/main/java/pro/sketchware/activities/preview/ProjectResourceResolver.java` (+72); **261 inserciones y 32
+borrados** en total. Todo se volvió a comprobar después en el **APK release (R8)** (§15.4).
+
+| El diálogo de avisos, con el botón **Copiar** | Con el permiso denegado: línea y barra en **ámbar** |
+| --- | --- |
+| ![Diálogo con el botón Copiar](assets/preview-r11-copy.png) | ![Estado con permiso denegado, en ámbar](assets/preview-r11-permission.png) |
+
+### 15.1 Botón "Copiar" en el diálogo de avisos
+
+**Qué hace.** El diálogo de la vista previa — tanto el de la barra **parcial** como el del caso **OK** — tiene un
+botón **neutro "Copiar"** que lleva al portapapeles el **informe completo, sin truncar**, y confirma con el toast
+**"Aviso copiado"**. El botón `OK` se mantiene.
+
+**Por qué "completo" está medido y no solo dicho.** El diálogo corta cada grupo a **12 líneas**
+(`…y N mas (pulsa Copiar para el aviso completo; tambien en el log LayoutPreview)`). El copiado usa el mismo
+generador con `truncate=false`:
+
+| caso | diálogo | copiado |
+| --- | --- | --- |
+| 2 recursos no encontrados | 12 líneas por grupo | log `info: aviso copiado al portapapeles (1119 caracteres)` |
+| `caseD`, **20** colores rotos | 12 + `…y 8 mas` | **1869 caracteres** (crece con los 20, no con los 12) |
+| `caseE` (estilos/iconos) | 12 líneas por grupo | **572 caracteres** |
+
+**Prueba end-to-end de que el portapapeles tiene el texto entero** (no solo el log interno): el portapapeles se pegó
+en el buscador de Ajustes (`KEYCODE_PASTE`, 279) y en pantalla aparece el **final** del informe
+(`…ware Pro · vista previa de disenos`), es decir, está completo, con su última línea. Leer el portapapeles desde
+shell **no** es posible en API 34: `cmd clipboard` responde *"No shell command implementation."* y
+`service call clipboard 1..8` solo devuelve `SecurityException`/"No items"; por eso el pegado real.
+
+**Contenido del texto copiado** (autosuficiente, se entiende sin la app): cabecera `Vista previa · <layout>`, la
+línea `Estado:` (vistas dibujadas · recursos no encontrados · vistas aproximadas · atributos no aplicados ·
+estilos/medidas no aplicados), un bloque por causa con su recuento y **cada** elemento con su motivo, la línea
+`Drawables buscados en: …`, las notas explicativas y la firma `— Sketchware Pro · vista previa de disenos`.
+
+### 15.2 Causa confirmada (con prueba): el permiso de almacenamiento
+
+Emulador `RV_API34` (arm64, API 34). Caso `caseC`: un `LinearLayout` con
+`android:background="@color/color_proyecto"` (#0000FF, del `values/colors.xml` del proyecto 601), un `TextView` con
+ese color y un `ImageView` con `@drawable/r8_anillo`. **Mismo APK, misma pantalla: solo cambia el permiso.**
+
+| estado del permiso | (0,0,255) px | barra |
+| --- | --- | --- |
+| `MANAGE_EXTERNAL_STORAGE allow` | **373.070 px**, bbox `x[0,1079] y[182,599]` | `Preview OK · vistas: 4` |
+| `MANAGE_EXTERNAL_STORAGE deny` | **AUSENTE** | `⚠ Preview PARCIAL: 2 recursos no encontrados` |
+
+Con el permiso denegado, logcat confirma la causa raíz (no es una suposición):
+
+```
+warning: recurso no resuelto [colores]: @color/color_proyecto (no esta en files/resource/values/colors.xml)
+warning: recurso no resuelto [drawables/imagenes]: @drawable/r8_anillo (buscado en: 2 carpetas drawable* ...)
+E MediaProvider: Permission to access file: /storage/emulated/0/.sketchware/mysc/list/601/project is denied
+E ERROR: /storage/emulated/0/.sketchware/mysc/list/601/project: open failed: EACCES (Permission denied)
+```
+
+=> **Sin el permiso, los colores `@color/` del proyecto y los iconos desaparecen y la vista previa se queda con
+valores por defecto, en silencio.** (Además la app no puede leer ni el fichero del proyecto.)
+
+**Arreglado en tres piezas:**
+
+1. **Línea explícita en el diálogo, en ÁMBAR** (`ForegroundColorSpan(0xFFB26A00)`):
+   `⚠ No puedo leer los ficheros del proyecto: falta el permiso de almacenamiento (Acceso a todos los archivos);
+   los recursos del proyecto se muestran con su valor por defecto.`
+2. **La barra de estado** ya no se pinta roja por culpa del permiso: con el permiso ausente va en **ámbar** y añade
+   `· falta el permiso de almacenamiento (Acceso a todos los archivos)`. Con el permiso concedido se comporta
+   **exactamente** como antes (rojo solo si faltan recursos de verdad): regresión intacta.
+3. **Diálogo "Permiso de almacenamiento" antes de dibujar**: si la app no puede leer `.sketchware`, sale un diálogo
+   con **Conceder** (abre los ajustes de "Acceso a todos los archivos" de `pro.sketchware` vía
+   `FileUtil.requestAllFilesAccessPermission` → `com.android.settings.spa.SpaActivity`) y **Ahora no**. No bloquea el
+   dibujado: sin permiso se dibuja igual, pero ya no en silencio.
+
+**Relectura al volver.** Al cambiar el permiso se reconstruye el `ProjectResourceResolver` (que cacheaba "no pude
+leer nada" y no se recuperaba sin reiniciar la app). Verificado por log:
+`info: permiso de almacenamiento concedido: se releen los recursos del proyecto (.sketchware) en la siguiente
+previsualizacion`, seguido de `Preview OK`. Con permiso: **373.070 px exactos, mismo bbox** que antes de los cambios.
+
+### 15.3 Segunda causa real: los colores del proyecto (el `colors.xml` del `res` generado)
+
+La hipótesis del permiso está confirmada **como mecanismo**, pero encaja mal con "veo el diseño pero no los
+colores": sin permiso la app no puede leer ni el fichero del proyecto (`mysc/list/601/project` → `EACCES`), así que
+la lista de proyectos estaría vacía. Por eso se fue también a la otra vía y **se encontró un fallo real y medido**:
+
+`ensureColorsLoaded()` leía **solo** `files/resource/values/colors.xml`. Nunca miraba `value/`, `values-v21`,
+`values-night` **ni el `res` generado del build** (`.sketchware/mysc/<sc_id>/app/src/main/res/value*`) — justo las
+rutas que sí se arreglaron en `styles.xml` en la ronda 9a. Y en el proyecto 601 el `res` generado define colores que
+la app **sí** tiene:
+
+```xml
+<!-- .sketchware/mysc/601/app/src/main/res/values/colors.xml -->
+<color name="colorPrimary">#007FAC</color>  (colorPrimaryDark, colorAccent, colorControlHighlight, colorControlNormal)
+```
+
+Medición con `caseE` (`android:background="@color/colorPrimary"`), mismo APK, solo cambia el resolvedor:
+
+| | logcat | (0,127,172) px | barra |
+| --- | --- | --- | --- |
+| resolvedor viejo | `warning: recurso no resuelto [colores]: @color/colorPrimary (no esta en files/resource/values/colors.xml)` | **AUSENTE** (banda blanca **359.604 px**) | ROJO `⚠ Preview PARCIAL: 1 recurso no encontrado` |
+| resolvedor nuevo | `info: colors.xml del proyecto leidos: [values/colors.xml, mysc/601/.../values/colors.xml] -> 6 colores` | **356.400 px**, bbox `x[0,1079] y[182,511]` | sin rojo (`Preview: 1 nombre heredado resuelto`) |
+
+Es decir: **cualquier `@color/…` que exista en el `res` generado del build (`colorPrimary`, `colorAccent`, …) se
+daba por no encontrado y la banda salía con el color por defecto.** Cambios hechos (misma mecánica que en
+`styles.xml`): enumera `value*` en `files/resource` y en el `res` generado, lee `colors.xml`/`color.xml`, orden
+estable, prioridad para `values/colors.xml` (el comportamiento anterior no cambia: `putIfAbsent`) y parseo de color
+algo más tolerante. Resultado: **359.604 px blancos → 356.400 px con su color, cero rojo**.
+
+### 15.4 Smoke test del APK release (R8)
+
+| | |
+| --- | --- |
+| APK | `app/build/outputs/apk/release/app-arm64-v8a-release.apk` |
+| versionCode / versionName | **174** / `v7.0.12.0` |
+| md5 | `bcdaf0b16c7f55a90eebd4c5d11ff94c` |
+| Firma | mismo cert `testkey` que el debug → `adb install -r` conservó datos |
+| Dispositivo | emulador `emulator-5554` (`RV_API34`, arm64, API 34) |
+
+**Veredicto corto: ninguna diferencia con debug.** Los cuatro puntos se comportan igual (mediciones idénticas, salvo
+el texto exacto del informe, que depende del fixture):
+
+- **Copiar.** Botón neutro presente en el diálogo de la barra, tanto en el caso parcial (`caseD`, 20 colores rotos)
+  como en el `OK`. Al pulsar: toast **"Aviso copiado"** y log `info: aviso copiado al portapapeles (1627
+  caracteres)`. **Pegado real** (`KEYCODE_PASTE`): aparece el informe entero, con los **20** colores
+  (`@color/nx_1` … `@color/nx_20`) y la firma final. Completo. ✔
+- **Permiso denegado.** `0 colores`, diálogo **"Permiso de almacenamiento"** antes de dibujar (Conceder →
+  `com.android.settings/.spa.SpaActivity`) y línea **ámbar** `0xFFB26A00` **15.488 px** con **0 px** de
+  `0xFFB00020`; barra ámbar `(200,148,75)` **148.517 px, 0 rojo** (idéntica a debug). La banda `@color/` desaparece
+  con `deny` (0 px teal).
+- **Permiso concedido.** `colors.xml … -> 6 colores`, la banda vuelve **teal `(0,127,172)` = 356.400 px**, bbox
+  `x[0,1079] y[312,641]`, barra `Preview OK · vistas: 2`; y el log de relectura al volver de Ajustes. ✔
+- **`@color/` del `res` generado.** `@color/colorPrimary` → **356.400 px** teal con bbox exacto;
+  `@color/color_proyecto` → **356.400 px** azul.
+- **Regresión r8/r5.** `caseA_layouts` `Preview OK · vistas: 4`; `caseC_widgets` `Preview OK · vistas: 5`;
+  `r8 caseC` colores **púrpura 18.933 · verde 11.764 · azul 90.564 · cian 21.428 · magenta 18.896 px** con **bbox
+  idénticos pixel a pixel**; `r5 caseR5_families` con el mismo estado post-fix; y el rojo sigue reservado a recursos
+  realmente ausentes (`caseD` → barra roja `Preview PARCIAL: 20 recursos no encontrados`).
+
+**Nota de herramienta** (útil para futuras rondas): tras conceder por el toggle de Ajustes, `appops get` deja **dos
+entradas** (`Uid mode: allow` + entrada de paquete `deny`); `appops set pro.sketchware … deny` **no** deniega (gana
+el uid mode), hay que usar `appops set --uid pro.sketchware MANAGE_EXTERNAL_STORAGE deny`.
+
+### 15.5 Pendientes honestos de la ronda 11
+
+- **No se ha probado el móvil del usuario.** Se verificó el *mecanismo* (sin permiso → valores por defecto, con
+  evidencia de píxel y logcat) y la causa #2 (`colors.xml`) con antes/después medido.
+- **La relectura tras conceder el permiso está verificada por log, no por color en la misma pantalla**: al volver de
+  Ajustes, `onResume` redibuja el layout del *proyecto* (que no usa `@color/`), y el caso de prueba con `--es xml`
+  no se puede redibujar ahí. Lo probado: el resolvedor se reconstruye (log) y un resolvedor nuevo sí lee los 6
+  colores.
+- **Portapapeles:** el entorno no expone lectura del portapapeles desde shell en API 34; la evidencia es el log de la
+  propia copia + el pegado real (texto completo, con su última línea).
+- **Al recrear los fixtures cambió el *texto* del informe** (1627 vs 1869 caracteres): lo verificado es la propiedad
+  "completo y sin truncar", no la cadena literal.
+- **Regresión:** no se reejecutaron las 10 suites originales (sus XML/scripts ya no están en disco); sí casos
+  representativos (r5 y r8 con recuento de píxeles) más los cuatro puntos de la ronda, en debug **y** en release.
+- **Sin commitear** en el árbol de trabajo; `versionCode`/`versionName` los pone esta release a **174 / v7.0.12.0**.
+

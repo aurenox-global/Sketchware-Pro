@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.11.0-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.12.0-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -133,6 +133,34 @@ Requirements:
 
 This repository is a personal fork. Every improvement is added here as it lands, and the
 [website](https://aurenox-global.github.io/Sketchware-Pro/) is updated at the same time.
+
+### 2026-09-24 — Design preview, round 11: copy the whole notice, the storage permission and the colours the build's `res` defines
+
+- **v7.0.12.0 (versionCode 174) — copy the full notice, the storage permission, and the project colours that only
+  lived in the generated `res`.** Three pieces of the design preview, each one asked for or measured, and all three
+  checked again in the **release** APK under R8. (A) **The warnings dialog has a neutral "Copiar" button** — in the
+  partial bar and in the `OK` dialog — with the toast *"Aviso copiado"*. What it copies is the **complete report,
+  without truncating**: the dialog cuts each group at **12 lines**, the copy does not (**1,119** characters with 2
+  missing resources, **1,869** with 20 broken colours, **572** in the styles/icons case), and it is
+  **self-sufficient** (the state line, every group with its count, every item with its reason and its *"buscado
+  en:"*, and the closing signature). Verified end to end by pasting it for real into a text field. (B) **Cause one,
+  confirmed with proof: the storage permission.** With `MANAGE_EXTERNAL_STORAGE` denied the app cannot read the
+  project files and **everything falls back to the defaults silently**: the project's blue goes from **373,070 px to
+  absent**, logcat shows `EACCES (Permission denied)` and the icon disappears too. Fixed in three pieces: an explicit
+  **amber** line in the dialog, a **"Storage permission"** dialog that opens *All files access* when it is missing,
+  and a **re-read** of the project on return (verified in the log). With the permission granted the regression is
+  exact: **373,070 px**, same bounding box. (C) **Cause two, the one that was most likely yours: `colors.xml` was
+  read only from `values/`.** Colours defined in the `res` the build generates (`@color/colorPrimary`, `colorAccent`,
+  …) came out as *not found*, so the band stayed white and the bar went red. It now reads **both** locations, exactly
+  as `styles.xml` already did: **359,604 white px → 356,400 px with their own colour, zero red**. (D) **Checked again
+  in release (R8).** The four points behave **just like debug**: Copiar (toast + **1,627** characters + a real paste),
+  permission (amber `0xFFB26A00` **15,488 px**, **0 red**; with it, teal **356,400 px** and `Preview OK`),
+  `@color/colorPrimary` at **356,400 px** with the exact bounding box, and the r8/r5 regression with
+  **pixel-identical** counts and boxes (purple 18,933, green 11,764, blue 90,564, cyan 21,428, magenta 18,896).
+  **Honest:** recreating the fixtures changed the *text* of the report (1,627 vs 1,869 characters), and the clipboard
+  can only be verified with a real paste (API 34 does not expose it from the shell). Release page:
+  [v7.0.12.0](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.12.0). Full write-up (in Spanish):
+  [docs/preview-fix.md](docs/preview-fix.md) (round 11).
 
 ### 2026-09-23 — Flutter, experimental: release/AOT on the device, complete assets and real pub (phase 8)
 

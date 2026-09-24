@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.11.0-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.12.0-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -133,6 +133,34 @@ Requisitos:
 
 Este repositorio es un fork personal. Cada mejora se añade aquí según entra, y el
 [sitio web](https://aurenox-global.github.io/Sketchware-Pro/es.html) se actualiza a la vez.
+
+### 2026-09-24 — Vista previa, ronda 11: copiar el aviso completo, el permiso de almacenamiento y los colores que solo estaban en el `res` generado
+
+- **v7.0.12.0 (versionCode 174) — copiar el aviso completo, el permiso de almacenamiento y los colores del proyecto
+  que solo vivian en el `res` generado.** Tres piezas de la vista previa de disenos, cada una pedida o medida, y las
+  tres recomprobadas en el APK **release** con R8. (A) **El dialogo de avisos tiene un boton neutro "Copiar"** — en
+  la barra parcial y en el dialogo `OK` — con el toast *"Aviso copiado"*. Lo que copia es el **informe completo, sin
+  truncar**: el dialogo corta cada grupo a **12 lineas**, el copiado no (**1.119** caracteres con 2 recursos rotos,
+  **1.869** con 20 colores rotos, **572** en el caso de estilos/iconos), y es **autosuficiente** (la linea de estado,
+  cada grupo con su recuento, cada elemento con su motivo y su *"buscado en:"*, y la firma final). Verificado de
+  punta a punta pegandolo de verdad en un campo de texto. (B) **Causa uno, confirmada con prueba: el permiso de
+  almacenamiento.** Sin `MANAGE_EXTERNAL_STORAGE` la app no puede leer los ficheros del proyecto y **todo cae a
+  valores por defecto en silencio**: el azul del proyecto pasa de **373.070 px a ausente**, logcat muestra
+  `EACCES (Permission denied)` y el icono desaparece tambien. Arreglado en tres piezas: una linea **ambar** explicita
+  en el dialogo, un dialogo **"Permiso de almacenamiento"** que abre *Acceso a todos los archivos* si falta, y una
+  **relectura** del proyecto al volver (verificada por log). Con el permiso concedido la regresion es exacta:
+  **373.070 px**, mismo bbox. (C) **Causa dos, la que mas probablemente era la tuya: `colors.xml` solo se leia de
+  `values/`.** Los colores definidos en el `res` que genera el build (`@color/colorPrimary`, `colorAccent`, …) salian
+  *no encontrados*, asi que la banda seguia blanca y la barra en rojo. Ahora se leen **ambas** ubicaciones, igual que
+  ya se hacia con `styles.xml`: **359.604 px blancos → 356.400 px con su color, cero rojo**. (D) **Recomprobado en
+  release (R8).** Los cuatro puntos se comportan **igual que en debug**: Copiar (toast + **1.627** caracteres +
+  pegado real), permiso (ambar `0xFFB26A00` **15.488 px**, **0 rojo**; con el, teal **356.400 px** y `Preview OK`),
+  `@color/colorPrimary` con **356.400 px** y el bbox exacto, y la regresion r8/r5 con recuentos y bboxes
+  **identicos pixel a pixel** (purpura 18.933, verde 11.764, azul 90.564, cian 21.428, magenta 18.896). **Honesto:**
+  al recrear los fixtures cambio el *texto* del informe (1.627 vs 1.869 caracteres), y el portapapeles solo se puede
+  verificar con un pegado real (API 34 no lo expone por shell). Pagina de la release:
+  [v7.0.12.0](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.12.0). Todos los detalles:
+  [docs/preview-fix.md](docs/preview-fix.md) (ronda 11).
 
 ### 2026-09-23 — Flutter, experimental: release/AOT en el dispositivo, assets completos y pub real (fase 8)
 

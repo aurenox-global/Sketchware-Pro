@@ -1,8 +1,15 @@
 package pro.sketchware.activities.preview;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.res.Resources;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
+import android.text.SpannableString;
+import android.text.Spanned;
+import android.text.style.ForegroundColorSpan;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.WebView;
@@ -96,6 +103,33 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
 
     private static final String TAG = "LayoutPreview";
 
+    /**
+     * Aviso (ambar, nunca rojo) cuando la app NO puede leer los ficheros del proyecto: en Android 11+
+     * hace falta el permiso especial "Acceso a todos los archivos" (MANAGE_EXTERNAL_STORAGE) para
+     * leer {@code .sketchware/...}. Sin el, {@code @color/}, {@code @drawable/}, {@code styles.xml} y
+     * las imagenes del proyecto no se pueden ni abrir y TODOS los recursos del proyecto caen a su
+     * valor por defecto: la vista previa ensenaria el diseno del usuario "mal" sin decir por que.
+     */
+    private static final String STORAGE_PERMISSION_WARNING =
+            "No puedo leer los ficheros del proyecto: falta el permiso de almacenamiento"
+                    + " (Acceso a todos los archivos); los recursos del proyecto se muestran con su valor por defecto.";
+
+    /** Ambar del aviso de permisos (mismo tono que la barra de aviso no critica). */
+    private static final int STORAGE_WARNING_COLOR = 0xFFB26A00;
+
+    /**
+     * Informe COMPLETO del ultimo estado de la vista previa (sin truncar). Es lo que copia el boton
+     * "Copiar": autosuficiente para pegarlo en un chat, se entiende sin la app delante.
+     */
+    private String previewWarningReport;
+
+    /** Vistas dibujadas y WebViews del ultimo render (para el informe); -1 si aun no se ha dibujado. */
+    private int lastViews = -1;
+    private int lastWebViews = -1;
+
+    /** Ultimo estado conocido del permiso de almacenamiento, para releer los recursos si cambia. */
+    private boolean lastStorageOk = true;
+
     /** Nombre corto de una clase (lo ultimo tras el punto). */
     private static String shortClassName(String className) {
         if (className == null) {
@@ -173,6 +207,7 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
             return;
         }
         resourceResolver = new ProjectResourceResolver(this, scId);
+        lastStorageOk = canReadProjectFiles();
 
         pane = binding.pane;
         // ViewPane.initialize() construye el editor de colores del proyecto, y ese lee el campo estatico
@@ -198,12 +233,25 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
         layoutHistory.push(title);
         // Si quien abre la vista previa nos da el XML (editor de XML de vistas), lo usamos tal cual.
         pendingXml = getIntent().getStringExtra("xml");
+        // Si no podemos leer los ficheros del proyecto (falta el permiso de almacenamiento), se avisa y
+        // se ofrece concederlo ANTES de dibujar: asi los colores/iconos por defecto no enganan.
+        maybeAskForStoragePermission();
         renderCurrentLayout();
     }
 
     @Override
     public void onResume() {
         super.onResume();
+        // El resolvedor cachea lo que pudo (o no pudo) leer del disco: si el permiso de almacenamiento
+        // ha cambiado (p.ej. el usuario acaba de concederlo en Ajustes), se reconstruye para releer los
+        // recursos del proyecto, y asi los colores/iconos aparecen sin reiniciar la app.
+        boolean storageOk = canReadProjectFiles();
+        if (storageOk != lastStorageOk) {
+            lastStorageOk = storageOk;
+            resourceResolver = new ProjectResourceResolver(this, scId);
+            android.util.Log.i(TAG, "info: permiso de almacenamiento " + (storageOk ? "concedido" : "retirado")
+                    + ": se releen los recursos del proyecto (.sketchware) en la siguiente previsualizacion");
+        }
         if (!firstResume && !rendering) {
             refreshFromProject();
         }
@@ -400,7 +448,14 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
                     && resourceResolver.getWarnings().isEmpty()
                     && resourceResolver.getLegacyResolutions().isEmpty()) {
                 hidePreviewWarning();
+                lastViews = viewsById.size();
+                lastWebViews = webViewCount;
+                previewWarningReport = buildPreviewWarningReport(false);
                 debug("Preview OK · vistas: " + viewsById.size() + " · WebViews: " + webViewCount + sample);
+                // La barra del caso bueno tambien abre el informe: asi el boton "Copiar" existe en
+                // parcial Y en OK (misma peticion del usuario).
+                binding.debugStatus.setOnClickListener(v -> showPreviewWarningDetail());
+                binding.debugStatus.setClickable(true);
             } else {
                 // Nada de muros de texto: resumen corto y agrupado en la barra + detalle a un toque.
                 showPreviewWarningSummary(viewsById.size(), webViewCount);
@@ -462,14 +517,25 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
         // "PARCIAL" y rojo SOLO cuando algo ha fallado de verdad (recurso que no existe en ninguna
         // fuente). Una vista aproximada o un atributo no aplicable no son un fallo del diseno: se
         // avisan en ambar. Un nombre heredado mapeado es informativo.
-        boolean partial = resourceCount > 0 || viewCount > 0 || appearanceCount > 0 || informativeCount > 0;
-        boolean error = resourceCount > 0;
+        boolean storageOk = canReadProjectFiles();
+        if (!storageOk) {
+            // Causa raiz probable de "no veo mis colores/iconos": sin el permiso de "acceso a todos
+            // los archivos" no se puede leer NINGUN fichero del proyecto. Es un problema de
+            // configuracion del telefono, no del diseno: se avisa en AMBAR, no en rojo.
+            parts.add("falta el permiso de almacenamiento (Acceso a todos los archivos)");
+        }
+        boolean partial = resourceCount > 0 || viewCount > 0 || appearanceCount > 0 || informativeCount > 0
+                || !storageOk;
+        boolean error = resourceCount > 0 && storageOk;
         String summary = (partial ? "Preview PARCIAL: " : "Preview: ") + android.text.TextUtils.join(" · ", parts);
         binding.debugStatus.setVisibility(android.view.View.VISIBLE);
         binding.debugStatus.setBackgroundColor(error ? 0xB3B00020 : 0xB3B26A00);
         binding.debugStatus.setText((error ? "⚠ " : "ℹ ") + summary);
         binding.debugStatus.setOnClickListener(v -> showPreviewWarningDetail());
         binding.debugStatus.setClickable(true);
+        lastViews = views;
+        lastWebViews = webViews;
+        previewWarningReport = buildPreviewWarningReport(false);
         if (partial) {
             android.util.Log.w(TAG, "warning: " + summary);
         } else {
@@ -509,12 +575,13 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
     }
 
     /**
-     * Detalle agrupado del aviso, en un dialogo: una linea de cabecera por causa con su recuento y
-     * la lista de elementos (limitada, para que un diseno con 200 recursos rotos siga siendo legible).
+     * Grupos del aviso (titulo -> lineas), agrupados por causa y en orden estable: una linea de
+     * cabecera por causa con su recuento y la lista de elementos. Lo comparten el dialogo (que lo
+     * trunca para que un diseno con 200 recursos rotos siga siendo legible) y el informe completo
+     * que copia el boton "Copiar".
      */
-    private void showPreviewWarningDetail() {
+    private Map<String, List<String>> previewWarningGroups() {
         Map<ProjectResourceResolver.Kind, java.util.Set<String>> byKind = resourceResolver.getWarningsByKind();
-        StringBuilder text = new StringBuilder();
         Map<String, List<String>> groups = new LinkedHashMap<>();
 
         if (!renderWarnings.isEmpty()) {
@@ -553,32 +620,65 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
             groups.put("Nombres heredados resueltos -> icono actual", lines);
         }
 
+        return groups;
+    }
+
+    /**
+     * Informe del estado de la vista previa. Con {@code truncate} se limita cada grupo a 12 lineas
+     * (lo que se ve en el dialogo); sin el, se incluye TODO: es el texto que copia el boton "Copiar",
+     * pensado para pegarlo en un chat y que se entienda sin la app delante (estado, todos los grupos
+     * con sus recuentos, cada elemento con su motivo y donde se ha buscado).
+     */
+    private String buildPreviewWarningReport(boolean truncate) {
+        List<ProjectResourceResolver.LegacyResolution> legacy = resourceResolver.getLegacyResolutions();
+        String layout = currentLayout != null ? currentLayout : layoutHistory.peek();
+        boolean storageOk = canReadProjectFiles();
+
+        StringBuilder text = new StringBuilder();
+        text.append("Vista previa").append(layout == null || layout.isEmpty() ? "" : " · " + layout).append('\n');
+
+        List<String> estado = new ArrayList<>();
+        if (lastViews >= 0) {
+            estado.add(lastViews + (lastViews == 1 ? " vista dibujada" : " vistas dibujadas"));
+        }
+        if (lastWebViews > 0) {
+            estado.add(lastWebViews + (lastWebViews == 1 ? " WebView" : " WebViews"));
+        }
+        estado.add(resourceResolver.getWarnings().size() + " recursos no encontrados");
+        estado.add(renderWarnings.size() + " vistas aproximadas");
+        estado.add(appearanceWarnings.size() + " atributos no aplicados");
+        estado.add(resourceResolver.getInformativeWarnings().size() + " estilos/medidas no aplicados");
+        text.append("Estado: ").append(android.text.TextUtils.join(" · ", estado)).append('\n');
+        if (!storageOk) {
+            text.append("⚠ ").append(STORAGE_PERMISSION_WARNING).append('\n');
+        }
+
+        Map<String, List<String>> groups = previewWarningGroups();
+        if (groups.isEmpty()) {
+            text.append("\nSin incidencias: todas las vistas y los recursos se han aplicado.\n");
+        }
         final int maxPerGroup = 12;
-        boolean first = true;
         for (Map.Entry<String, List<String>> group : groups.entrySet()) {
-            if (!first) {
-                text.append('\n');
-            }
-            first = false;
+            text.append('\n');
             List<String> values = group.getValue();
             text.append("• ").append(group.getKey()).append(": ").append(values.size()).append('\n');
-            int shown = Math.min(values.size(), maxPerGroup);
+            int shown = truncate ? Math.min(values.size(), maxPerGroup) : values.size();
             for (int i = 0; i < shown; i++) {
                 text.append("    ").append(values.get(i)).append('\n');
             }
             if (values.size() > shown) {
-                text.append("    …y ").append(values.size() - shown).append(" mas (ver log LayoutPreview)\n");
+                text.append("    …y ").append(values.size() - shown)
+                        .append(" mas (pulsa Copiar para el aviso completo; tambien en el log LayoutPreview)\n");
             }
         }
         String searched = resourceResolver.getSearchedLocations();
         if (!searched.isEmpty()) {
-            text.append("\nDrawables buscados en: ").append(searched);
+            text.append("\nDrawables buscados en: ").append(searched).append('\n');
         }
-        boolean partial = !renderWarnings.isEmpty() || !appearanceWarnings.isEmpty()
-                || !resourceResolver.getWarnings().isEmpty()
-                || !resourceResolver.getInformativeWarnings().isEmpty();
+
+        boolean partial = !groups.isEmpty() || !storageOk;
         if (partial) {
-            text.append("\n\nEl resto del diseno SI se ha dibujado; solo falta lo listado arriba.");
+            text.append("\nEl resto del diseno SI se ha dibujado; solo falta lo listado arriba.");
             if (!renderWarnings.isEmpty()) {
                 text.append(" Las vistas aproximadas conservan fondo, padding y tamano, y sus hijos se")
                         .append(" dibujan dentro (se marcan con un borde ambar y una pastilla en el lienzo).");
@@ -588,13 +688,94 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
             }
         }
         if (!legacy.isEmpty()) {
-            text.append("\n\nLos nombres heredados de arriba SI se han dibujado, usando el icono actual").append(" del editor (la version vieja de Sketchware los llamaba de otra forma).");
+            text.append("\n\nLos nombres heredados de arriba SI se han dibujado, usando el icono actual")
+                    .append(" del editor (la version vieja de Sketchware los llamaba de otra forma).");
         }
+        text.append("\n\n— Sketchware Pro · vista previa de disenos");
+        return text.toString().trim();
+    }
 
+    /** Deja la linea del permiso en AMBAR (no rojo): es configuracion del telefono, no el diseno. */
+    private CharSequence previewWarningDialogMessage(String report) {
+        int start = report.indexOf(STORAGE_PERMISSION_WARNING);
+        if (start < 0) {
+            return report;
+        }
+        SpannableString message = new SpannableString(report);
+        message.setSpan(new ForegroundColorSpan(STORAGE_WARNING_COLOR),
+                start, start + STORAGE_PERMISSION_WARNING.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        return message;
+    }
+
+    /**
+     * Detalle agrupado del aviso, en un dialogo. El mensaje limita cada grupo a 12 lineas por
+     * legibilidad, pero el boton NEUTRO "Copiar" lleva al portapapeles el informe COMPLETO (sin
+     * truncar), para que el usuario pueda pegarlo en un chat.
+     */
+    private void showPreviewWarningDetail() {
+        if (previewWarningReport == null || previewWarningReport.isEmpty()) {
+            previewWarningReport = buildPreviewWarningReport(false);
+        }
+        final String report = previewWarningReport;
+        boolean partial = !previewWarningGroups().isEmpty() || !canReadProjectFiles();
         new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
                 .setTitle(partial ? "Vista previa parcial" : "Vista previa")
-                .setMessage(text.toString().trim())
+                .setMessage(previewWarningDialogMessage(buildPreviewWarningReport(true)))
                 .setPositiveButton(android.R.string.ok, null)
+                .setNeutralButton("Copiar", (dialog, which) -> copyPreviewReport(report))
+                .show();
+    }
+
+    /** Copia el informe completo al portapapeles y lo confirma con un toast ("Aviso copiado"). */
+    private void copyPreviewReport(String report) {
+        try {
+            ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            if (clipboard == null) {
+                SketchwareUtil.toastError("No se pudo copiar el aviso");
+                return;
+            }
+            clipboard.setPrimaryClip(ClipData.newPlainText("Vista previa", report));
+            SketchwareUtil.toast("Aviso copiado");
+            android.util.Log.i(TAG, "info: aviso copiado al portapapeles (" + report.length() + " caracteres)");
+        } catch (Throwable throwable) {
+            android.util.Log.w(TAG, "warning: no se pudo copiar el aviso al portapapeles", throwable);
+            SketchwareUtil.toastError("No se pudo copiar el aviso");
+        }
+    }
+
+    /**
+     * true si la app puede leer los ficheros del proyecto en el almacenamiento compartido
+     * ({@code .sketchware/...}). En Android 11+ hace falta el permiso especial "Acceso a todos los
+     * archivos" (MANAGE_EXTERNAL_STORAGE); sin el, TODO recurso del proyecto se resuelve por defecto.
+     */
+    private boolean canReadProjectFiles() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            return Environment.isExternalStorageManager();
+        }
+        return isStoragePermissionGranted();
+    }
+
+    /**
+     * Si la app no puede leer los ficheros del proyecto, lo dice ANTES de dibujar y ofrece conceder
+     * el permiso. No bloquea el dibujado: la vista previa sigue funcionando con los valores por
+     * defecto, pero ya no en silencio.
+     */
+    private void maybeAskForStoragePermission() {
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.Q) {
+            // En API <= 29 es el permiso clasico de almacenamiento, que la app ya pide al arrancar.
+            return;
+        }
+        if (Environment.isExternalStorageManager()) {
+            return;
+        }
+        new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                .setTitle("Permiso de almacenamiento")
+                .setMessage("Sin el permiso \"Acceso a todos los archivos\" la vista previa no puede leer "
+                        + "los recursos del proyecto (.sketchware): los colores, los iconos, los estilos y "
+                        + "las imagenes se ven con su valor por defecto.\n\nConcedelo para que la vista "
+                        + "previa sea fiel al diseno que has hecho.")
+                .setPositiveButton("Conceder", (dialog, which) -> FileUtil.requestAllFilesAccessPermission(this))
+                .setNegativeButton("Ahora no", null)
                 .show();
     }
 

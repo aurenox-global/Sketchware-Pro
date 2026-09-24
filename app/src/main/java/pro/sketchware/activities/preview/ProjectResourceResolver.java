@@ -55,7 +55,10 @@ public class ProjectResourceResolver {
     private static final String TAG = "LayoutPreview";
 
     private static final Pattern COLOR_ENTRY = Pattern.compile(
-            "<color\\s+name=\"([^\"]+)\"\\s*>\\s*(#[0-9a-fA-F]{6,8})</color>");
+            "<color\\s+name=\"([^\"]+)\"\\s*>\\s*([^<]+?)\\s*</color>");
+
+    /** Nombres con los que el IDE guarda los colores del proyecto (values/colors.xml, color.xml). */
+    private static final String[] COLOR_FILE_NAMES = {"colors.xml", "color.xml"};
 
     /** Entrada de un fichero dimens.xml del proyecto: nombre y valor ("16dp", "@dimen/x"...). */
     private static final Pattern DIMEN_ENTRY = Pattern.compile(
@@ -336,20 +339,65 @@ public class ProjectResourceResolver {
             return;
         }
         colorsLoaded = true;
-        File colorsFile = new File(new FilePathUtil().getPathResource(scId), "values/colors.xml");
-        if (!colorsFile.isFile()) {
+        List<File> files = new ArrayList<>();
+        // 1) La ruta canonica del IDE (lo que ya se leia antes) va PRIMERO: tiene prioridad.
+        File primary = new File(new FilePathUtil().getPathResource(scId), "values/colors.xml");
+        if (primary.isFile()) {
+            files.add(primary);
+        }
+        // 2) El resto de rutas donde el IDE deja los recursos: value* (values, value, values-v21,
+        //    values-night...). Antes solo se miraba values/colors.xml: un color definido en value/ (el
+        //    nombre heredado del IDE) o en values-night se daba por NO encontrado y la vista salia con
+        //    el color por defecto, igual que le pasaba a styles.xml antes de la ronda 9a.
+        collectColorFiles(new File(new FilePathUtil().getPathResource(scId)), files);
+        // 3) El res GENERADO del build (.sketchware/mysc/<sc_id>/app/src/main/res/value*), que es
+        //    literalmente lo que compila aapt2. Es la ruta que faltaba.
+        try {
+            collectColorFiles(new File(a.a.a.wq.d(scId), "app/src/main/res"), files);
+        } catch (Throwable throwable) {
+            android.util.Log.w(TAG, "warning: no se pudo localizar el res generado del build: " + throwable);
+        }
+        for (File file : files) {
+            String content = FileUtil.readFile(file.getAbsolutePath());
+            if (content == null || content.trim().isEmpty()) {
+                continue;
+            }
+            Matcher matcher = COLOR_ENTRY.matcher(content);
+            while (matcher.find()) {
+                String name = matcher.group(1);
+                try {
+                    // putIfAbsent: la primera ruta que define el color gana (values/ por delante de
+                    // value/ y del res generado), asi el comportamiento actual no cambia.
+                    colorCache.putIfAbsent(name, Color.parseColor(matcher.group(2).trim()));
+                } catch (IllegalArgumentException ignored) {
+                    android.util.Log.d(TAG, "warning: color del proyecto no parseable: " + name
+                            + " = " + matcher.group(2).trim());
+                }
+            }
+        }
+        android.util.Log.i(TAG, "info: colors.xml del proyecto leidos: " + files
+                + " -> " + colorCache.size() + " colores");
+    }
+
+    /** Anyade los colors.xml de los directorios {@code value*} del directorio dado (orden estable). */
+    private void collectColorFiles(File resourceRoot, List<File> target) {
+        File[] children = resourceRoot == null ? null : resourceRoot.listFiles();
+        if (children == null) {
             return;
         }
-        String content = FileUtil.readFile(colorsFile.getAbsolutePath());
-        if (content == null) {
-            return;
+        List<File> valueDirs = new ArrayList<>();
+        for (File child : children) {
+            if (child.isDirectory() && child.getName().toLowerCase(Locale.US).startsWith("value")) {
+                valueDirs.add(child);
+            }
         }
-        Matcher matcher = COLOR_ENTRY.matcher(content);
-        while (matcher.find()) {
-            try {
-                colorCache.put(matcher.group(1), Color.parseColor(matcher.group(2)));
-            } catch (IllegalArgumentException ignored) {
-                android.util.Log.d("SketchwarePro", "ProjectResourceResolver: IllegalArgumentException ignored", ignored);
+        Collections.sort(valueDirs, (left, right) -> left.getName().compareTo(right.getName()));
+        for (File dir : valueDirs) {
+            for (String fileName : COLOR_FILE_NAMES) {
+                File file = new File(dir, fileName);
+                if (file.isFile() && !target.contains(file)) {
+                    target.add(file);
+                }
             }
         }
     }

@@ -37,14 +37,14 @@
 
   <!-- ============================================================ hero -->
   <section class="hero" style="border-top:none">
-    <div class="tag">● v7.0.11.0 · versionCode 173 · source-available</div>
+    <div class="tag">● v7.0.12.0 · versionCode 174 · source-available</div>
     <h1>Crea apps Android reales<br><span class="accent">desde tu móvil.</span></h1>
     <p class="lead">
       Sketchware Pro es un IDE de Android que funciona sobre Android: arrastra bloques, escribe Java o Kotlin,
       compila en el propio dispositivo y obtén un APK instalable — sin necesidad de ordenador.
     </p>
     <div class="btns">
-      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.11.0" target="_blank" rel="noopener">⬇ Descargar APK</a>
+      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.12.0" target="_blank" rel="noopener">⬇ Descargar APK</a>
       <a class="btn ghost" href="https://github.com/aurenox-global/Sketchware-Pro" target="_blank" rel="noopener">Ver el código en GitHub</a>
     </div>
 
@@ -134,12 +134,52 @@
       <span class="k">Hitos destacados</span>
       <p>
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.0">Flutter corriendo en el dispositivo, release/AOT incluido</a> &middot;
-        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.11.0">la vista previa de diseños arreglada, rondas 1 a 10</a> &middot;
+        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.12.0">la vista previa de diseños arreglada, rondas 1 a 11</a> &middot;
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.1">la descarga del toolchain de Dart ahora la decides tú, y el toolchain ya no dice "no instalado"</a> &middot;
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.9">soporte de Kotlin en el IDE de la app</a>.
       </p>
     </div>
     <div class="log" id="change-log">
+      <div class="item done featured">
+        <span class="when">2026-09-24 · vista previa</span>
+        <h3>Copiar el aviso completo, el permiso de almacenamiento y los colores del proyecto que define el <code>res</code> generado  <span class="pill feat">destacado</span> <span class="pill ok">arreglado</span></h3>
+        <ul class="clean">
+          <li><strong>El dialogo de avisos tiene un boton neutro "Copiar"</strong> — en la barra parcial <em>y</em> en el
+          dialogo <code>OK</code> — con el toast <em>"Aviso copiado"</em>. Lo que copia es el <strong>informe completo,
+          sin truncar</strong>: el dialogo corta cada grupo a <strong>12 lineas</strong> (<code>…y N mas</code>), el
+          copiado no — <strong>1.119</strong> caracteres con 2 recursos rotos, <strong>1.869</strong> con 20 colores
+          rotos, <strong>572</strong> en el caso de estilos/iconos. El texto es <strong>autosuficiente</strong>: la
+          linea de estado, cada grupo con su recuento, cada elemento con su motivo y su <code>buscado en:</code>, y la
+          firma final. Verificado de punta a punta pegandolo de verdad en un campo de texto.</li>
+          <li><strong>Causa uno, confirmada con prueba: el permiso de almacenamiento.</strong> Sin
+          <code>MANAGE_EXTERNAL_STORAGE</code> la app no puede leer los ficheros del proyecto y <strong>todo cae a
+          valores por defecto en silencio</strong>: el azul del proyecto pasa de <strong>373.070 px a ausente</strong>,
+          logcat muestra <code>EACCES (Permission denied)</code> y el icono desaparece tambien. Arreglado en tres
+          piezas: una linea <strong>ambar</strong> explicita en el dialogo (<code>0xFFB26A00</code>), un dialogo
+          <strong>"Permiso de almacenamiento"</strong> que abre <em>Acceso a todos los archivos</em> si falta, y una
+          <strong>relectura</strong> del proyecto al volver (verificada por log). Con el permiso concedido la
+          regresion es exacta: <strong>373.070 px</strong>, mismo bbox.</li>
+          <li><strong>Causa dos, la que mas probablemente era la tuya: <code>colors.xml</code> solo se leia de
+          <code>values/</code>.</strong> Los colores definidos en el <code>res</code> que genera el build
+          (<code>@color/colorPrimary</code>, <code>colorAccent</code>, …) salian <em>no encontrados</em>, asi que la
+          banda seguia blanca y la barra en rojo. Ahora se leen <strong>ambas</strong> ubicaciones, igual que ya se
+          hacia con <code>styles.xml</code>: <strong>359.604 px blancos → 356.400 px con su color, cero
+          rojo</strong>.</li>
+          <li><strong>Recomprobado en el APK release (R8).</strong> Los cuatro puntos se comportan <strong>igual que
+          en debug</strong>: Copiar (toast + <strong>1.627</strong> caracteres + pegado real), permiso (ambar
+          <code>0xFFB26A00</code> <strong>15.488 px</strong>, <strong>0 rojo</strong>; con el, teal
+          <strong>356.400 px</strong> y <code>Preview OK</code>), <code>@color/colorPrimary</code> con
+          <strong>356.400 px</strong> y el bbox exacto, y la regresion r8/r5 con recuentos y bboxes
+          <strong>identicos pixel a pixel</strong> (purpura 18.933, verde 11.764, azul 90.564, cian 21.428, magenta
+          18.896). <strong>Honesto:</strong> al recrear los fixtures cambio el <em>texto</em> del informe (1.627 vs
+          1.869 caracteres), y el portapapeles solo se puede verificar con un pegado real (API 34 no lo expone por
+          shell).</li>
+        </ul>
+        <p><img src="assets/preview-r11-copy.png" alt="El dialogo de avisos con el boton neutro Copiar abajo a la izquierda y OK abajo a la derecha, listando 20 recursos @color rotos" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)"> <img src="assets/preview-r11-permission.png" alt="El dialogo de avisos con la linea ambar: no se pueden leer los ficheros del proyecto porque falta el permiso de almacenamiento" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)"></p>
+        <p>Versión <strong>v7.0.12.0</strong> (versionCode 174). El detalle de la ronda 11 está al final de
+        <a href="preview-fix.md">docs/preview-fix.md</a>.</p>
+      </div>
+
       <div class="item done featured">
         <span class="when">2026-09-24 · vista previa + Flutter</span>
         <h3>Los iconos que trae el IDE, el <code>styles.xml</code> de tu proyecto y los constructores que R8 borraba  <span class="pill feat">destacado</span> <span class="pill ok">arreglado</span></h3>
