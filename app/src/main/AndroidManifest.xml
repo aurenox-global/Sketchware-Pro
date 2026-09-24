@@ -290,6 +290,8 @@
         <activity android:name="pro.sketchware.activities.settings.SettingsActivity" />
         <activity android:name="pro.sketchware.activities.settings.FeatureFlagsActivity" />
 
+        <activity android:name="pro.sketchware.keystore.KeystoreManagerActivity" />
+
         <activity android:name="pro.sketchware.activities.resourceseditor.ResourcesEditorActivity" />
 
         <activity

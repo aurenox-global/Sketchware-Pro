@@ -22,6 +22,7 @@ import mod.jbk.util.LogUtil;
 import pro.sketchware.SketchApplication;
 import pro.sketchware.utility.BinaryExecutor;
 import pro.sketchware.utility.FileUtil;
+import pro.sketchware.utility.ResourceXmlGuard;
 
 /**
  * A class responsible for compiling a Project's resources.
@@ -281,6 +282,9 @@ public class ResourceCompiler {
         private void compileProjectResources(String outputPath) throws zy, MissingFileException {
             compilingAssertDirectoryExists(buildHelper.yq.resDirectoryPath);
 
+            /* Skip generated resource XML files without a root element (AAPT2 would abort with a cryptic error) */
+            ResourceXmlGuard.skipXmlResourcesWithoutRootElement(new File(buildHelper.yq.resDirectoryPath));
+
             ArrayList<String> commands = new ArrayList<>();
             commands.add(aapt2.getAbsolutePath());
             commands.add("compile");
@@ -312,6 +316,9 @@ public class ResourceCompiler {
                 File localLibraryDirectory = new File(localLibraryResDirectory).getParentFile();
                 if (localLibraryDirectory != null) {
                     compilingAssertDirectoryExists(localLibraryResDirectory);
+
+                    /* Skip local library resource XML files without a root element */
+                    ResourceXmlGuard.skipXmlResourcesWithoutRootElement(new File(localLibraryResDirectory));
 
                     ArrayList<String> commands = new ArrayList<>();
                     commands.add(aapt2.getAbsolutePath());
@@ -381,13 +388,17 @@ public class ResourceCompiler {
         }
 
         private void compileImportedResources(String outputPath) throws zy {
-            if (FileUtil.isExistFile(buildHelper.fpu.getPathResource(buildHelper.yq.sc_id))
-                    && new File(buildHelper.fpu.getPathResource(buildHelper.yq.sc_id)).length() != 0) {
+            String importedResourcesPath = buildHelper.fpu.getPathResource(buildHelper.yq.sc_id);
+            if (FileUtil.isExistFile(importedResourcesPath)
+                    && new File(importedResourcesPath).length() != 0) {
+                /* Skip imported resource XML files without a root element (e.g. created by the resource editor) */
+                ResourceXmlGuard.skipXmlResourcesWithoutRootElement(new File(importedResourcesPath));
+
                 ArrayList<String> commands = new ArrayList<>();
                 commands.add(aapt2.getAbsolutePath());
                 commands.add("compile");
                 commands.add("--dir");
-                commands.add(buildHelper.fpu.getPathResource(buildHelper.yq.sc_id));
+                commands.add(importedResourcesPath);
                 commands.add("-o");
                 commands.add(outputPath + File.separator + "project-imported.zip");
                 LogUtil.d(TAG + ":cIR", "Now executing: " + commands);

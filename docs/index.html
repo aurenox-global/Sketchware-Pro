@@ -37,14 +37,14 @@
 
   <!-- ============================================================ hero -->
   <section class="hero" style="border-top:none">
-    <div class="tag">● v7.0.13.0 · versionCode 175 · source-available</div>
+    <div class="tag">● v7.0.14.0 · versionCode 176 · source-available</div>
     <h1>Build real Android apps<br><span class="accent">from your phone.</span></h1>
     <p class="lead">
       Sketchware Pro is an Android IDE that runs on Android itself: drag blocks, write Java or Kotlin,
       compile on the device and get an installable APK — no computer required.
     </p>
     <div class="btns">
-      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.13.0" target="_blank" rel="noopener">⬇ Download APK</a>
+      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.14.0" target="_blank" rel="noopener">⬇ Download APK</a>
       <a class="btn ghost" href="https://github.com/aurenox-global/Sketchware-Pro" target="_blank" rel="noopener">View source on GitHub</a>
     </div>
 
@@ -134,12 +134,82 @@
       <span class="k">Top milestones</span>
       <p>
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.0">Flutter running on the device, release/AOT included</a> &middot;
-        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.13.0">the design preview fixed, rounds 1 to 12</a> &middot;
+        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.14.0">signing with your own keystore, rounds 1 to 12 + round A</a> &middot;
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.1">the Dart toolchain download is now your decision, and the toolchain no longer says "not installed"</a> &middot;
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.9">Kotlin support in the in-app IDE</a>.
       </p>
     </div>
     <div class="log" id="change-log">
+      <div class="item done featured">
+        <span class="when">2026-09-24 · build &amp; signing</span>
+        <h3>Sign with <em>your</em> keystore, and compile APK or AAB from one dialog  <span class="pill feat">highlight</span> <span class="pill ok">fixed</span></h3>
+        <ul class="clean">
+          <li><strong>The IDE now signs with your own keystore, and compiling is one dialog: APK or AAB × saved
+          keystore / keystore file / testkey / don't sign.</strong> Where it started, <strong>measured</strong> and not
+          guessed: the <em>Sign an APK file</em> tool in Settings <strong>never looked at your keystore</strong> — both
+          of its calls hard-coded <code>useTestkey=true</code>, so it always signed with the <strong>AOSP
+          testkey</strong> (<code>apksigner verify</code> → <code>a40da80a…</code>, not your certificate). The sign
+          dialog assumed a <strong>fixed path</strong>
+          (<code>/storage/emulated/0/sketchware/keystore/release_key.jks</code>) and had <strong>a single password
+          field</strong>, so the same password had to be both the store and the alias password, and the APK branch of
+          <code>ExportProjectActivity</code> ignored the dialog path <strong>and reused the alias password as the
+          store password</strong> — a real <code>.jks</code> (the normal <code>keytool</code> case, two different
+          passwords) was simply unusable.</li>
+          <li><strong>New keystore manager</strong> (Settings → <em>General</em>): imports <code>.jks</code> /
+          <code>.keystore</code> / <code>.bks</code> / <code>.p12</code> after validating the credentials, copies the
+          file into <strong>private app storage</strong> (<code>filesDir/keystores/</code>, not <code>/sdcard</code>,
+          which anyone can read), stores alias + store and key passwords <strong>encrypted</strong> and shows each
+          certificate — the SHA-256 it displays is <strong>identical to <code>keytool</code></strong>
+          (<code>B1:46:48:5F:…:C4</code>). The shared sign dialog now has an <strong>explicit keystore path</strong>,
+          <strong>store password separate from the alias password</strong>, a saved-keystore picker that fills
+          everything in, and it <strong>no longer closes on a validation error</strong> (it used to lose what you had
+          typed). It reads that JKS with a type-agnostic loader, because on Android
+          <code>KeyStore.getInstance("JKS")</code> resolves to <strong>BKS</strong> and a real JKS cannot be opened.
+          And Settings → <em>Sign an APK file</em> finally asks <strong>which key</strong> to use (testkey or each saved
+          keystore) and <strong>shows the resulting certificate</strong>, instead of signing silently with a key you
+          did not choose.</li>
+          <li><strong>The on-device build was blocking all of it, and those were real bugs of the IDE, not the test
+          projects.</strong> <code>DexMerger</code> (the fork's dx) died with
+          <strong><code>java.nio.BufferOverflowException</code></strong> on <em>any</em> release/AAB build — the
+          library dexes the IDE injects <strong>share a single <code>debug_info_item</code> among up to 116
+          methods</strong> while the merger wrote a fresh copy per <code>code_item</code> and reserved space with the
+          already deduplicated byte count; fixed by deduplicating on (input dex, offset): debug info items
+          <strong>2,297 → 361</strong> (reproduced offline with the two real dexes, same stack as the device).
+          <strong><code>Export AAB</code> was broken by R8</strong> — protobuf resolves the generated getters
+          <strong>by reflection</strong>, so <code>getBundletool</code> was gone from the release dex (0 → 7
+          occurrences after the <code>-keep</code>). The <strong>release APK was V1-only</strong> and would not
+          install on Android 11+ (<code>INSTALL_PARSE_FAILED_NO_CERTIFICATES</code>), now <strong>apksig
+          V1+V2+V3</strong>; and the <strong>AAB carried SHA-1 digests</strong> (<code>jarsigner</code> treated it as
+          unsigned) → <strong>SHA-256</strong>, <code>jar verified.</code></li>
+          <li><strong>Two more build-killers fixed on the way.</strong> A resource XML written with <strong>only the
+          header</strong> (<code>NONE.xml</code>, straight out of the "Create a new file" dialog) made aapt2 fail the
+          <strong>whole</strong> build (<code>no element found</code>) → valid per-folder templates, name validation and
+          a guard that moves root-less XML to <code>.invalid-xml-skipped/</code> with a warning (recoverable, nothing
+          is deleted). And R8 deleted the <strong><code>&lt;init&gt;</code> of its own embedded R8/D8 threading
+          providers</strong>, which that same R8 instantiates <strong>by reflection</strong> (the class name survives
+          in a string, so the failure was <code>NoSuchMethodException</code> and deterministic): <em>"Failure
+          creating provider for the threading module"</em> → <code>-keep class
+          com.android.tools.r8.threading.** { *; }</code> (<strong>+1,196 B</strong>, ~0.001 % of the APK), proven
+          before/after on the device with a probe that replays that exact factory.</li>
+          <li><strong>Verified in the release APK (R8):</strong> an APK release signed with <strong>your</strong>
+          certificate (<code>apksigner verify</code>: <code>Verifies</code>, V1+V2+V3, <code>b146485f…</code>) and
+          <strong>installed from the dialog's own Install button</strong> (the system installer offered to update the
+          app); an AAB with the full bundle structure (<code>BundleConfig.pb</code>,
+          <code>base/manifest</code>, <code>base/dex</code>, <code>base/res/*</code>, <code>base/resources.pb</code>)
+          and <code>jarsigner -verify</code> → <em>jar verified</em>; <code>Run ▶</code> untouched (debug, testkey
+          <code>a40da80a…</code>); the unsigned mode writes <code>.unsigned</code>. Five UI bugs found while measuring
+          were fixed too — the format spinner was invisible, the signing label lied, <code>NEXT</code> fell off the
+          screen, <code>Install</code> crashed the app (<code>FileProvider</code> didn't expose
+          <code>sketchware/signed_apk/</code>) and it offered to install an unsigned APK.</li>
+        </ul>
+        <p><img src="assets/preview-a-dialog.png" alt="The unified Compile project dialog with format and signing mode" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)"> <img src="assets/preview-a-keystore.png" alt="The keystore manager showing the certificate SHA-256" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)"> <img src="assets/preview-a-result.png" alt="The AAB result dialog with the path and the certificate" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)"></p>
+        <p><strong>Honest:</strong> the AAB has <strong>not</strong> been checked against <code>bundletool</code> or
+        Play (there is no <code>bundletool</code> on this machine), the <em>keystore file</em> and <em>testkey</em>
+        modes of the dialog were not executed for release (UI only), and converting Android Studio/GitHub projects is
+        still pending (next round: viability + MVP). Version <strong>v7.0.14.0</strong> (versionCode 176). The round-A
+        write-up is at the end of <a href="preview-fix.md">docs/preview-fix.md</a>.</p>
+      </div>
+
       <div class="item done featured">
         <span class="when">2026-09-24 · preview</span>
         <h3>The colours you pick are no longer written transparent into the XML  <span class="pill feat">highlight</span> <span class="pill ok">fixed</span></h3>

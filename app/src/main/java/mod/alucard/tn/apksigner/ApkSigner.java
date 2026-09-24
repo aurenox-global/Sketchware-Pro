@@ -11,10 +11,19 @@ import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
+import java.security.GeneralSecurityException;
+import java.security.Key;
+import java.security.KeyStore;
+import java.security.PrivateKey;
+import java.security.cert.Certificate;
+import java.security.cert.X509Certificate;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import kellinwood.security.zipsigner.optional.KeyStoreFileManager;
 import mod.jbk.build.BuiltInLibraries;
 
 public class ApkSigner {
@@ -73,49 +82,59 @@ public class ApkSigner {
         }
     }
 
+    /**
+     * Signs an APK with a JKS/PKCS12/BKS keystore.
+     *
+     * <p>Deliberately not going through {@code ApkSignerTool}'s CLI: on Android,
+     * {@code KeyStore.getInstance("JKS")} resolves to the BouncyCastle BKS implementation, so a real
+     * Java-format JKS cannot be read that way ({@code IOException: Wrong version of key store}); and
+     * the CLI calls {@code System.exit()} when it fails, which kills Sketchware itself. The keystore
+     * is loaded with the same type-agnostic loader the Export signing uses, and signed through the
+     * apksig programmatic API.</p>
+     */
     public void signWithKeyStore(@NonNull String inputFilePath, @NonNull String outputFilePath,
                                  @NonNull String keyStorePath, @NonNull String keyStorePassword,
                                  @NonNull String keyStoreKeyAlias, @NonNull String keyPassword, @Nullable LogCallback callback) {
         try (LogWriter logger = new LogWriter(callback)) {
             long savedTimeMillis = System.currentTimeMillis();
-            PrintStream oldOut = System.out;
 
-            List<String> args = Arrays.asList(
-                    "sign",
-                    "--in",
-                    inputFilePath,
-                    "--out",
-                    outputFilePath,
-                    "--ks",
-                    keyStorePath,
-                    "--ks-pass",
-                    "pass:" + keyStorePassword,
-                    "--ks-key-alias",
-                    keyStoreKeyAlias,
-                    "--key-pass",
-                    "pass:" + keyPassword
-            );
-
-            logger.write("Signing an APK with a JKS keystore and these arguments: ");
-
-            if (callback != null) {
-                try (PrintStream stream = new PrintStream(logger)) {
-                    System.setOut(stream);
-                }
-            }
+            logger.write("Signing the APK " + inputFilePath + " with the keystore " + keyStorePath
+                    + " (alias: " + keyStoreKeyAlias + ")\n");
 
             try {
-                ApkSignerTool.main(args.toArray(new String[0]));
+                KeyStore keyStore = KeyStoreFileManager.loadKeyStore(keyStorePath, keyStorePassword.toCharArray());
+                Key key = keyStore.getKey(keyStoreKeyAlias, keyPassword.toCharArray());
+                if (!(key instanceof PrivateKey)) {
+                    throw new GeneralSecurityException("Alias \"" + keyStoreKeyAlias + "\" does not hold a private key");
+                }
+
+                Certificate[] chain = keyStore.getCertificateChain(keyStoreKeyAlias);
+                if (chain == null || chain.length == 0) {
+                    Certificate certificate = keyStore.getCertificate(keyStoreKeyAlias);
+                    chain = certificate == null ? new Certificate[0] : new Certificate[]{certificate};
+                }
+                List<X509Certificate> certificates = new ArrayList<>(chain.length);
+                for (Certificate certificate : chain) {
+                    certificates.add((X509Certificate) certificate);
+                }
+
+                com.android.apksig.ApkSigner.SignerConfig signerConfig = new com.android.apksig.ApkSigner.SignerConfig.Builder(
+                        keyStoreKeyAlias, (PrivateKey) key, certificates).build();
+
+                new com.android.apksig.ApkSigner.Builder(Collections.singletonList(signerConfig))
+                        .setInputApk(new File(inputFilePath))
+                        .setOutputApk(new File(outputFilePath))
+                        .setV1SigningEnabled(true)
+                        .setV2SigningEnabled(true)
+                        .setV3SigningEnabled(true)
+                        .build()
+                        .sign();
             } catch (Exception e) {
                 LogCallback.errorCount.incrementAndGet();
-                logger.write("Failed to sign APK with JKS keystore: " + Log.getStackTraceString(e));
+                logger.write("Failed to sign APK with keystore: " + Log.getStackTraceString(e));
             }
 
             logger.write("Signing an APK took " + (System.currentTimeMillis() - savedTimeMillis) + " ms");
-
-            if (callback != null) {
-                System.setOut(oldOut);
-            }
         } catch (IOException e) {
             e.printStackTrace();
         }

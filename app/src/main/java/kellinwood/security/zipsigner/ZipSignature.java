@@ -28,13 +28,13 @@ import javax.crypto.IllegalBlockSizeException;
 @SuppressWarnings("restriction")
 public class ZipSignature {
 
-    byte[] beforeAlgorithmIdBytes =  { 0x30, 0x21 };
+    byte[] beforeAlgorithmIdBytes =  { 0x30, 0x31 }; // Ronda A2: DigestInfo de SHA-256
 
     //      byte[] algorithmIdBytes;    
     //		algorithmIdBytes =  sun.security.x509.AlgorithmId.get("SHA1").encode();    
-    byte[] algorithmIdBytes = {0x30, 0x09, 0x06, 0x05, 0x2B, 0x0E, 0x03, 0x02, 0x1A, 0x05, 0x00 }; 
+    byte[] algorithmIdBytes = {0x30, 0x0d, 0x06, 0x09, 0x60, (byte)0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01, 0x05, 0x00 }; // Ronda A2: OID 2.16.840.1.101.3.4.2.1 (SHA-256) 
 
-    byte[] afterAlgorithmIdBytes = { 0x04, 0x14 };
+    byte[] afterAlgorithmIdBytes = { 0x04, 0x20 }; // Ronda A2: 32 bytes de digest
 
     Cipher cipher;
 
@@ -43,7 +43,7 @@ public class ZipSignature {
 
     public ZipSignature() throws IOException, GeneralSecurityException
     {
-        md = MessageDigest.getInstance("SHA1");
+        md = MessageDigest.getInstance("SHA-256");
         cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
     }
 

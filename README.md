@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.13.0-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.14.0-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -133,6 +133,48 @@ Requirements:
 
 This repository is a personal fork. Every improvement is added here as it lands, and the
 [website](https://aurenox-global.github.io/Sketchware-Pro/) is updated at the same time.
+
+### 2026-09-24 — Round A: sign with your own keystore, and choose APK or AAB in one dialog
+
+- **v7.0.14.0 (versionCode 176) — the IDE now signs with *your* keystore, and compiling is one dialog: APK or AAB ×
+  saved keystore / keystore file / testkey / don't sign.** Where it started, measured, not guessed: the *Sign an APK
+  file* tool in Settings **never looked at your keystore** — both of its calls hard-coded `useTestkey=true`, so it
+  always signed with the **AOSP testkey** (`apksigner verify` → `a40da80a…`, not your certificate); the sign dialog
+  assumed a **fixed path** (`/storage/emulated/0/sketchware/keystore/release_key.jks`) with **one single password
+  field**, so the same password had to be both the store and the alias password (`GetKeyStoreCredentialsDialog`
+  built `new Credentials(alg, etPassword, etAlias, etPassword)`), and the APK branch of `ExportProjectActivity`
+  ignored the dialog path **and reused the alias password as the store password**. **New keystore manager** (Settings
+  → *General*): imports `.jks` / `.keystore` / `.bks` / `.p12` after validating the credentials, copies the file into
+  **private app storage** (`filesDir/keystores/`, not `/sdcard`, which anyone can read), stores alias + store and
+  key passwords **encrypted** and shows each certificate — the SHA-256 it displays is **identical to `keytool`**
+  (`B1:46:48:5F:…:C4`). The shared sign dialog now has an **explicit keystore path**, **store password separate from
+  alias password**, a saved-keystore picker that fills everything in, and it **no longer closes on a validation
+  error** (it used to lose what you had typed). **Unified "Compile project" dialog**, reachable from the editor's ▾
+  menu (new *Compile APK / AAB...*, next to `Run ▶`) and from Export Project: *What to build* = APK (debug) / APK
+  (release) / AAB, *Signing mode* = saved keystore / keystore file / test key / don't sign; it **remembers the last
+  choice**, does not re-ask for passwords, and when it finishes it shows **the path, what it was signed with, the
+  certificate** and offers **Install** if it is a signed APK. **The on-device build was blocking all of this, and it
+  was real bugs, not the test projects:** `DexMerger` died with **`java.nio.BufferOverflowException`** on *any*
+  release/AAB build — the library dexes the IDE injects **share one `debug_info_item` among up to 116 methods** while
+  the merger wrote a fresh copy per `code_item` and reserved space with the already deduplicated byte count; fixed by
+  deduplicating on (input dex, offset) — **2,297 → 361 debug info items**; **`Export AAB` was broken by R8**
+  (protobuf resolves the generated getters **by reflection**, so `getBundletool` was gone from the release dex, 0 →
+  7 occurrences after the `-keep`); the **release APK was V1-only** and would not install on Android 11+
+  (`INSTALL_PARSE_FAILED_NO_CERTIFICATES`), now **apksig V1+V2+V3**; and the **AAB carried SHA-1 digests** (`jarsigner`
+  treated it as unsigned) → **SHA-256**, `jar verified.` **Two more build-killers fixed on the way:** a resource XML
+  written with **only the header** (`NONE.xml`) made aapt2 fail the **whole** build → valid per-folder templates, name
+  validation and a guard that moves root-less XML to `.invalid-xml-skipped/` with a warning; and R8 deleted the
+  **`<init>` of its own embedded R8/D8 threading providers**, which that same R8 instantiates **by reflection**
+  (`Failure creating provider for the threading module`) → `-keep class com.android.tools.r8.threading.** { *; }`
+  (**+1,196 B**, ~0.001 % of the APK). **Verified in the release APK (R8):** an APK release signed with **your**
+  certificate (`apksigner verify`: `Verifies`, V1+V2+V3, `b146485f…`) and **installed from the dialog's own Install
+  button**; an AAB with the full bundle structure and `jarsigner -verify` → *jar verified*; `Run ▶` untouched (debug,
+  testkey `a40da80a…`); the unsigned mode writes `.unsigned`. **Honest:** the AAB has **not** been checked against
+  `bundletool`/Play (there is no `bundletool` on this machine), the *keystore file* and *testkey* modes of the dialog
+  were **not** executed for release (UI only), and converting Android Studio/GitHub projects is **still pending**
+  (next round: viability + MVP). Release page:
+  [v7.0.14.0](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.14.0). Full write-up (in Spanish):
+  [docs/preview-fix.md](docs/preview-fix.md) (round A).
 
 ### 2026-09-24 — Design preview, round 12: the colours you pick were written transparent into the XML
 

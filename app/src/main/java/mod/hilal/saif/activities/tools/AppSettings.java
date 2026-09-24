@@ -29,9 +29,12 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.File;
+import java.security.MessageDigest;
+import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.android.apksig.ApkVerifier;
 import dev.aldi.sayuti.editor.manage.ManageLocalLibraryActivity;
 import dev.pranav.filepicker.FilePickerCallback;
 import dev.pranav.filepicker.FilePickerDialogFragment;
@@ -47,6 +50,8 @@ import pro.sketchware.activities.settings.FeatureFlagsActivity;
 import pro.sketchware.activities.settings.SettingsActivity;
 import pro.sketchware.databinding.ActivityAppSettingsBinding;
 import pro.sketchware.databinding.DialogSelectApkToSignBinding;
+import pro.sketchware.keystore.KeystoreManagerActivity;
+import pro.sketchware.keystore.KeystoreStore;
 import pro.sketchware.utility.FileUtil;
 import pro.sketchware.utility.SketchwareUtil;
 
@@ -112,7 +117,8 @@ public class AppSettings extends BaseAppCompatActivity {
         generalCategory.addLibraryItem(createPreference(R.drawable.ic_mtrl_settings, "Feature flags", "Enable or disable experimental features", new ActivityLauncher(new Intent(getApplicationContext(), FeatureFlagsActivity.class))), true);
         generalCategory.addLibraryItem(createPreference(R.drawable.ic_mtrl_palette, Helper.getResString(R.string.settings_appearance), Helper.getResString(R.string.settings_appearance_description), openSettingsActivity(SettingsActivity.SETTINGS_APPEARANCE_FRAGMENT)), true);
         generalCategory.addLibraryItem(createPreference(R.drawable.ic_mtrl_folder, "Open working directory", "Open Sketchware Pro's directory and edit files in it", v -> openWorkingDirectory()), true);
-        generalCategory.addLibraryItem(createPreference(R.drawable.ic_mtrl_apk_document, "Sign an APK file with testkey", "Sign an already existing APK file with testkey and signature schemes up to V4", v -> signApkFileDialog()), true);
+        generalCategory.addLibraryItem(createPreference(R.drawable.ic_mtrl_key, "Keystore manager", "Import and manage the keystores used to sign your APKs and AABs", new ActivityLauncher(new Intent(getApplicationContext(), KeystoreManagerActivity.class))), true);
+        generalCategory.addLibraryItem(createPreference(R.drawable.ic_mtrl_apk_document, "Sign an APK file", "Sign an already existing APK file with the testkey or a saved keystore, signature schemes up to V4", v -> signApkFileDialog()), true);
         generalCategory.addLibraryItem(createPreference(R.drawable.ic_mtrl_settings, Helper.getResString(R.string.main_drawer_title_system_settings), "Auto-save and vibrations", new ActivityLauncher(new Intent(getApplicationContext(), SystemSettingActivity.class))), false);
 
         preferences.forEach(content::addView);
@@ -198,7 +204,7 @@ public class AppSettings extends BaseAppCompatActivity {
     private void signApkFileDialog() {
         boolean[] isAPKSelected = {false};
         MaterialAlertDialogBuilder apkPathDialog = new MaterialAlertDialogBuilder(this);
-        apkPathDialog.setTitle("Sign APK with testkey");
+        apkPathDialog.setTitle("Sign an APK file");
 
         DialogSelectApkToSignBinding binding = DialogSelectApkToSignBinding.inflate(getLayoutInflater());
         View testkey_root = binding.getRoot();
@@ -238,13 +244,11 @@ public class AppSettings extends BaseAppCompatActivity {
                 confirmOverwrite.setNegativeButton(Helper.getResString(R.string.common_word_cancel), null);
                 confirmOverwrite.setPositiveButton("Overwrite", (view, which1) -> {
                     v.dismiss();
-                    signApkFileWithDialog(input_apk_path, output_apk_path, true,
-                            null, null, null, null);
+                    chooseSigningMethod(input_apk_path, output_apk_path);
                 });
                 confirmOverwrite.show();
             } else {
-                signApkFileWithDialog(input_apk_path, output_apk_path, true,
-                        null, null, null, null);
+                chooseSigningMethod(input_apk_path, output_apk_path);
             }
         });
 
@@ -253,6 +257,41 @@ public class AppSettings extends BaseAppCompatActivity {
         apkPathDialog.setView(testkey_root);
         apkPathDialog.setCancelable(false);
         apkPathDialog.show();
+    }
+
+    /**
+     * Asks which keystore the already-existing APK should be signed with: the AOSP testkey, or any
+     * keystore saved from Settings → Keystore manager.
+     */
+    private void chooseSigningMethod(String inputApkPath, String outputApkPath) {
+        List<KeystoreStore.Entry> savedKeystores = KeystoreStore.list(this);
+        List<String> labels = new ArrayList<>();
+        labels.add("Sign with the testkey");
+        for (KeystoreStore.Entry entry : savedKeystores) {
+            labels.add("Sign with " + entry.getName() + " (" + entry.getAlias() + ")");
+        }
+
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("Sign with")
+                .setItems(labels.toArray(new String[0]), (dialog, which) -> {
+                    if (which == 0) {
+                        signApkFileWithDialog(inputApkPath, outputApkPath, true, null, null, null, null);
+                        return;
+                    }
+                    KeystoreStore.Entry entry = savedKeystores.get(which - 1);
+                    File source = entry.file(this);
+                    if (!source.exists()) {
+                        SketchwareUtil.toastError("The keystore file is missing. Import it again from Settings → Keystore manager.");
+                        return;
+                    }
+                    signApkFileWithDialog(inputApkPath, outputApkPath, false,
+                            source.getAbsolutePath(),
+                            entry.getStorePassword(),
+                            entry.getAlias(),
+                            entry.getKeyPassword());
+                })
+                .setNegativeButton(Helper.getResString(R.string.common_word_cancel), null)
+                .show();
     }
 
     private void signApkFileWithDialog(String inputApkPath, String outputApkPath, boolean useTestkey, String keyStorePath, String keyStorePassword, String keyStoreKeyAlias, String keyPassword) {
@@ -293,6 +332,7 @@ public class AppSettings extends BaseAppCompatActivity {
                         SketchwareUtil.toast("Successfully saved signed APK to: /Internal storage/sketchware/signed_apk/"
                                         + Uri.fromFile(new File(outputApkPath)).getLastPathSegment(),
                                 Toast.LENGTH_LONG);
+                        showSignedApkCertificate(outputApkPath);
                     } else {
                         tv_progress.setText("An error occurred. Check the log for more details.");
                     }
@@ -301,6 +341,43 @@ public class AppSettings extends BaseAppCompatActivity {
         }.start();
 
         building_dialog.show();
+    }
+
+    /**
+     * Reads back the signature that was just written and shows it, so the tool no longer signs
+     * silently with a key the user didn't choose.
+     */
+    private void showSignedApkCertificate(String apkPath) {
+        new Thread() {
+            @Override
+            public void run() {
+                super.run();
+                String message;
+                try {
+                    ApkVerifier.Result result = new ApkVerifier.Builder(new File(apkPath)).build().verify();
+                    StringBuilder builder = new StringBuilder();
+                    boolean first = true;
+                    for (X509Certificate certificate : result.getSignerCertificates()) {
+                        if (!first) {
+                            builder.append("\n\n");
+                        }
+                        first = false;
+                        builder.append("Subject: ").append(certificate.getSubjectX500Principal().getName());
+                        builder.append("\nSHA-256: ").append(KeystoreStore.formatSha256(
+                                MessageDigest.getInstance("SHA-256").digest(certificate.getEncoded())));
+                    }
+                    message = first ? "No certificates found in the signed APK." : builder.toString();
+                } catch (Exception e) {
+                    message = "Could not read the resulting certificate: " + e.getMessage();
+                }
+                String finalMessage = message;
+                runOnUiThread(() -> new MaterialAlertDialogBuilder(AppSettings.this)
+                        .setTitle("Signed APK certificate")
+                        .setMessage(finalMessage)
+                        .setPositiveButton("Close", null)
+                        .show());
+            }
+        }.start();
     }
 
     private class ActivityLauncher implements View.OnClickListener {

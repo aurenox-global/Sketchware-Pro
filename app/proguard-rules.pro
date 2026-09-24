@@ -446,3 +446,78 @@
 -dontwarn sun.security.util.ObjectIdentifier
 -dontwarn sun.security.x509.AlgorithmId
 -dontwarn sun.security.x509.X500Name
+
+# --- Ronda A1 (firma con keystore propio): sexto fallo R8, ahora en spongycastle ---
+# org.spongycastle.jce.provider.BouncyCastleProvider carga sus tablas de implementaciones
+# POR REFLEXION: instancia cada clase interna "*$Mappings" con Class.newInstance(), o sea
+# con su constructor sin argumentos. R8 no ve esa llamada y lo borraba ->
+# "InternalError: cannot create instance of org.spongycastle.jcajce.provider.digest.GOST3411$Mappings:
+# InstantiationException: has no zero argument constructor" en el <clinit> de
+# kellinwood.security.zipsigner.optional.KeyStoreFileManager -> CRASH de la app.
+# MEDIDO en el APK release arm64-v8a (v7.0.13.0 + cambios de la ronda A1, minifyEnabled=true):
+# al abrir Ajustes -> Keystore manager la app moria con ese InternalError (adjunto en
+# preview-evidence/sw-a1/50-crash-spongycastle.txt).
+# No es solo la funcion nueva: ese <clinit> lo toca tambien el camino de firma con keystore
+# propio del Export (CustomKeySigner -> KeyStoreFileManager), asi que estaba roto en release
+# desde antes. Se conserva spongycastle completo, como ya se hace con apksig y kellinwood.
+-keep class org.spongycastle.** { *; }
+-dontwarn org.spongycastle.**
+
+# --- Ronda A2 (AAB): septimo fallo R8, ahora en los protobuf de bundletool ---
+# El "Export AAB" moria siempre en release con:
+#   E AppExporter: Failed to build bundle: Generated message class
+#   "com.android.bundle.Config$BundleConfig" missing method "getBundletool".
+#   at mod.jbk.build.compiler.bundle.AppBundleCompiler.buildBundle
+# El runtime de protobuf resuelve los getters de las clases generadas POR NOMBRE
+# (reflexion), asi que R8 no ve esas llamadas y renombra/elimina getBundletool().
+# MEDIDO sobre el APK release arm64-v8a construido en esta ronda: `getBundletool`
+# aparecia 0 veces en classes.dex; en cambio la clase si existe (BundleConfig).
+# Se conservan enteros los paquetes de bundletool y protobuf, como ya se hace con
+# apksig, kellinwood y spongycastle.
+-keep class com.android.bundle.** { *; }
+-keep class com.android.tools.build.bundletool.** { *; }
+-keep class com.google.protobuf.** { *; }
+-dontwarn com.android.bundle.**
+-dontwarn com.android.tools.build.bundletool.**
+-dontwarn com.google.protobuf.**
+
+# --- Ronda 10b (compilar un proyecto EN EL DISPOSITIVO): octavo fallo R8, en el R8/D8 embebido ---
+# Sintoma reportado al COMPILAR un proyecto en el movil (etapa de dex):
+#   com.android.tools.r8.internal.Qf: Failure creating provider for the threading module
+#     at com.android.tools.r8.internal.QJ.c(Unknown Source:55)
+#     at mod.jbk.build.compiler.dex.DexCompiler.compileDexFiles
+#   Caused by: java.lang.NoSuchMethodException:
+#     com.android.tools.r8.threading.providers.blocking.ThreadingModuleBlockingProvider.<init> []
+#
+# CAUSA (medida, no deducida): la app EMBEBE R8/D8 (libs.bundles.shrinker -> com.android.tools:r8:8.11.18)
+# para compilar proyectos, y el R8 de la IDE minifica TAMBIEN esas clases. La eleccion del proveedor de
+# threading no se hace por bytecode sino POR REFLEXION con el nombre en un String:
+#   com.android.tools.r8.threading.a.b():   (en el APK minificado acabo viviendo en com.android.tools.r8.internal.QJ.c)
+#     for (name in ["...threading.providers.blocking.ThreadingModuleBlockingProvider",
+#                   "...threading.providers.singlethreaded.ThreadingModuleSingleThreadedProvider"])
+#         Class.forName(name).getDeclaredConstructor().newInstance();
+# El constructor SIN ARGUMENTOS de esos dos proveedores no lo llama nadie del bytecode, asi que R8 lo
+# borro. El NOMBRE de la clase sobrevivio (por eso es NoSuchMethodException y no ClassNotFoundException) y
+# el bucle solo tolera ClassNotFoundException: cualquier otro ReflectiveOperationException lo reenvuelve en
+# Qf("Failure creating provider for the threading module") y lo lanza. Por eso el fallo es DETERMINISTA en
+# release, en cualquier dispositivo: NO depende del numero de nucleos (la hipotesis de los 4 vs 8 nucleos
+# del AVD queda descartada por la medicion; ver el probe de la evidencia).
+#
+# EVIDENCIA (antes del arreglo), APK release arm64-v8a, minifyEnabled=true:
+#   * app/build/outputs/mapping/release/usage.txt lo dice literalmente: R8 elimino
+#       com.android.tools.r8.threading.providers.blocking.ThreadingModuleBlockingProvider:
+#           public void <init>()
+#       com.android.tools.r8.threading.providers.singlethreaded.ThreadingModuleSingleThreadedProvider:
+#           public void <init>()
+#   * dexdump del APK: las dos clases ESTAN pero con "Direct methods -" vacio (sin <init>).
+#   * en el dispositivo (emulador arm64, cargando el APK release como classpath, sin instalar nada):
+#       NoSuchMethodException: ...ThreadingModuleBlockingProvider.<init> []
+#       y la factory -> "Failure creating provider for the threading module".
+#   * en debug (minifyEnabled=false) los constructores estan presentes y no falla, como en el resto de la
+#     familia de fallos (v7.0.8.1, v7.0.10.1, spongycastle, bundletool).
+#
+# Alcance: solo hay UNA copia de R8/D8 en el APK (el artefacto de Gradle); los .dex precompilados de
+# assets/libs/*.zip no incluyen R8, asi que no hay mas copias que arreglar. Se conserva el paquete
+# com.android.tools.r8.threading completo (5 clases minusculas): nombres + miembros de la factory y, sobre
+# todo, los <init> de los proveedores, para que la reflexion encuentre lo que busca.
+-keep class com.android.tools.r8.threading.** { *; }

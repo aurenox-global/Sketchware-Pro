@@ -27,6 +27,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 
 import dev.pranav.filepicker.FilePickerCallback;
 import dev.pranav.filepicker.FilePickerDialogFragment;
@@ -207,12 +208,14 @@ public class ManageResourceActivity extends BaseAppCompatActivity {
         dialog.setOnShowListener(dialogInterface -> {
             Button positiveButton = ((androidx.appcompat.app.AlertDialog) dialogInterface).getButton(DialogInterface.BUTTON_POSITIVE);
             positiveButton.setOnClickListener(view -> {
-                if (Helper.getText(inputText).isEmpty()) {
-                    SketchwareUtil.toastError("Invalid name");
+                String name = Helper.getText(inputText).trim();
+
+                String nameError = validateNewName(name, isFolder);
+                if (nameError != null) {
+                    SketchwareUtil.toastError(nameError);
                     return;
                 }
 
-                String name = Helper.getText(inputText);
                 String path;
                 if (isFolder) {
                     path = fpu.getPathResource(numProj) + "/" + name;
@@ -227,7 +230,10 @@ public class ManageResourceActivity extends BaseAppCompatActivity {
                 if (isFolder) {
                     FileUtil.makeDir(path);
                 } else {
-                    FileUtil.writeFile(path, "<?xml version=\"1.0\" encoding=\"utf-8\"?>");
+                    /* Write a valid XML template including a root element: a file with only the
+                     * XML declaration makes AAPT2 fail with "no element found", breaking the
+                     * whole build. */
+                    FileUtil.writeFile(path, getNewFileTemplate(new File(temp).getName()));
                 }
                 handleAdapter(temp);
                 SketchwareUtil.toast("Created file successfully");
@@ -246,6 +252,73 @@ public class ManageResourceActivity extends BaseAppCompatActivity {
         });
 
         dialog.show();
+    }
+
+    /**
+     * Validates a name typed into the "Create a new file/folder" dialog.
+     *
+     * @return An error message to show the user, or {@code null} if the name is acceptable.
+     */
+    private static String validateNewName(String name, boolean isFolder) {
+        if (name.isEmpty()) {
+            return "Introduce un nombre";
+        }
+
+        String base = name;
+        if (!isFolder) {
+            if (!name.toLowerCase(Locale.ROOT).endsWith(".xml")) {
+                return "El nombre debe terminar en .xml";
+            }
+            base = name.substring(0, name.length() - ".xml".length());
+            if (base.isEmpty()) {
+                return "El nombre no puede ser solo la extension .xml";
+            }
+            String upperBase = base.toUpperCase(Locale.ROOT);
+            if (upperBase.equals("NONE") || upperBase.equals("TRANSPARENT")) {
+                return "Nombre reservado, usa otro (NONE/TRANSPARENT)";
+            }
+        }
+
+        if (base.charAt(0) == '.') {
+            return "El nombre no puede empezar por '.'";
+        }
+        if (Character.isDigit(base.charAt(0))) {
+            return "El nombre no puede empezar por un digito";
+        }
+        if (isFolder ? !base.matches("[a-zA-Z0-9_-]+") : !base.matches("[a-zA-Z0-9_]+")) {
+            return "El nombre contiene caracteres no validos";
+        }
+        return null;
+    }
+
+    /**
+     * @return A minimal, valid XML template (root element included) for the given resource folder.
+     */
+    private static String getNewFileTemplate(String directoryName) {
+        String dir = directoryName == null ? "" : directoryName.toLowerCase(Locale.ROOT);
+        String header = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n";
+        String ns = "xmlns:android=\"http://schemas.android.com/apk/res/android\"";
+
+        if (dir.startsWith("values")) {
+            return header + "<resources>\n</resources>\n";
+        }
+        if (dir.startsWith("layout")) {
+            return header + "<LinearLayout " + ns + ">\n</LinearLayout>\n";
+        }
+        if (dir.startsWith("animation") || dir.startsWith("anim")) {
+            return header + "<set " + ns + ">\n</set>\n";
+        }
+        if (dir.startsWith("menu")) {
+            return header + "<menu " + ns + ">\n</menu>\n";
+        }
+        if (dir.startsWith("color")) {
+            return header + "<selector " + ns + ">\n</selector>\n";
+        }
+        if (dir.startsWith("font")) {
+            return header + "<font-family " + ns + ">\n</font-family>\n";
+        }
+        /* drawable, mipmap, xml and unknown folders: a generic drawable is always accepted */
+        return header + "<shape " + ns + ">\n</shape>\n";
     }
 
     private void setupDialog() {

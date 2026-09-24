@@ -5,6 +5,7 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
 import android.view.WindowManager;
@@ -23,10 +24,16 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import org.spongycastle.jce.provider.BouncyCastleProvider;
 
 import java.io.File;
+import java.io.InputStream;
 import java.lang.ref.WeakReference;
+import java.security.MessageDigest;
 import java.security.Security;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
 
 import a.a.a.KB;
 import a.a.a.MA;
@@ -55,12 +62,22 @@ import mod.jbk.build.compiler.bundle.AppBundleCompiler;
 import mod.jbk.export.GetKeyStoreCredentialsDialog;
 import mod.jbk.util.TestkeySignBridge;
 import pro.sketchware.R;
+import pro.sketchware.keystore.CompilePreferences;
+import pro.sketchware.keystore.KeystoreStore;
 import pro.sketchware.metrics.BuildMetricsStore;
+import com.android.apksig.ApkVerifier;
 import pro.sketchware.utility.FilePathUtil;
 import pro.sketchware.utility.FileUtil;
 import pro.sketchware.utility.SketchwareUtil;
 
 public class ExportProjectActivity extends BaseAppCompatActivity {
+
+    /**
+     * Set by the design editor's compile dialog: start the build for this format without showing
+     * the dialog again (the choice, including how to sign, is already remembered).
+     */
+    public static final String EXTRA_COMPILE_FORMAT = "compile_format";
+    public static final String EXTRA_AUTO_COMPILE = "auto_compile";
 
     private final oB file_utility = new oB();
     /**
@@ -134,6 +151,104 @@ public class ExportProjectActivity extends BaseAppCompatActivity {
         initializeSignApkViews();
         initializeExportSrcViews();
         initializeAppBundleExportViews();
+
+        if (savedInstanceState == null && getIntent().getBooleanExtra(EXTRA_AUTO_COMPILE, false)) {
+            startCompileFromRememberedChoice(getIntent().getStringExtra(EXTRA_COMPILE_FORMAT));
+        }
+    }
+
+    /**
+     * Called when the design editor already asked what to build and how to sign it. Reuses the
+     * remembered choice; if it can't be resolved anymore (a deleted keystore, for instance), the
+     * normal dialog is shown instead so the user can fix it.
+     */
+    private void startCompileFromRememberedChoice(String formatName) {
+        GetKeyStoreCredentialsDialog.Format format = formatFromName(formatName);
+        if (format == null) {
+            return;
+        }
+
+        GetKeyStoreCredentialsDialog.Credentials credentials = credentialsFromRememberedChoice();
+        if (credentials == null && !isRememberedChoiceNotSigning()) {
+            showCompileDialog(format);
+            return;
+        }
+        startBuild(new GetKeyStoreCredentialsDialog.CompileRequest(format, credentials));
+    }
+
+    private GetKeyStoreCredentialsDialog.Format formatFromName(String name) {
+        if (TextUtils.isEmpty(name)) {
+            return null;
+        }
+        for (GetKeyStoreCredentialsDialog.Format format : GetKeyStoreCredentialsDialog.Format.values()) {
+            if (format.name().equals(name)) {
+                return format;
+            }
+        }
+        return null;
+    }
+
+    private GetKeyStoreCredentialsDialog.SigningMode rememberedSigningMode() {
+        String name = CompilePreferences.getSigningMode(this);
+        if (TextUtils.isEmpty(name)) {
+            return null;
+        }
+        for (GetKeyStoreCredentialsDialog.SigningMode mode : GetKeyStoreCredentialsDialog.SigningMode.values()) {
+            if (mode.name().equals(name)) {
+                return mode;
+            }
+        }
+        return null;
+    }
+
+    private boolean isRememberedChoiceNotSigning() {
+        return rememberedSigningMode() == GetKeyStoreCredentialsDialog.SigningMode.DONT_SIGN;
+    }
+
+    /**
+     * @return the credentials to sign with, taken from the compile dialog's last choice.
+     * {@code null} both when the user chose not to sign and when the choice can't be resolved
+     * (use {@link #isRememberedChoiceNotSigning()} to tell the two apart).
+     */
+    private GetKeyStoreCredentialsDialog.Credentials credentialsFromRememberedChoice() {
+        GetKeyStoreCredentialsDialog.SigningMode mode = rememberedSigningMode();
+        if (mode == null) {
+            return null;
+        }
+
+        switch (mode) {
+            case TESTKEY -> {
+                return new GetKeyStoreCredentialsDialog.Credentials("SHA256withRSA");
+            }
+            case SAVED_KEY_STORE -> {
+                KeystoreStore.Entry entry = KeystoreStore.find(this, CompilePreferences.getKeystoreId(this));
+                if (entry == null) {
+                    return null;
+                }
+                return new GetKeyStoreCredentialsDialog.Credentials(
+                        entry.file(this).getAbsolutePath(),
+                        entry.getStorePassword(),
+                        entry.getAlias(),
+                        entry.getKeyPassword(),
+                        entry.getAlgorithm());
+            }
+            case CUSTOM_KEY_STORE -> {
+                String path = CompilePreferences.getCustomKeystorePath(this);
+                if (TextUtils.isEmpty(path) || !new File(path).exists()) {
+                    return null;
+                }
+                String algorithm = CompilePreferences.getCustomAlgorithm(this);
+                return new GetKeyStoreCredentialsDialog.Credentials(
+                        path,
+                        CompilePreferences.getCustomStorePassword(this),
+                        CompilePreferences.getCustomAlias(this),
+                        CompilePreferences.getCustomKeyPassword(this),
+                        TextUtils.isEmpty(algorithm) ? "SHA256withRSA" : algorithm);
+            }
+            default -> {
+                return null;
+            }
+        }
     }
 
     @Override
@@ -259,42 +374,7 @@ public class ExportProjectActivity extends BaseAppCompatActivity {
     }
 
     private void initializeAppBundleExportViews() {
-        export_aab_button.setOnClickListener(view -> {
-            MaterialAlertDialogBuilder confirmationDialog = new MaterialAlertDialogBuilder(this);
-            confirmationDialog.setTitle("Important note");
-            confirmationDialog.setMessage("The generated .aab file must be signed.\nCopy your keystore to /Internal storage/sketchware/keystore/release_key.jks and enter the alias' password.");
-            confirmationDialog.setIcon(R.drawable.ic_mtrl_info);
-
-            confirmationDialog.setPositiveButton("Understood", (v, which) -> {
-                showAabSigningDialog();
-                v.dismiss();
-            });
-            confirmationDialog.show();
-        });
-    }
-
-    private void showAabSigningDialog() {
-        GetKeyStoreCredentialsDialog credentialsDialog = new GetKeyStoreCredentialsDialog(this,
-                R.drawable.ic_mtrl_key, "Sign outputted AAB", "Fill in the keystore details to sign the AAB.");
-        credentialsDialog.setListener(credentials -> {
-            BuildingAsyncTask task = new BuildingAsyncTask(this, yq.ExportType.AAB);
-            task.enableAppBundleBuild();
-            if (credentials != null) {
-                if (credentials.isForSigningWithTestkey()) {
-                    task.setSignWithTestkey(true);
-                } else {
-                    task.configureResultJarSigning(
-                            wq.j(),
-                            credentials.getKeyStorePassword().toCharArray(),
-                            credentials.getKeyAlias(),
-                            credentials.getKeyPassword().toCharArray(),
-                            credentials.getSigningAlgorithm()
-                    );
-                }
-            }
-            task.execute();
-        });
-        credentialsDialog.show();
+        export_aab_button.setOnClickListener(view -> showCompileDialog(GetKeyStoreCredentialsDialog.Format.AAB));
     }
 
     /**
@@ -326,56 +406,165 @@ public class ExportProjectActivity extends BaseAppCompatActivity {
         sign_apk_loading_anim.setVisibility(View.GONE);
         sign_apk_output_stage.setVisibility(View.GONE);
 
-        sign_apk_button.setOnClickListener(view -> {
-            MaterialAlertDialogBuilder confirmationDialog = new MaterialAlertDialogBuilder(this);
-            confirmationDialog.setTitle("Important note");
-            confirmationDialog.setMessage("""
-                    To sign an APK, you need a keystore. Use your already created one, and copy it to \
-                    /Internal storage/sketchware/keystore/release_key.jks and enter the alias's password.
-                    
-                    Note that this only signs your APK using signing scheme V1, to target Android 11+ for example, \
-                    use a 3rd-party tool (for now).""");
-            confirmationDialog.setIcon(R.drawable.ic_mtrl_info);
-
-            confirmationDialog.setPositiveButton("Understood", (v, which) -> {
-                showApkSigningDialog();
-                v.dismiss();
-            });
-            confirmationDialog.show();
-        });
+        sign_apk_button.setOnClickListener(view -> showCompileDialog(GetKeyStoreCredentialsDialog.Format.APK_RELEASE));
     }
 
-    private void showApkSigningDialog() {
+    /**
+     * The unified compile dialog: pick the format and how to sign it, in one place. Both entry
+     * points on this screen ("Sign APK" and "Export AAB") open it, with the format they suggest
+     * pre-selected, and the user can still switch between APK release and AAB inside it.
+     */
+    private void showCompileDialog(GetKeyStoreCredentialsDialog.Format defaultFormat) {
         GetKeyStoreCredentialsDialog credentialsDialog = new GetKeyStoreCredentialsDialog(this,
                 R.drawable.ic_mtrl_key,
-                "Sign an APK",
-                "Fill in the keystore details to sign the APK. " +
-                        "If you don't have a keystore, you can use a test key.");
-        credentialsDialog.setListener(credentials -> {
+                "Compile project",
+                "Pick what to build and how to sign it. A saved keystore needs no password. " +
+                        "The choice is remembered.",
+                defaultFormat,
+                new GetKeyStoreCredentialsDialog.Format[]{
+                        GetKeyStoreCredentialsDialog.Format.APK_RELEASE,
+                        GetKeyStoreCredentialsDialog.Format.AAB
+                });
+        credentialsDialog.setCompileListener(this::startBuild);
+        credentialsDialog.show();
+    }
+
+    /**
+     * Starts the build described by {@code request}.
+     */
+    private void startBuild(GetKeyStoreCredentialsDialog.CompileRequest request) {
+        setBuilding(true);
+
+        BuildingAsyncTask task = new BuildingAsyncTask(this,
+                request.isAppBundle() ? yq.ExportType.AAB : yq.ExportType.SIGN_APP);
+        if (request.isAppBundle()) {
+            task.enableAppBundleBuild();
+        }
+
+        GetKeyStoreCredentialsDialog.Credentials credentials = request.getCredentials();
+        if (credentials != null) {
+            if (credentials.isForSigningWithTestkey()) {
+                task.setSignWithTestkey(true);
+                task.setSigningSummary("testkey");
+            } else {
+                task.configureResultJarSigning(
+                        credentials.getKeyStorePath(),
+                        credentials.getKeyStorePassword().toCharArray(),
+                        credentials.getKeyAlias(),
+                        credentials.getKeyPassword().toCharArray(),
+                        credentials.getSigningAlgorithm()
+                );
+                task.setSigningSummary(describeCredentials(credentials));
+            }
+        } else {
+            task.disableResultJarSigning();
+            task.setSigningSummary("not signed");
+        }
+        task.execute();
+    }
+
+    /**
+     * @return a human-readable name of the keystore a build is about to be signed with, shown in the
+     * result dialog (a build should never be signed silently with a key the user didn't choose).
+     */
+    private String describeCredentials(GetKeyStoreCredentialsDialog.Credentials credentials) {
+        for (KeystoreStore.Entry entry : KeystoreStore.list(this)) {
+            if (entry.file(this).getAbsolutePath().equals(credentials.getKeyStorePath())) {
+                return entry.getName() + " (" + entry.getAlias() + ")";
+            }
+        }
+        return new File(credentials.getKeyStorePath()).getName() + " (" + credentials.getKeyAlias() + ")";
+    }
+
+    private void setBuilding(boolean building) {
+        if (building) {
             sign_apk_button.setVisibility(View.GONE);
             sign_apk_output_stage.setVisibility(View.GONE);
             sign_apk_loading_anim.setVisibility(View.VISIBLE);
             sign_apk_loading_anim.playAnimation();
+        } else {
+            sign_apk_button.setVisibility(View.VISIBLE);
+        }
+    }
 
-            BuildingAsyncTask task = new BuildingAsyncTask(this, yq.ExportType.SIGN_APP);
-            if (credentials != null) {
-                if (credentials.isForSigningWithTestkey()) {
-                    task.setSignWithTestkey(true);
-                } else {
-                    task.configureResultJarSigning(
-                            wq.j(),
-                            credentials.getKeyStorePassword().toCharArray(),
-                            credentials.getKeyAlias(),
-                            credentials.getKeyPassword().toCharArray(),
-                            credentials.getSigningAlgorithm()
-                    );
+    /**
+     * Tells the user what was produced, where it is, and with which key it was signed. For an APK,
+     * it also offers to install it right away.
+     */
+    private void showCompileResultDialog(File result, String signingSummary) {
+        boolean isApk = result.getName().toLowerCase().endsWith(".apk");
+        // An unsigned APK cannot be installed, so don't offer it (the system would just refuse).
+        boolean canBeInstalled = isApk && !"not signed".equals(signingSummary);
+        new Thread(() -> {
+            String certificate = isApk ? readApkCertificate(result) : readJarCertificate(result);
+            String message = result.getAbsolutePath()
+                    + "\n\nSigned with: " + signingSummary
+                    + (certificate.isEmpty() ? "" : "\n" + certificate);
+            runOnUiThread(() -> new MaterialAlertDialogBuilder(this)
+                    .setIcon(R.drawable.open_box_48)
+                    .setTitle(isApk ? "APK built" : "AAB built")
+                    .setMessage(message)
+                    .setPositiveButton(canBeInstalled ? "Install" : "OK", (dialog, which) -> {
+                        if (canBeInstalled) {
+                            installApk(result);
+                        }
+                    })
+                    .setNegativeButton(canBeInstalled ? "Close" : null, null)
+                    .show());
+        }).start();
+    }
+
+    private void installApk(File apk) {
+        Intent intent = new Intent(Intent.ACTION_VIEW);
+        Uri apkUri = FileProvider.getUriForFile(getApplicationContext(),
+                getApplicationContext().getPackageName() + ".provider", apk);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+        intent.addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        intent.setDataAndType(apkUri, "application/vnd.android.package-archive");
+        startActivity(intent);
+    }
+
+    /**
+     * Reads the signed APK's signing certificate back, so the user can see which key was used.
+     */
+    private String readApkCertificate(File apk) {
+        try {
+            ApkVerifier.Result result = new ApkVerifier.Builder(apk).build().verify();
+            StringBuilder builder = new StringBuilder();
+            for (X509Certificate certificate : result.getSignerCertificates()) {
+                if (builder.length() > 0) {
+                    builder.append('\n');
                 }
-            } else {
-                task.disableResultJarSigning();
+                builder.append("Certificate: ").append(certificate.getSubjectX500Principal().getName());
+                builder.append("\nSHA-256: ").append(KeystoreStore.formatSha256(
+                        MessageDigest.getInstance("SHA-256").digest(certificate.getEncoded())));
             }
-            task.execute();
-        });
-        credentialsDialog.show();
+            return builder.toString();
+        } catch (Exception e) {
+            return "Certificate could not be read: " + e.getMessage();
+        }
+    }
+
+    /**
+     * Same as {@link #readApkCertificate(File)}, for the JAR-signed .aab file.
+     */
+    private String readJarCertificate(File archive) {
+        try (JarFile jarFile = new JarFile(archive)) {
+            JarEntry entry = jarFile.getJarEntry("META-INF/CERT.RSA");
+            if (entry == null) {
+                return "";
+            }
+            try (InputStream input = jarFile.getInputStream(entry)) {
+                X509Certificate certificate = (X509Certificate) CertificateFactory.getInstance("X.509")
+                        .generateCertificate(input);
+                return "Certificate: " + certificate.getSubjectX500Principal().getName()
+                        + "\nSHA-256: " + KeystoreStore.formatSha256(
+                        MessageDigest.getInstance("SHA-256").digest(certificate.getEncoded()));
+            }
+        } catch (Exception e) {
+            return "";
+        }
     }
 
     private void initializeOutputDirectories() {
@@ -432,6 +621,7 @@ public class ExportProjectActivity extends BaseAppCompatActivity {
         private char[] signingAliasPassword = null;
         private String signingAlgorithm = null;
         private boolean signWithTestkey = false;
+        private String signingSummary = "testkey";
         private long buildStartedAtMs;
         private boolean metricsRecorded;
         private boolean failedWithError;
@@ -673,16 +863,18 @@ public class ExportProjectActivity extends BaseAppCompatActivity {
                     if (signWithTestkey) {
                         TestkeySignBridge.signWithTestkey(builder.yq.unsignedAlignedApkPath, outputLocation);
                     } else if (isResultJarSigningEnabled()) {
-                        Security.addProvider(new BouncyCastleProvider());
-                        CustomKeySigner.signZip(
-                                new ZipSigner(),
-                                wq.j(),
-                                signingKeystorePassword,
-                                signingAliasName,
-                                signingKeystorePassword,
-                                signingAlgorithm,
+                        /* Sign with apksig (v1 + v2 + v3). kellinwood's ZipSigner only produces a
+                           v1 (JAR) signature, and an APK targeting Android 11+ (API 30+) signed
+                           only with v1 is rejected by the platform and by apksigner:
+                           "Target SDK version 34 requires a minimum of signature scheme v2". */
+                        new mod.alucard.tn.apksigner.ApkSigner().signWithKeyStore(
                                 builder.yq.unsignedAlignedApkPath,
-                                outputLocation
+                                outputLocation,
+                                signingKeystorePath,
+                                new String(signingKeystorePassword),
+                                signingAliasName,
+                                new String(signingAliasPassword),
+                                null
                         );
                     } else {
                         FileUtil.copyFile(builder.yq.unsignedAlignedApkPath, outputLocation);
@@ -769,20 +961,15 @@ public class ExportProjectActivity extends BaseAppCompatActivity {
             // Dismiss the ProgressDialog
             activity.get().i();
 
-            if (new File(getCorrectResultFilename(project_metadata.releaseApkPath)).exists()) {
-                activity.get().f(getCorrectResultFilename(project_metadata.projectName + "_release.apk"));
+            File built = getBuiltResultFile();
+            if (built == null) {
+                return;
             }
 
-            String aabFilename = getCorrectResultFilename(project_metadata.projectName + ".aab");
-            if (buildingAppBundle && new File(Environment.getExternalStorageDirectory(), "sketchware" + File.separator + "signed_aab" + File.separator + aabFilename).exists()) {
-                MaterialAlertDialogBuilder dialog = new MaterialAlertDialogBuilder(activity.get());
-                dialog.setIcon(R.drawable.open_box_48);
-                dialog.setTitle("Finished exporting AAB");
-                dialog.setMessage("You can find the generated, signed AAB file at:\n" +
-                        "/Internal storage/sketchware/signed_aab/" + aabFilename);
-                dialog.setPositiveButton(Helper.getResString(R.string.common_word_ok), null);
-                dialog.show();
+            if (!buildingAppBundle) {
+                activity.get().f(built.getName());
             }
+            activity.get().showCompileResultDialog(built, signingSummary);
         }
 
         /**
@@ -810,6 +997,28 @@ public class ExportProjectActivity extends BaseAppCompatActivity {
 
         public void enableAppBundleBuild() {
             buildingAppBundle = true;
+        }
+
+        /**
+         * Named in the result dialog, so the user can see which key the build was signed with.
+         */
+        public void setSigningSummary(String signingSummary) {
+            this.signingSummary = signingSummary;
+        }
+
+        /**
+         * @return the absolute path of the file that was just built, or {@code null} if none of the
+         * two expected outputs exists.
+         */
+        private File getBuiltResultFile() {
+            if (buildingAppBundle) {
+                File aab = new File(Environment.getExternalStorageDirectory(),
+                        "sketchware" + File.separator + "signed_aab" + File.separator
+                                + getCorrectResultFilename(project_metadata.projectName + ".aab"));
+                return aab.exists() ? aab : null;
+            }
+            File apk = new File(getCorrectResultFilename(project_metadata.releaseApkPath));
+            return apk.exists() ? apk : null;
         }
 
         /**

@@ -85,6 +85,22 @@ public final class DexMerger {
 
     private final InstructionTransformer instructionTransformer;
 
+    /**
+     * Output offsets of already transformed debug info items, keyed by the input
+     * dex they come from (identity) and their offset inside it.
+     * <p>
+     * DEX files written by modern dexers (the prebuilt library DEX files shipped in
+     * {@code assets/libs/dexs.zip} come from d8/AOSP dx) store a single
+     * {@code debug_info_item} shared by many methods: one dex can have 2201 code
+     * items pointing at only 265 debug info items. {@link #transformCode} used to
+     * emit a fresh copy for every code item, while the reserved size of the debug
+     * info section is computed from the (already deduplicated) byte count of the
+     * inputs, so the output blew past the reservation and merging died with
+     * {@code java.nio.BufferOverflowException}. Reusing the output item keeps the
+     * merged DEX consistent (and smaller) and the size estimate valid.
+     */
+    private final Map<Dex, Map<Integer, Integer>> transformedDebugInfos = new IdentityHashMap<>();
+
     /** minimum number of wasted bytes before it's worthwhile to compact the result */
     private int compactWasteThreshold = 1024 * 1024; // 1MiB
 
@@ -897,8 +913,16 @@ public final class DexMerger {
 
         int debugInfoOffset = code.getDebugInfoOffset();
         if (debugInfoOffset != 0) {
-            codeOut.writeInt(debugInfoOut.getPosition());
-            transformDebugInfoItem(in.open(debugInfoOffset), indexMap);
+            // Several code items may share a single debug info item (see
+            // transformedDebugInfos), so write it once and reuse its output offset.
+            Map<Integer, Integer> transformed = transformedDebugInfos.computeIfAbsent(in, ignored -> new HashMap<>());
+            Integer debugInfoOutOffset = transformed.get(debugInfoOffset);
+            if (debugInfoOutOffset == null) {
+                debugInfoOutOffset = debugInfoOut.getPosition();
+                transformDebugInfoItem(in.open(debugInfoOffset), indexMap);
+                transformed.put(debugInfoOffset, debugInfoOutOffset);
+            }
+            codeOut.writeInt(debugInfoOutOffset);
         } else {
             codeOut.writeInt(0);
         }

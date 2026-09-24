@@ -5,4 +5,9 @@
     <external-path
         name="sketchware_backups"
         path=".sketchware/backups/" />
+    <!-- Signed APKs built by the unified compile dialog, so its "Install" button can hand the
+         file to the package installer ("sketchware/signed_apk"). -->
+    <external-path
+        name="sketchware_signed_apk"
+        path="sketchware/signed_apk/" />
 </paths>

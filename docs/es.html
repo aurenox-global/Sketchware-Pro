@@ -37,14 +37,14 @@
 
   <!-- ============================================================ hero -->
   <section class="hero" style="border-top:none">
-    <div class="tag">● v7.0.13.0 · versionCode 175 · source-available</div>
+    <div class="tag">● v7.0.14.0 · versionCode 176 · source-available</div>
     <h1>Crea apps Android reales<br><span class="accent">desde tu móvil.</span></h1>
     <p class="lead">
       Sketchware Pro es un IDE de Android que funciona sobre Android: arrastra bloques, escribe Java o Kotlin,
       compila en el propio dispositivo y obtén un APK instalable — sin necesidad de ordenador.
     </p>
     <div class="btns">
-      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.13.0" target="_blank" rel="noopener">⬇ Descargar APK</a>
+      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.14.0" target="_blank" rel="noopener">⬇ Descargar APK</a>
       <a class="btn ghost" href="https://github.com/aurenox-global/Sketchware-Pro" target="_blank" rel="noopener">Ver el código en GitHub</a>
     </div>
 
@@ -134,12 +134,82 @@
       <span class="k">Hitos destacados</span>
       <p>
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.0">Flutter corriendo en el dispositivo, release/AOT incluido</a> &middot;
-        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.13.0">la vista previa de diseños arreglada, rondas 1 a 12</a> &middot;
+        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.14.0">firmar con tu propio keystore, rondas 1 a 12 + ronda A</a> &middot;
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.1">la descarga del toolchain de Dart ahora la decides tú, y el toolchain ya no dice "no instalado"</a> &middot;
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.9">soporte de Kotlin en el IDE de la app</a>.
       </p>
     </div>
     <div class="log" id="change-log">
+      <div class="item done featured">
+        <span class="when">2026-09-24 · build y firma</span>
+        <h3>Firmar con <em>tu</em> keystore, y compilar APK o AAB desde un solo diálogo  <span class="pill feat">destacado</span> <span class="pill ok">arreglado</span></h3>
+        <ul class="clean">
+          <li><strong>El IDE ya firma con tu propio keystore, y compilar es un solo diálogo: APK o AAB × keystore
+          guardado / fichero de keystore / testkey / sin firmar.</strong> De dónde se partía, <strong>medido</strong> y
+          no supuesto: la herramienta <em>Sign an APK file</em> de Ajustes <strong>nunca miraba tu keystore</strong> —
+          sus dos llamadas pasaban <code>useTestkey=true</code> hardcodeado, así que firmaba siempre con la
+          <strong>testkey de AOSP</strong> (<code>apksigner verify</code> → <code>a40da80a…</code>, no tu
+          certificado). El diálogo de firma asumía una <strong>ruta fija</strong>
+          (<code>/storage/emulated/0/sketchware/keystore/release_key.jks</code>) y tenía <strong>un solo campo de
+          contraseña</strong>, así que la misma contraseña tenía que ser la del store y la del alias, y la rama APK
+          de <code>ExportProjectActivity</code> ignoraba la ruta del diálogo <strong>y reutilizaba la contraseña de
+          alias como contraseña de store</strong> — un <code>.jks</code> real (el caso normal de
+          <code>keytool</code>, con dos contraseñas distintas) era directamente inusable.</li>
+          <li><strong>Gestor de keystores nuevo</strong> (Ajustes → <em>General</em>): importa <code>.jks</code> /
+          <code>.keystore</code> / <code>.bks</code> / <code>.p12</code> validando las credenciales antes de guardar,
+          copia el fichero al <strong>almacenamiento privado de la app</strong> (<code>filesDir/keystores/</code>, no
+          <code>/sdcard</code>, que es legible por cualquiera), guarda alias + contraseñas de store y de clave
+          <strong>cifradas</strong> y muestra el certificado de cada uno — el SHA-256 que pinta es <strong>idéntico al
+          de <code>keytool</code></strong> (<code>B1:46:48:5F:…:C4</code>). El diálogo de firma compartido ya tiene
+          <strong>ruta explícita de keystore</strong>, <strong>contraseña de store separada de la de alias</strong>,
+          selector de keystore guardado que rellena todo y <strong>ya no se cierra cuando la validación falla</strong>
+          (antes perdías lo escrito). Ese JKS lo lee con un cargador agnóstico de tipo, porque en Android
+          <code>KeyStore.getInstance("JKS")</code> resuelve a <strong>BKS</strong> y un JKS de verdad no se puede
+          abrir. Y Ajustes → <em>Sign an APK file</em> por fin pregunta <strong>con qué clave</strong> firmar (testkey
+          o cada keystore guardado) y <strong>muestra el certificado resultante</strong>, en vez de firmar en
+          silencio con una clave que no elegiste.</li>
+          <li><strong>El build on-device bloqueaba todo esto, y eran bugs reales del IDE, no los proyectos de
+          prueba.</strong> <code>DexMerger</code> (el dx del fork) reventaba con
+          <strong><code>java.nio.BufferOverflowException</code></strong> en <em>cualquier</em> build release/AAB — los
+          dex de librería que inyecta el IDE <strong>comparten un mismo <code>debug_info_item</code> entre hasta 116
+          métodos</strong> mientras el merger escribía una copia nueva por <code>code_item</code> y reservaba el
+          hueco con los bytes ya deduplicados; arreglado deduplicando por (dex de entrada, offset): debug info items
+          <strong>2.297 → 361</strong> (reproducido offline con los dos dex reales, mismo stack que el dispositivo).
+          El <strong><code>Export AAB</code> estaba roto por R8</strong> — protobuf resuelve los getters generados
+          <strong>por reflexión</strong>, así que <code>getBundletool</code> había desaparecido del dex release (0 → 7
+          ocurrencias tras el <code>-keep</code>). El <strong>APK release era V1-only</strong> y no se instalaba en
+          Android 11+ (<code>INSTALL_PARSE_FAILED_NO_CERTIFICATES</code>), ahora <strong>apksig V1+V2+V3</strong>; y el
+          <strong>AAB llevaba digests SHA-1</strong> (<code>jarsigner</code> lo trataba como no firmado) →
+          <strong>SHA-256</strong>, <code>jar verified.</code></li>
+          <li><strong>Otros dos bloqueos arreglados de paso.</strong> Un XML de recurso escrito <strong>solo con la
+          cabecera</strong> (<code>NONE.xml</code>, salido tal cual del diálogo "Create a new file") tumbaba el build
+          <strong>entero</strong> en aapt2 (<code>no element found</code>) → plantillas válidas por carpeta, validación
+          de nombre y una guardia que aparta los XML sin raíz a <code>.invalid-xml-skipped/</code> con aviso
+          (recuperable, no se borra nada). Y R8 borraba el <strong><code>&lt;init&gt;</code> de sus propios
+          proveedores de threading</strong>, que ese mismo R8 embebido instancia <strong>por reflexión</strong> (el
+          nombre de la clase sobrevive en un String, por eso el fallo era <code>NoSuchMethodException</code> y
+          determinista): <em>"Failure creating provider for the threading module"</em> → <code>-keep class
+          com.android.tools.r8.threading.** { *; }</code> (<strong>+1.196 B</strong>, ~0,001 % del APK), probado
+          antes/después en el dispositivo con un probe que replica esa misma factory.</li>
+          <li><strong>Verificado en el APK release (R8):</strong> un APK release firmado con <strong>tu</strong>
+          certificado (<code>apksigner verify</code>: <code>Verifies</code>, V1+V2+V3, <code>b146485f…</code>) e
+          <strong>instalado desde el botón Install del propio diálogo</strong> (el instalador del sistema ofreció
+          actualizar la app); un AAB con la estructura de bundle completa (<code>BundleConfig.pb</code>,
+          <code>base/manifest</code>, <code>base/dex</code>, <code>base/res/*</code>, <code>base/resources.pb</code>)
+          y <code>jarsigner -verify</code> → <em>jar verified</em>; <code>Run ▶</code> intacto (debug, testkey
+          <code>a40da80a…</code>); el modo sin firmar escribe <code>.unsigned</code>. También se arreglaron 5 bugs de
+          UI encontrados midiendo: el selector de formato era invisible, la etiqueta de firma mentía, <code>NEXT</code>
+          se salía de la pantalla, <code>Install</code> mataba la app (el <code>FileProvider</code> no exponía
+          <code>sketchware/signed_apk/</code>) y ofrecía instalar un APK sin firmar.</li>
+        </ul>
+        <p><img src="assets/preview-a-dialog.png" alt="El diálogo unificado Compile project con formato y modo de firma" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)"> <img src="assets/preview-a-keystore.png" alt="El gestor de keystores mostrando el SHA-256 del certificado" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)"> <img src="assets/preview-a-result.png" alt="El diálogo de resultado del AAB con la ruta y el certificado" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)"></p>
+        <p><strong>Honesto:</strong> el AAB <strong>no</strong> se ha probado contra <code>bundletool</code> ni
+        Play (en esta máquina no hay <code>bundletool</code>), los modos <em>keystore file</em> y <em>testkey</em> del
+        diálogo no se ejecutaron en release (solo UI), y la conversión de proyectos de Android Studio/GitHub sigue
+        pendiente (siguiente ronda: viabilidad + MVP). Versión <strong>v7.0.14.0</strong> (versionCode 176). El detalle
+        de la ronda A está al final de <a href="preview-fix.md">docs/preview-fix.md</a>.</p>
+      </div>
+
       <div class="item done featured">
         <span class="when">2026-09-24 · vista previa</span>
         <h3>Los colores que eliges ya no se escriben transparentes en el XML  <span class="pill feat">destacado</span> <span class="pill ok">arreglado</span></h3>

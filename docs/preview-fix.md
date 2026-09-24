@@ -1468,3 +1468,257 @@ Recuentos de vistas `Preview OK · vistas: 4` (caseA), `5` (caseC) y `2` (caseE)
   representativos con recuento de píxeles (r8 caseA/caseC y r11 caseE), idénticos a la base.
 - **Sin commitear** en el árbol de trabajo; `versionCode`/`versionName` los pone esta release a **175 / v7.0.13.0**.
 
+
+## 17. Ronda A (v7.0.14.0)
+
+Fecha: 2026-09-24 · Versión: **v7.0.14.0** (versionCode 176) · Repo: `Sketchware-Pro-main`
+
+Release: <https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.14.0>
+
+La ronda que pedía el dueño del fork era una sola frase: *al compilar, poder elegir APK o AAB y firmarlo con su
+propia firma de una sola vez*. Se hizo en tres carriles (A1: gestor de keystores + firma; A2: build on-device + APK y
+AAB firmados; A3: diálogo unificado), más dos carriles cortos que salieron **midiendo** (un XML sin raíz que tumbaba
+el build entero; un `<init>` que R8 borraba de su propio R8). El resultado: **el IDE firma con el keystore del
+usuario** (antes ni lo miraba) y **compilar es un solo diálogo** — formato × firma, con memoria de la última
+elección. Por el camino aparecieron **bugs reales del propio IDE** que bloqueaban *cualquier* build release/AAB —
+no eran los proyectos de prueba.
+
+| Diálogo unificado **"Compile project"** (formato + firma recordados) | **Gestor de keystores**: certificado = el de `keytool` | Resultado: ruta + con qué se firmó + certificado |
+| --- | --- | --- |
+| ![Diálogo unificado de compilar con formato y modo de firma](assets/preview-a-dialog.png) | ![Gestor de keystores mostrando el SHA-256 del certificado](assets/preview-a-keystore.png) | ![Diálogo de resultado del AAB con la ruta y el certificado](assets/preview-a-result.png) |
+
+### 17.1 El punto de partida (recon): la herramienta de firmar **ignoraba** tu keystore
+
+Recon previo (`sw-features-recon.md`), todo **verificado** en código (fichero:línea) y en pantalla:
+
+- **Ajustes → "Sign an APK file with testkey"** firmaba con la **testkey de AOSP**, pasara lo que pasara: las dos
+  llamadas de `AppSettings` (`:241`, `:246`) iban con **`useTestkey=true` hardcodeado**. Con un keystore propio
+  guardado, la herramienta **ni lo miraba**. Medido: el APK resultante verificaba con `a40da80a…`, la testkey AOSP.
+- **El diálogo de firma del Export** (mismo widget para APK y AAB) asumía **ruta fija**
+  (`/storage/emulated/0/sketchware/keystore/release_key.jks`, `wq.j()`), **no tenía campo de ruta** y tenía **un solo
+  campo de contraseña**: `GetKeyStoreCredentialsDialog` construía `new Credentials(alg, etPassword, etAlias,
+  etPassword)` → la misma contraseña para keystore y para alias. Un `.jks` real (contraseñas distintas, lo normal de
+  `keytool`) **no se podía usar**; si el fichero no estaba en la ruta fija: toast "Keystore not found" y el diálogo
+  se cerraba perdiendo lo escrito.
+- **Bug latente en la rama APK** (`ExportProjectActivity.java:677`): se llamaba a `CustomKeySigner.signZip(…)` con
+  `wq.j()` (ignoraba la ruta) y con `signingKeystorePassword` **también** como contraseña de alias. La rama AAB sí
+  usaba las variables correctas.
+- **Editar Java YA existía.** `FeatureFlags.Key.CODE_VIEWER_EDIT_AND_SAVE` está **ON por defecto** (`FeatureFlags.java:15`),
+  y el guardado **sobrevive al build**: `yq` genera el `.java` **solo si no existe** el override en
+  `data/<sc_id>/files/java/` y `ProjectBuilder.compileJavaCode()` añade ese directorio a las fuentes. No había que
+  crear ningún mecanismo nuevo: lo que faltaba era UX (y la conversión de proyectos de Android Studio/GitHub, que
+  sigue sin existir).
+
+### 17.2 Gestor de keystores (nuevo)
+
+`pro/sketchware/security/SecurePrefs.java` (extrae el patrón `EncryptedSharedPreferences` + `MasterKey` AES256_GCM
+que ya usaba el IDE en `pro/sketchware/ai/AiSecretStore`, con fallback si el cifrado no está disponible) y
+`pro/sketchware/keystore/KeystoreStore.java`:
+
+- copia el `.jks` al **almacenamiento privado de la app** (`filesDir/keystores/<id>.jks`, **no** `/sdcard`, que es
+  legible por cualquiera) y guarda alias + contraseña de store + contraseña de clave + algoritmo, cifrados;
+- lista, importa, borra y **lee el certificado** (SHA-256 + subject) con el cargador agnóstico de tipo
+  (`KeyStoreFileManager`), el mismo que usa el firmado del Export.
+
+`KeystoreManagerActivity` + `activity_keystore_manager.xml` + `item_keystore.xml` + `dialog_import_keystore.xml`:
+pantalla en **Ajustes → General → Keystore manager**; importa `.jks` / `.keystore` / `.bks` / `.p12` **validando las
+credenciales antes de guardar**.
+
+Prueba (contraseñas **distintas a propósito**: store `StorePass123`, alias `myalias`, key `KeyPass456`): la app
+muestra `SHA-256: B1:46:48:5F:AE:05:9A:D6:9A:6C:F3:82:6D:2B:4A:6D:3E:E3:56:EE:90:4E:D2:87:A4:91:98:28:FD:62:72:C4`,
+el **mismo valor** que `keytool -list -v -keystore myapp.jks`. Es decir: el guardado cifrado de **las dos**
+contraseñas funciona y el keystore se lee de verdad desde `filesDir`.
+
+**Dato que cambia el diagnóstico previo:** antes de esta ronda, tocar `KeyStoreFileManager` **mataba la app** en
+release (ver §17.6, `spongycastle`).
+
+### 17.3 Diálogo de firma con **ruta explícita** y **dos contraseñas** (APK y AAB)
+
+`dialog_keystore_credentials.xml` + `GetKeyStoreCredentialsDialog.java`:
+
+- Modos: **Sign using saved keystore** / **Sign using a keystore file** / **Sign using a test key** / **Don't sign**
+  (por defecto: guardado si hay alguno; si no, "keystore file").
+- Campos nuevos: **selector de keystore guardado**, **ruta del keystore**, **contraseña de store** — separada de
+  **alias password**. Al elegir un keystore guardado se rellenan ruta, alias, ambas contraseñas y algoritmo sin
+  re-teclear.
+- `Credentials` gana `keyStorePath` y un constructor `(path, storePassword, alias, keyPassword, algorithm)`.
+- El diálogo **ya no se cierra** cuando la validación falla.
+- `ExportProjectActivity`: se pasa `credentials.getKeyStorePath()` y `signingAliasPassword` (los dos bugs de §17.1).
+
+Medido en pantalla (`72-export-sign-dialog.png`, `73-aab-sign-dialog.png`), el dump de UI real sale ya así **para APK
+y para AAB** (idéntico, mismo widget):
+
+```
+'Saved keystore'
+'/data/user/0/pro.sketchware/files/keystores/ks_…jks'     et_keystore_path
+'StorePass123'                                            et_store_password
+'myalias'                                                 et_alias
+'KeyPass456'                                              et_password
+'SHA256withRSA'                                           et_signing_algorithm
+```
+
+Hay **ruta explícita** y **las dos contraseñas son distintas** — imposible antes (un solo campo). Ya no hace falta
+copiar nada a `release_key.jks`.
+
+### 17.4 Ajustes → "Sign an APK file": firma con **tu** keystore y lo demuestra
+
+- La entrada de Ajustes pasa de *"Sign an APK file with testkey"* a **"Sign an APK file"**. Tras elegir el APK
+  aparece un selector **"Sign with"**: *testkey* o cada keystore guardado (`Sign with myapp.jks (myalias)`). Se acabó
+  el `useTestkey=true` fijo.
+- `mod/alucard/tn/apksigner/ApkSigner.java`: `signWithKeyStore(...)` deja de usar el **CLI** de apksig y usa la **API
+  programática** (cargador agnóstico de tipo + `com.android.apksig.ApkSigner`, V1+V2+V3). Esto arregla de golpe dos
+  fallos de §17.6: Android no puede abrir un JKS real con `getInstance("JKS")`, y el CLI llama a `System.exit()` al
+  fallar → **mataba Sketchware** (`System.exit called, status: 2` → `Process pro.sketchware has died`).
+- Al terminar, la app **muestra el certificado resultante** (subject + SHA-256) leyendo el APK firmado con
+  `ApkVerifier`.
+
+Verificación independiente del APK sacado del dispositivo (`apksigner verify --print-certs`):
+
+```
+Signer #1 certificate DN: CN=Zota Test, OU=RondaA1, O=OpenClaw, L=Vienna, C=AT
+Signer #1 certificate SHA-256 digest: b146485fae059ad69a6cf3826d2b4a6d3ee356ee904ed287a4919828fd6272c4
+```
+
+`b146485f…` = **el certificado del usuario**, no la testkey. Antes de la ronda, ese mismo APK salía firmado en
+silencio con `a40da80a…`.
+
+### 17.5 Los tres bugs reales que bloqueaban el build release/AAB
+
+Al medir la firma apareció la verdad: **no se podía compilar ningún proyecto on-device** (el *Run* debug sí iba,
+porque el merge de dex se salta en debug). Tres bugs del propio IDE:
+
+| # | Bug real | Síntoma medido | Arreglo | Verificación |
+| --- | --- | --- | --- | --- |
+| 1 | `DexMerger` (el dx del fork) | `java.nio.BufferOverflowException` en **cualquier** build release/AAB | dedupe de `debug_info_item` por (dex de entrada, offset), +28 líneas | offline **y** en dispositivo: **2.297 → 361** debug info items |
+| 2 | `Export AAB` roto por R8 | `Failed to build bundle: … missing method "getBundletool"` | `-keep` de `com.android.bundle.**`, `bundletool.**`, `com.google.protobuf.**` | `getBundletool` **0 → 7** ocurrencias en el dex release; el AAB se genera |
+| 3 | Firma del APK release **V1-only** | `INSTALL_PARSE_FAILED_NO_CERTIFICATES` (Android 11+) | kellinwood `ZipSigner` → **apksig V1+V2+V3** | `apksigner verify`: `Verifies` + **instala y arranca** |
+
+**Causa raíz del (1), medida y no deducida:** los `.dex` de librería que el IDE inyecta (generados con d8)
+**comparten un mismo `debug_info_item` entre hasta 116 métodos** (2201 code items → solo 265 debug info items en
+`http-legacy-android-28.dex`, el que se inyecta siempre); `DexMerger` reservaba el hueco con el byteCount **ya
+deduplicado** (`debugInfo += byteCount * 2 + 8` → **5.824 B**) pero escribía **una copia nueva por `code_item`**
+(2.315 items). Reproducido **offline** con los dos dex reales, mismo stack que el dispositivo, y el fix desaparece el
+fallo (margen medido: `debugInfo reserved=5824 used=2901`).
+
+**Y un cuarto arreglo:** el AAB salía con **digests SHA-1** (en el firmador vendorizado `kellinwood`), así que
+`jarsigner -verify` (JDK 17) lo trataba como **no firmado**. Cambiado a **SHA-256** (nombres de atributo + prefijo
+`DigestInfo` PKCS#1). Verificado: `jar verified.`
+
+### 17.6 Dos fallos de R8 más (familia "la minificación borra algo que solo se usa por reflexión")
+
+1. **`org.spongycastle` sin constructores.** R8 borraba los constructores vacíos de las clases `*$Mappings` que
+   `BouncyCastleProvider` instancia **por reflexión**; al abrir el gestor, `KeyStoreFileManager.<clinit>` reventaba
+   con `InternalError: cannot create instance of … has no zero argument constructor`. No era solo la pantalla nueva:
+   ese mismo camino lo toca **la firma del Export**, así que la firma con keystore propio estaba rota en release
+   **desde antes** de esta ronda. Arreglo: `-keep class org.spongycastle.** { *; }` (+ `-dontwarn`).
+2. **El `<init>` de los proveedores de threading del R8/D8 embebido.** La app **embebe R8/D8** para compilar
+   proyectos; su propio R8 minificaba esas clases y borraba el **constructor sin argumentos** de los dos proveedores
+   de threading, que la factory instancia **por reflexión con el nombre de la clase en un String** → crash
+   `Failure creating provider for the threading module` (y el nombre de la clase **sobrevive**, por eso el error era
+   `NoSuchMethodException`, no `ClassNotFoundException`: **determinista en cualquier dispositivo**). Corroborado con
+   las tres vías: `usage.txt` de R8 lista los dos `<init>` eliminados, `dexdump` los muestra vacíos y el
+   desensamblado localiza la factory. Arreglo: `-keep class com.android.tools.r8.threading.** { *; }`; verificado
+   **antes/después en dispositivo** con un probe que replica la factory (`NoSuchMethodException` → `OK`). Coste
+   medido: **+1.196 B** en arm64-v8a (≈0,001 %). Enumeración completa: **es el único caso** de "clase propia del APK
+   instanciada por reflexión" en el R8/D8 embebido.
+
+### 17.7 El XML sin raíz que rompía **todo** el build (`NONE.xml`)
+
+El diálogo "Create a new file" del editor de recursos escribía el fichero con **solo la cabecera**
+(`<?xml version="1.0" encoding="utf-8"?>`), y aapt2 respondía:
+
+```
+…/drawable/NONE.xml:1: error: no element found.
+…/drawable/NONE.xml: error: file failed to compile.
+```
+
+Un fichero suelto tumbaba **el build entero**. Arreglo en tres piezas (+91/−7 en 2 ficheros, +1 nuevo):
+
+- **Plantillas válidas por carpeta** (`values*` → `<resources>`, `layout*` → `<LinearLayout …>`, `drawable*` →
+  `<shape …>`, etc.).
+- **Validación del nombre**: rechaza vacío, `NONE`/`TRANSPARENT` (reservados), `.xml` sin base, sin extensión,
+  empezando por `.` o dígito, y caracteres fuera de `[a-zA-Z0-9_]`.
+- **Guardia en el build** (`ResourceXmlGuard`, invocada antes de cada `aapt2 compile --dir`): si un `.xml` no tiene
+  elemento raíz, se **aparta** a un directorio hermano `.invalid-xml-skipped/` con un aviso — **no se borra** y el
+  build sigue. Decisión explicada: el problema reportado era justo que un fichero aislado bloqueaba todo; fallar con
+  mensaje claro seguía dejando al usuario sin compilar.
+
+Reproducido con el **aapt2 real del dispositivo** (`libaapt2_exec.so`, arm64) y verificada la guardia (sin ella
+aapt2 falla; con el fichero apartado, `EXIT=0`).
+
+**Límite honesto de este carril:** no se ejecutó el ciclo in-app (crear el fichero y compilar desde la app) porque el
+emulador y gradle estaban ocupados por los otros carriles; la verificación fue **equivalente**: el mismo binario
+aapt2 + el código real de la guardia (compilado y probado: 10/10 casos + 8/8 integración) + las plantillas
+compiladas con aapt2 del host **y** del dispositivo.
+
+### 17.8 El diálogo unificado "Compile project" (formato × firma)
+
+Un solo diálogo donde se elige **qué construir** y **cómo firmarlo**, accesible desde **dos sitios**:
+
+- **Desde el editor de diseño** (donde ya está `Run ▶`): menú ▾ → **"Compile APK / AAB..."** (entrada nueva).
+  * APK (debug) → lanza el **mismo `BuildTask` de Run** (rápido, testkey, instala); el selector de firma se
+    desactiva con la nota *"Debug builds are always signed with the testkey"*.
+  * APK (release) / AAB → abren `ExportProjectActivity` con el formato y **la firma recordada**, y arrancan el build
+    sin preguntar nada más.
+- **Desde Export Project**: **Sign APK** y **Export AAB** abren **el mismo diálogo** (con el formato que sugiere cada
+  botón preseleccionado y pudiendo cambiarlo).
+
+Matriz soportada: **saved keystore / keystore file / testkey / sin firmar** × **APK debug / APK release / AAB** (el
+debug siempre testkey). Salidas: `signed_apk/<Proyecto>_release.apk`, `signed_aab/<Proyecto>.aab` y las variantes
+`.unsigned`. **Recuerda la última elección** (`CompilePreferences`, en `SecurePrefs`): medido reabriendo el diálogo
+tras elegir `AAB` y `APK (release)` + `Don't sign`, con ruta/alias/contraseñas del keystore guardado ya rellenos.
+**No se tocó el motor de build** (`BuildingAsyncTask` ya exponía los cuatro modos).
+
+### 17.9 Verificación en el APK release
+
+Todo medido en `emulator-5554` (Android 14, arm64-v8a) con el **APK release reconstruido** (R8 activo):
+
+- **APK release firmado con el keystore del usuario** (proyecto `602`): `apksigner verify` → `Verifies`, V1+V2+V3,
+  `b146485f…` (el certificado del usuario); `adb install` OK e **instalado desde el botón Install del propio
+  diálogo** (el instalador del sistema ofreció *"Do you want to update this app?"*, `lastUpdateTime` cambiado).
+- **AAB firmado** (proyecto `602`): `jarsigner -verify` → `jar verified.`; estructura de bundle completa
+  (`BundleConfig.pb`, `base/manifest/AndroidManifest.xml`, `base/dex/classes.dex`, `base/res/…`, `base/resources.pb`);
+  el `classes.dex` interno es **byte a byte el mismo** que el del APK firmado; el diálogo de resultado mostró
+  `Signed with: myapp.jks (myalias)` + `SHA-256: B1:46:48:5F:…:C4`.
+- **Run ▶ intacto** (modo debug): el APK sale con la **testkey AOSP** `a40da80a…`, idéntica a las rondas previas.
+- **Sin firmar**: salida `…_release.unsigned.apk`, resultado sin botón Install (no ofrece instalar algo que el
+  sistema rechazaría).
+- El proyecto `601` — el que A1 dejó bloqueado — **compila y firma de punta a punta** una vez reparado su override
+  de estilos (el fallo AppCompat era de **sus datos**, no del IDE).
+
+### 17.10 Los 5 bugs de UI encontrados y arreglados durante la verificación
+
+Encontrados **midiendo**, no leyendo, y **todos** corregidos y verificados en el dispositivo:
+
+1. **El selector de formato no se veía** (quedó `android:visibility="gone"` y nadie lo ponía visible).
+2. **La etiqueta del selector de firma mentía**: al pasar de `APK (debug)` a `AAB` seguía diciendo "test key" aunque
+   el modo real era *saved keystore* (habría firmado bien, pero la UI engañaba).
+3. **`NEXT` se salía de la pantalla** cuando el formulario mostraba todos los campos (defecto heredado del diálogo
+   de A1 que la fila nueva empeoraba): arreglado acotando la altura y desplazando arriba.
+4. **Pulsar `Install` mataba la app** (`IllegalArgumentException: Failed to find configured root that contains
+   /storage/emulated/0/sketchware/signed_apk/…`): el `FileProvider` solo exponía `.sketchware/` → añadida la ruta
+   `sketchware/signed_apk/` a `provider_paths.xml`.
+5. **Se ofrecía instalar un APK sin firmar**: el botón `Install` ahora solo aparece si el resultado está firmado
+   (más el foco/teclado, que ya solo aparece cuando hay que escribir).
+
+### 17.11 Pendientes honestos de la ronda A
+
+- **El AAB no se ha probado contra `bundletool` ni contra Play.** No hay `bundletool` en esta máquina (`which
+  bundletool` → no encontrado, tampoco en el SDK) y no se subió nada. Verificado: estructura de bundle + `jarsigner`
+  + certificado + integridad del dex. Lo que falta para cerrarlo:
+  `java -jar bundletool.jar validate --bundle=NewProject2.aab` en una máquina con bundletool.
+- **En el diálogo no se ejecutaron en release los modos "keystore file" ni "testkey"** (solo verificados en UI): el
+  wiring es el mismo que el del keystore guardado, ya probado, pero no se han corrido.
+- **`Export AAB` (el botón del Export Project) no se pulsó** en la ronda: abre el mismo `showCompileDialog(AAB)` que
+  *Sign APK* (verificado en pantalla); el build de AAB sí se ejecutó, desde la entrada del editor.
+- **La conversión de proyectos de Android Studio/GitHub sigue pendiente.** El recon concluye que la inversa **no
+  existe** (no hay parser de Gradle/Manifest ni cliente git) y que es viable **solo parcialmente y "best effort"**:
+  crear un proyecto vacío e importar `res/layout` y `.java` **como overrides** (que el motor ya soporta). Es trabajo
+  nuevo y considerable → **siguiente ronda: viabilidad + MVP**.
+- **Firma V3.1/V4** no añadidas (el APK sale V1+V2+V3; V4 no es requisito de Play con `minSdk 21`).
+- **El `-keep` de `bundletool`/`protobuf` engorda el APK release** (~2 MB en arm64-v8a: 118,49 vs 116,43 MB). Es el
+  precio de que el AAB funcione; se puede afinar a las clases realmente usadas.
+- **Pendientes pequeños conocidos, no tocados:** `NewKeyStoreActivity` (drawer → *Create keystore*) sigue
+  escribiendo en `wq.j()` con **una sola** contraseña; `AiSecretStore` sigue duplicando el patrón de `SecurePrefs`;
+  `Build Settings` y *Show Apk signatures* siguen como estaban.
+- **Sin commitear** en el árbol de trabajo; `versionCode`/`versionName` los pone esta release a **176 / v7.0.14.0**.

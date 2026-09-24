@@ -390,7 +390,12 @@ public class ZipSigner
         }
     }
 
-    /** Add the SHA1 of every file to the manifest, creating it if necessary. */
+    /**
+     * Add the digest of every file to the manifest, creating it if necessary.
+     * <p>
+     * Ronda A2: se usa SHA-256 (antes SHA1) porque JDK 17+ desactiva las firmas JAR con
+     * digests SHA-1 y `jarsigner -verify` trata el .aab como NO firmado.
+     */
     private Manifest addDigestsToManifest(Map<String,ZioEntry> entries)
         throws IOException, GeneralSecurityException 
     {
@@ -410,7 +415,7 @@ public class ZipSigner
         }
 
         // BASE64Encoder base64 = new BASE64Encoder();
-        MessageDigest md = MessageDigest.getInstance("SHA1");
+        MessageDigest md = MessageDigest.getInstance("SHA-256");
         byte[] buffer = new byte[512];
         int num;
 
@@ -445,7 +450,7 @@ public class ZipSigner
                     if (inAttr != null) attr = new Attributes( inAttr);
                 }
                 if (attr == null) attr = new Attributes();
-                attr.putValue("SHA1-Digest", Base64.encode(md.digest()));
+                attr.putValue("SHA-256-Digest", Base64.encode(md.digest()));
                 output.getEntries().put(name, attr);
             }
         }
@@ -462,7 +467,7 @@ public class ZipSigner
 
 
         // BASE64Encoder base64 = new BASE64Encoder();
-        MessageDigest md = MessageDigest.getInstance("SHA1");
+        MessageDigest md = MessageDigest.getInstance("SHA-256");
         PrintStream print = new PrintStream(
                 new DigestOutputStream(new ByteArrayOutputStream(), md),
                 true, "UTF-8");
@@ -471,7 +476,7 @@ public class ZipSigner
         manifest.write(print);
         print.flush();
 
-        out.write( ("SHA1-Digest-Manifest: "+ Base64.encode(md.digest()) + "\r\n\r\n").getBytes());
+        out.write( ("SHA-256-Digest-Manifest: "+ Base64.encode(md.digest()) + "\r\n\r\n").getBytes());
 
         Map<String, Attributes> entries = manifest.getEntries();
         for (Map.Entry<String, Attributes> entry : entries.entrySet()) {
@@ -487,7 +492,7 @@ public class ZipSigner
             print.flush();
 
             out.write( nameEntry.getBytes());
-            out.write( ("SHA1-Digest: " +  Base64.encode(md.digest()) + "\r\n\r\n").getBytes());
+            out.write( ("SHA-256-Digest: " +  Base64.encode(md.digest()) + "\r\n\r\n").getBytes());
         }
 
     }
@@ -512,7 +517,7 @@ public class ZipSigner
 
             if (log.isDebugEnabled()) {
 
-                MessageDigest md = MessageDigest.getInstance("SHA1");
+                MessageDigest md = MessageDigest.getInstance("SHA-256");
                 md.update( signatureFileBytes);
                 byte[] sfDigest = md.digest();
                 log.debug( "Sig File SHA1: \n" + HexDumpEncoder.encode( sfDigest));

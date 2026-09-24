@@ -116,8 +116,10 @@ import mod.hilal.saif.activities.android_manifest.AndroidManifestInjection;
 import mod.hilal.saif.activities.tools.ConfigActivity;
 import mod.jbk.build.BuildProgressReceiver;
 import mod.jbk.build.BuiltInLibraries;
+import com.besome.sketch.export.ExportProjectActivity;
 import mod.jbk.diagnostic.CompileErrorSaver;
 import mod.jbk.diagnostic.MissingFileException;
+import mod.jbk.export.GetKeyStoreCredentialsDialog;
 import mod.jbk.util.LogUtil;
 import mod.khaled.logcat.LogReaderActivity;
 import pro.sketchware.R;
@@ -369,6 +371,42 @@ public class DesignActivity extends BaseAppCompatActivity implements View.OnClic
     }
 
     /**
+     * The unified compile dialog, reachable from the ▾ menu next to Run.
+     *
+     * <p>Debug builds keep going through the quick Run flow (testkey + install right away).
+     * Release APK and AAB builds are handed to {@link ExportProjectActivity}, which already knows
+     * how to produce them; it gets the format and the remembered signing choice, so no password is
+     * asked for again.</p>
+     */
+    private void showCompileDialog() {
+        GetKeyStoreCredentialsDialog dialog = new GetKeyStoreCredentialsDialog(this,
+                R.drawable.ic_mtrl_key,
+                "Compile project",
+                "Pick what to build and how to sign it. A saved keystore needs no password. " +
+                        "Debug builds are signed with the testkey and installed right away.",
+                GetKeyStoreCredentialsDialog.Format.APK_DEBUG,
+                new GetKeyStoreCredentialsDialog.Format[]{
+                        GetKeyStoreCredentialsDialog.Format.APK_DEBUG,
+                        GetKeyStoreCredentialsDialog.Format.APK_RELEASE,
+                        GetKeyStoreCredentialsDialog.Format.AAB
+                });
+        dialog.setCompileListener(request -> {
+            if (request.isDebugApk()) {
+                BuildTask buildTask = new BuildTask(this);
+                currentBuildTask = buildTask;
+                buildTask.execute();
+            } else {
+                Intent intent = new Intent(this, ExportProjectActivity.class);
+                intent.putExtra("sc_id", sc_id);
+                intent.putExtra(ExportProjectActivity.EXTRA_AUTO_COMPILE, true);
+                intent.putExtra(ExportProjectActivity.EXTRA_COMPILE_FORMAT, request.getFormat().name());
+                startActivity(intent);
+            }
+        });
+        dialog.show();
+    }
+
+    /**
      * Opens the debug APK to install.
      */
     private void installBuiltApk() {
@@ -509,6 +547,10 @@ public class DesignActivity extends BaseAppCompatActivity implements View.OnClic
         bottomMenu.add(Menu.NONE, 1, Menu.NONE, "Build Settings").setOnMenuItemClickListener(item -> {
             BuildSettingsBottomSheet sheet = BuildSettingsBottomSheet.newInstance(sc_id);
             sheet.show(getSupportFragmentManager(), BuildSettingsBottomSheet.TAG);
+            return true;
+        });
+        bottomMenu.add(Menu.NONE, 8, Menu.NONE, "Compile APK / AAB...").setOnMenuItemClickListener(item -> {
+            showCompileDialog();
             return true;
         });
         bottomMenu.add(Menu.NONE, 2, Menu.NONE, "Clean temporary files").setVisible(false).setOnMenuItemClickListener(item -> {
