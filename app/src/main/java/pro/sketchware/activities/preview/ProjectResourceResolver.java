@@ -21,8 +21,10 @@ import androidx.annotation.Nullable;
 import org.xmlpull.v1.XmlPullParser;
 
 import java.io.File;
+import java.io.InputStream;
 import java.io.StringReader;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -32,6 +34,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 import com.google.android.material.color.MaterialColors;
 
@@ -63,16 +67,42 @@ public class ProjectResourceResolver {
     /** Padre de un <style parent="...">. */
     private static final Pattern STYLE_PARENT = Pattern.compile("parent\\s*=\\s*\"([^\"]+)\"");
 
-    /** Entrada de un <style> del proyecto: <item name="...">valor</item>. */
+    /**
+     * Entrada de un <style> del proyecto: <item name="...">valor</item>.
+     */
     private static final Pattern STYLE_ITEM = Pattern.compile(
             "<item\\s+name=\"([^\"]+)\"\\s*>\\s*([^<]*?)\\s*</item>");
 
-    /** Bloque completo de un <style ...>cuerpo</style> (con DOTALL: el cuerpo lleva saltos). */
+    /** <item name="..."/> vacio (sin valor). */
+    private static final Pattern STYLE_ITEM_EMPTY = Pattern.compile(
+            "<item\\s+name=\"([^\"]+)\"\\s*/>");
+
+    /**
+     * Bloque completo de un <style>: con cuerpo ({@code <style ...>...</style>}) o AUTOCIERRE
+     * ({@code <style ... />}).
+     *
+     * <p>El autociérre es lo que escribe el IDE cuando genera un estilo sin items
+     * ({@code addStyle("AppTheme.AppBarOverlay", "ThemeOverlay.AppCompat.Dark.ActionBar")} produce
+     * {@code <style name="AppTheme.AppBarOverlay" parent="..." />}). El patron anterior
+     * ({@code <style\s+([^>]*)>(.*?)</style>}) NO lo reconocia: se saltaba ese estilo Y se tragaba el
+     * cuerpo del SIGUIENTE hasta su {@code </style>}, con lo que p.ej. {@code AppTheme.PopupOverlay}
+     * desaparecia del mapa y salia como "estilo no encontrado". Por eso el grupo 2 distingue
+     * {@code />} de {@code >cuerpo</style>}.
+     */
     private static final Pattern STYLE_BLOCK = Pattern.compile(
-            "<style\\s+([^>]*)>(.*?)</style>", Pattern.DOTALL);
+            "<style\\s+([^>]*?)(/>|>(.*?)</style>)", Pattern.DOTALL);
 
     /** Extensiones de imagen que sabemos leer, en orden de preferencia. */
     private static final String[] DRAWABLE_EXTENSIONS = {".xml", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"};
+
+    /**
+     * Estilos del set de iconos Material que trae el propio IDE ({@code assets/icons/icon_pack.zip}):
+     * {@code svg/<nombre>/<estilo>.svg}. Son exactamente los cinco que ofrece el selector de iconos.
+     */
+    private static final String[] ICON_PACK_STYLES = {"baseline", "outline", "round", "sharp", "twotone"};
+
+    /** Entrada del zip del set de iconos del IDE, dentro del APK. */
+    private static final String ICON_PACK_ASSET = "icons/icon_pack.zip";
 
     private final Context context;
     private final String scId;
@@ -124,6 +154,19 @@ public class ProjectResourceResolver {
     private List<File> libraryDrawableDirs;
     /** Resumen de donde se ha buscado (para el detalle del aviso). */
     private String searchedLocations = "";
+
+    /**
+     * Ficheros {@code styles.xml} del proyecto ya localizados, en orden de lectura:
+     * {@code files/resource/value*} (lo que edita el gestor de recursos) y el {@code res} GENERADO
+     * del build ({@code .sketchware/mysc/<sc_id>/app/src/main/res/value*}), que es lo que compila
+     * aapt2. Aqui es donde viven, por ejemplo, {@code AppTheme.AppBarOverlay} y
+     * {@code AppTheme.PopupOverlay} (el IDE los genera y los inyecta en Toolbar/AppBarLayout).
+     */
+    private final List<File> styleFiles = new ArrayList<>();
+    /** Estilos que el propio IDE genera para el proyecto (mismos que compila aapt2). Ultimo recurso. */
+    private boolean ideGeneratedStylesLoaded;
+    /** Nombres de icono del set del IDE que ya se ha comprobado que NO estan (para no releer el zip). */
+    private final Set<String> iconPackMisses = new LinkedHashSet<>();
 
     /**
      * Nombres heredados que NO existen con ese nombre pero que se han podido mapear a un drawable
@@ -182,6 +225,17 @@ public class ProjectResourceResolver {
         public final Map<String, String> items = new LinkedHashMap<>();
         /** Motivo cuando no se ha podido traducir (para el aviso ambar). */
         public final String reason;
+        /**
+         * Base real del framework/Material encontrada en la cadena de padres de un estilo del
+         * proyecto que no tiene items propios ni resId (p.ej. {@code AppTheme.AppBarOverlay} ->
+         * {@code ThemeOverlay.MaterialComponents.Dark.ActionBar}). 0 si no hay ninguna.
+         *
+         * <p>Sin esto, un estilo del IDE escrito en AUTOCIERRE ({@code <style name="..." parent="..." />},
+         * que es justo como lo genera el IDE en {@code getXMLStyle()}) se resolvia pero se consideraba
+         * "no usable" y no se aplicaba NADA: ni aviso ni tema. Con la base se puede construir la vista
+         * dentro de un {@link android.view.ContextThemeWrapper} igual que en la app.
+         */
+        public int baseStyleId;
 
         StyleResolution(String requested, String resolvedName, int styleId, String reason) {
             this.requested = requested;
@@ -191,7 +245,7 @@ public class ProjectResourceResolver {
         }
 
         public boolean isUsable() {
-            return styleId != 0 || !items.isEmpty();
+            return styleId != 0 || !items.isEmpty() || baseStyleId != 0;
         }
     }
 
@@ -494,17 +548,95 @@ public class ProjectResourceResolver {
             return;
         }
         stylesLoaded = true;
-        String[] candidates = {"values/styles.xml", "value/styles.xml", "values/style.xml"};
-        for (String candidate : candidates) {
-            File file = new File(new FilePathUtil().getPathResource(scId), candidate);
-            if (!file.isFile()) {
-                continue;
-            }
+        projectStyleFiles();
+        for (File file : styleFiles) {
             String content = FileUtil.readFile(file.getAbsolutePath());
-            if (content == null) {
+            if (content == null || content.trim().isEmpty()) {
                 continue;
             }
             parseStyles(content);
+        }
+        android.util.Log.i(TAG, "info: styles.xml del proyecto leidos: " + styleFiles
+                + " -> " + styleCache.size() + " estilos");
+    }
+
+    /**
+     * Localiza los {@code styles.xml} del proyecto (una vez), en las dos rutas donde el IDE los deja:
+     *
+     * <ol>
+     *   <li>{@code files/resource/value*}: lo que el usuario ve/edita en el gestor de recursos
+     *       ({@code values}, {@code value}, {@code values-v21}, {@code values-night}...). Antes solo
+     *       se miraba {@code values/styles.xml} exacto.</li>
+     *   <li>{@code .sketchware/mysc/<sc_id>/app/src/main/res/value*}: el {@code res} GENERADO del
+     *       build, que es literalmente lo que compila aapt2 para la app. Es la ruta que faltaba y la
+     *       causa de que estilos que la app SI tiene (p.ej. {@code AppTheme.AppBarOverlay}, que el IDE
+     *       genera en {@code getXMLStyle()} e inyecta en los Toolbar/AppBarLayout) salieran como "no
+     *       presentes" en la vista previa.</li>
+     * </ol>
+     */
+    private void projectStyleFiles() {
+        if (!styleFiles.isEmpty()) {
+            return;
+        }
+        collectStyleFiles(new File(new FilePathUtil().getPathResource(scId)));
+        try {
+            collectStyleFiles(new File(a.a.a.wq.d(scId), "app/src/main/res"));
+        } catch (Throwable throwable) {
+            android.util.Log.w(TAG, "warning: no se pudo localizar el res generado del build: " + throwable);
+        }
+    }
+
+    /** Anyade a {@link #styleFiles} los styles.xml de los directorios {@code value*} del directorio dado. */
+    private void collectStyleFiles(File resourceRoot) {
+        File[] children = resourceRoot == null ? null : resourceRoot.listFiles();
+        if (children == null) {
+            return;
+        }
+        List<File> valueDirs = new ArrayList<>();
+        for (File child : children) {
+            if (child.isDirectory() && child.getName().toLowerCase(Locale.US).startsWith("value")) {
+                valueDirs.add(child);
+            }
+        }
+        // Orden estable (values antes que values-v21/values-night) para que la lectura sea determinista.
+        Collections.sort(valueDirs, (left, right) -> left.getName().compareTo(right.getName()));
+        for (File dir : valueDirs) {
+            for (String fileName : new String[]{"styles.xml", "style.xml"}) {
+                File file = new File(dir, fileName);
+                if (file.isFile() && !styleFiles.contains(file)) {
+                    styleFiles.add(file);
+                }
+            }
+        }
+    }
+
+    /**
+     * Lee (una vez, solo si hace falta) los estilos que el propio IDE GENERA para el proyecto.
+     *
+     * <p>Es la misma fuente que usa el compilador ({@code yq.getXMLStyle()}), asi que refleja el tema
+     * real del proyecto (Material3 / AppCompat / Material) con sus estilos inyectados
+     * ({@code AppTheme.AppBarOverlay}, {@code AppTheme.PopupOverlay}...). Se consulta SOLO como ultimo
+     * recurso, cuando el estilo no estaba en ninguno de los ficheros del disco, y nunca sustituye a
+     * lo que el proyecto tiene escrito: si el IDE tampoco lo genera, el aviso ambar sigue saliendo.
+     */
+    private void ensureIdeGeneratedStylesLoaded() {
+        if (ideGeneratedStylesLoaded) {
+            return;
+        }
+        ideGeneratedStylesLoaded = true;
+        try {
+            a.a.a.yq generator = new a.a.a.yq(context, scId);
+            // Inicializa el proyecto igual que el editor de recursos: asi el generador sabe si el
+            // proyecto usa AppCompat/Material3 y produce el styles.xml correcto.
+            generator.a(a.a.a.jC.c(scId), a.a.a.jC.b(scId), a.a.a.jC.a(scId));
+            String content = generator.getXMLStyle();
+            if (content != null && !content.trim().isEmpty()) {
+                parseStyles(content);
+                android.util.Log.i(TAG, "info: estilos generados por el IDE leidos ("
+                        + content.length() + " chars) -> " + styleCache.size() + " estilos en total");
+            }
+        } catch (Throwable throwable) {
+            android.util.Log.w(TAG, "warning: no se pudieron leer los estilos generados por el IDE: " + throwable);
         }
     }
 
@@ -517,7 +649,9 @@ public class ProjectResourceResolver {
         Matcher block = STYLE_BLOCK.matcher(content);
         while (block.find()) {
             String attributes = block.group(1) == null ? "" : block.group(1);
-            String body = block.group(2) == null ? "" : block.group(2);
+            // group(2) es "/>" en un <style .../> (sin items) y ">cuerpo</style>" en el resto; el
+            // cuerpo esta en group(3) y solo existe en el segundo caso.
+            String body = block.group(3) == null ? "" : block.group(3);
             Matcher nameMatcher = STYLE_NAME.matcher(attributes);
             if (!nameMatcher.find()) {
                 continue;
@@ -541,6 +675,10 @@ public class ProjectResourceResolver {
             Matcher item = STYLE_ITEM.matcher(body);
             while (item.find()) {
                 style.items.putIfAbsent(item.group(1).trim(), item.group(2).trim());
+            }
+            Matcher emptyItem = STYLE_ITEM_EMPTY.matcher(body);
+            while (emptyItem.find()) {
+                style.items.putIfAbsent(emptyItem.group(1).trim(), "");
             }
         }
     }
@@ -580,8 +718,21 @@ public class ProjectResourceResolver {
             resolvedName = name;
             collectStyleItems(name, items, new LinkedHashSet<>(), 0);
         } else {
-            // No esta en el styles.xml del proyecto: puede ser un estilo del editor (Material3,
-            // AppCompat) o simplemente no existir. Se prueba el APK del editor antes de rendirse.
+            // No esta en los styles.xml escritos en el disco: puede ser un estilo que el IDE GENERA
+            // para el proyecto (AppTheme.AppBarOverlay / AppTheme.PopupOverlay / AppTheme.FullScreen...)
+            // sin dejarlo en files/resource. Se le pregunta al propio generador del IDE (la misma
+            // fuente que usa el compilador) y, si tampoco lo tiene, al APK del editor.
+            ensureIdeGeneratedStylesLoaded();
+            if (styleCache.containsKey(name)) {
+                resolvedName = name;
+                collectStyleItems(name, items, new LinkedHashSet<>(), 0);
+                android.util.Log.i(TAG, "info: estilo del proyecto resuelto desde los estilos generados"
+                        + " por el IDE: " + v);
+            }
+        }
+        if (resolvedName == null) {
+            // No esta en el styles.xml del proyecto (ni escrito ni generado): puede ser un estilo del
+            // editor (Material3, AppCompat) o simplemente no existir. Se prueba el APK del editor.
             String pkg = context.getPackageName();
             styleId = context.getResources().getIdentifier(name, "style", pkg);
             if (styleId == 0) {
@@ -595,10 +746,17 @@ public class ProjectResourceResolver {
             }
         }
         if (resolvedName == null) {
-            reason = "no esta en files/resource/values/styles.xml ni en el editor";
+            reason = "no esta en los styles.xml del proyecto (files/resource/values* ni el res generado"
+                    + " del build) ni en los recursos del editor";
         }
         StyleResolution resolution = new StyleResolution(v, resolvedName, styleId, reason);
         resolution.items.putAll(items);
+        if (resolvedName != null && styleId == 0 && items.isEmpty()) {
+            // Estilo del proyecto/IDE sin items propios (autocierre): si su cadena de padres lleva a un
+            // estilo real del framework/Material, se guarda como BASE para poder aplicarlo igual que
+            // la app (ContextThemeWrapper), en vez de resolverlo y no hacer nada con el.
+            resolution.baseStyleId = resolveBaseStyleId(v);
+        }
         styleResolutionCache.put(v, resolution);
         if (reason != null && styleNotes.add(v)) {
             // AMBAR (no aplicado): la vista se dibuja igual, solo no se le aplica el estilo.
@@ -848,14 +1006,24 @@ public class ProjectResourceResolver {
         List<String> parts = new ArrayList<>();
         int projectDirs = projectDrawableDirs().size();
         if (projectDirs > 0) {
-            parts.add(projectDirs + " carpetas drawable* del proyecto");
+            parts.add(projectDirs + (projectDirs == 1 ? " carpeta drawable* del proyecto"
+                    : " carpetas drawable* del proyecto"));
+        }
+        if (projectImageStoreDir() != null) {
+            parts.add("imagenes del proyecto (.sketchware/resources/images/" + scId + ")");
         }
         parts.add("assets del proyecto");
+        if (generatedBuildResDir() != null) {
+            parts.add("res generado del build");
+        }
         int libraries = libraryDrawableDirs().size();
         if (libraries > 0) {
             parts.add(libraries + " recursos de librerias");
         }
         parts.add("recursos del IDE");
+        if (iconPackAvailable()) {
+            parts.add("set de iconos del IDE (icon_pack.zip)");
+        }
         searchedLocations = android.text.TextUtils.join(", ", parts);
         return searchedLocations;
     }
@@ -873,6 +1041,17 @@ public class ProjectResourceResolver {
                 return found;
             }
         }
+        // 1b) ALMACEN DE IMAGENES DEL PROYECTO (.sketchware/resources/images/<sc_id>).
+        //     Aqui guarda el selector de iconos del IDE el SVG convertido a vector:
+        //     icon_<nombre>_<estilo>.xml (ver ImportIconActivity + kC.l()). No esta en
+        //     files/resource/drawable*, y esa era la causa de que "los iconos no se vean".
+        File imageStore = projectImageStoreDir();
+        if (imageStore != null) {
+            Drawable inStore = findDrawableIn(imageStore, name);
+            if (inStore != null) {
+                return inStore;
+            }
+        }
         // 2) Assets del proyecto (mucha gente mete ahi las imagenes y las referencia como @drawable).
         File assets = new File(new FilePathUtil().getPathAssets(scId));
         Drawable found = findDrawableIn(assets, name);
@@ -885,6 +1064,16 @@ public class ProjectResourceResolver {
         if (inFiles != null) {
             return inFiles;
         }
+        // 3b) RES GENERADO DEL BUILD (.sketchware/mysc/<sc_id>/app/src/main/res): es lo que compila
+        //     aapt2 para la app, asi que si un drawable solo esta ahi (o solo ahi con ese nombre),
+        //     la vista previa debe verlo igual.
+        File generatedRes = generatedBuildResDir();
+        if (generatedRes != null) {
+            Drawable inGenerated = findDrawableIn(generatedRes, name);
+            if (inGenerated != null) {
+                return inGenerated;
+            }
+        }
         // 4) Recursos de las LIBRERIAS del proyecto (AAR locales descargados por DependencyResolver
         //    y librerias integradas del IDE ya extraidas). El compilador las enlaza con aapt2
         //    (ResourceCompiler: "-R"), asi que en la app compilada SI existen: la vista previa debe
@@ -896,7 +1085,34 @@ public class ProjectResourceResolver {
             }
         }
         // 5) Drawables propios del IDE: default_image, iconos mtrl, etc.
-        return loadIdeDrawable(name);
+        // 6) Set de iconos Material que el propio IDE trae (assets/icons/icon_pack.zip): los
+        //    "icon_<nombre>_<estilo>" del selector de iconos salen de ahi. Se intenta ANTES del
+        //    mapeo de nombres heredados porque aqui el nombre es exacto (no una variante adivinada).
+        Drawable fromIde = loadIdeDrawable(name);
+        return fromIde != null ? fromIde : loadIconPackDrawable(name);
+    }
+
+    /** Almacen de imagenes del proyecto ({@code .sketchware/resources/images/<sc_id>}). */
+    @Nullable
+    private File projectImageStoreDir() {
+        try {
+            return new File(a.a.a.wq.g(), scId);
+        } catch (Throwable throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Raiz de recursos GENERADA del build del proyecto
+     * ({@code .sketchware/mysc/<sc_id>/app/src/main/res}).
+     */
+    @Nullable
+    private File generatedBuildResDir() {
+        try {
+            return new File(a.a.a.wq.d(scId), "app/src/main/res");
+        } catch (Throwable throwable) {
+            return null;
+        }
     }
 
     /**
@@ -1089,6 +1305,203 @@ public class ProjectResourceResolver {
             android.util.Log.d("SketchwarePro", "ProjectResourceResolver: Throwable ignored", ignored);
         }
         return null;
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Set de iconos del IDE: "icon_<nombre>_<estilo>" -> svg/<nombre>/<estilo>.svg
+    // ---------------------------------------------------------------------------------------------
+
+    /**
+     * Resuelve los iconos del propio set del IDE.
+     *
+     * <p>El selector de iconos ({@code ImportIconActivity}) lista {@code svg/<nombre>/} y guarda el
+     * elegido como {@code icon_<nombre>_<estilo>} (p.ej. {@code icon_miscellaneous_services_round}).
+     * Ese set va DENTRO del APK del editor en {@code assets/icons/icon_pack.zip} (2.191 nombres x 5
+     * estilos), asi que un diseno que referencia ese nombre tiene que poder verse: antes no se miraba
+     * en ningun sitio (no es un {@code res/drawable} del APK, asi que {@code getIdentifier()} no lo ve).
+     *
+     * <p>El nombre es exacto (nombre + estilo), no una variante adivinada: se dibuja el mismo SVG que
+     * el selector habria convertido a vector. Se anota en {@link #legacyResolutions} para que no sea
+     * una sustitucion en silencio (el aviso dice de donde ha salido).
+     */
+    @Nullable
+    private Drawable loadIconPackDrawable(String name) {
+        String lower = name.toLowerCase(Locale.US);
+        if (!lower.startsWith("icon_")) {
+            return null;
+        }
+        int separator = lower.lastIndexOf('_');
+        if (separator <= "icon_".length() - 1) {
+            return null;
+        }
+        String style = lower.substring(separator + 1);
+        if (!isIconPackStyle(style)) {
+            return null;
+        }
+        String iconName = lower.substring("icon_".length(), separator);
+        if (iconName.isEmpty()) {
+            return null;
+        }
+        String entry = "svg/" + iconName + "/" + style + ".svg";
+        if (iconPackMisses.contains(entry)) {
+            return null;
+        }
+        String svg = readIconPackSvg(entry);
+        if (svg == null) {
+            iconPackMisses.add(entry);
+            return null;
+        }
+        String vectorXml = svgToVectorXml(svg);
+        Drawable drawable = vectorXml == null ? null : VectorPathDrawable.parse(context, vectorXml);
+        if (drawable == null) {
+            iconPackMisses.add(entry);
+            return null;
+        }
+        legacyResolutions.add(new LegacyResolution("@drawable/" + name,
+                "svg/" + iconName + "/" + style + ".svg",
+                "icono del set Material del IDE (assets/icons/icon_pack.zip), convertido a vector"));
+        android.util.Log.i(TAG, "info: icono del set del IDE resuelto: @drawable/" + name
+                + " -> " + entry);
+        return drawable;
+    }
+
+    private static boolean isIconPackStyle(String style) {
+        for (String candidate : ICON_PACK_STYLES) {
+            if (candidate.equals(style)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Hay set de iconos del IDE disponible (extraido del APK o dentro de assets)? */
+    private boolean iconPackAvailable() {
+        if (extractedIconPackDir() != null && new File(extractedIconPackDir(), "svg").isDirectory()) {
+            return true;
+        }
+        try (InputStream stream = context.getAssets().open(ICON_PACK_ASSET)) {
+            return stream != null;
+        } catch (Throwable throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * Carpeta donde el IDE descomprime el set de iconos la primera vez que se abre el selector
+     * ({@code wq.getExtractedIconPackStoreLocation()}). Puede no existir todavia.
+     */
+    @Nullable
+    private File extractedIconPackDir() {
+        try {
+            return new File(a.a.a.wq.getExtractedIconPackStoreLocation());
+        } catch (Throwable throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Lee un SVG del set de iconos del IDE: de la copia ya descomprimida si esta, y si no, del zip
+     * que va dentro del APK ({@code assets/icons/icon_pack.zip}).
+     */
+    @Nullable
+    private String readIconPackSvg(String entry) {
+        File extracted = extractedIconPackDir();
+        if (extracted != null) {
+            File file = new File(extracted, entry);
+            if (file.isFile()) {
+                String content = FileUtil.readFile(file.getAbsolutePath());
+                if (content != null && !content.trim().isEmpty()) {
+                    return content;
+                }
+            }
+        }
+        try (ZipInputStream zip = new ZipInputStream(context.getAssets().open(ICON_PACK_ASSET))) {
+            ZipEntry zipEntry;
+            while ((zipEntry = zip.getNextEntry()) != null) {
+                if (!entry.equals(zipEntry.getName())) {
+                    continue;
+                }
+                java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+                byte[] chunk = new byte[8192];
+                int read;
+                while ((read = zip.read(chunk)) > 0) {
+                    buffer.write(chunk, 0, read);
+                }
+                zip.closeEntry();
+                return buffer.toString("UTF-8");
+            }
+        } catch (Throwable throwable) {
+            android.util.Log.w(TAG, "warning: no se pudo leer el set de iconos del IDE (" + entry + "): " + throwable);
+        }
+        return null;
+    }
+
+    /**
+     * Convierte un SVG del set de iconos (Material: uno o varios {@code <path d="..."/>}) en el XML
+     * de un vector drawable, que es lo que sabe dibujar {@link VectorPathDrawable}. No se anaden
+     * dependencias nuevas: los iconos del set son deliberadamente simples.
+     */
+    @Nullable
+    private static String svgToVectorXml(String svg) {
+        try {
+            XmlPullParser parser = Xml.newPullParser();
+            parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false);
+            parser.setInput(new StringReader(svg));
+            StringBuilder paths = new StringBuilder();
+            String viewportWidth = "24";
+            String viewportHeight = "24";
+            int eventType = parser.getEventType();
+            while (eventType != XmlPullParser.END_DOCUMENT) {
+                if (eventType == XmlPullParser.START_TAG) {
+                    String tag = parser.getName();
+                    if ("svg".equals(tag)) {
+                        String viewBox = parser.getAttributeValue(null, "viewBox");
+                        if (viewBox != null) {
+                            String[] parts = viewBox.trim().split("[\\s,]+");
+                            if (parts.length >= 4) {
+                                viewportWidth = parts[2];
+                                viewportHeight = parts[3];
+                            }
+                        }
+                        String width = parser.getAttributeValue(null, "width");
+                        String height = parser.getAttributeValue(null, "height");
+                        if (width != null && !width.isEmpty() && height != null && !height.isEmpty()
+                                && viewportWidth.isEmpty()) {
+                            // Sin viewBox se usan las dimensiones del propio SVG.
+                            viewportWidth = width.replaceAll("[^0-9.]", "");
+                            viewportHeight = height.replaceAll("[^0-9.]", "");
+                        }
+                    } else if ("path".equals(tag)) {
+                        String data = parser.getAttributeValue(null, "d");
+                        if (data == null || data.trim().isEmpty()) {
+                            continue;
+                        }
+                        String fill = parser.getAttributeValue(null, "fill");
+                        if (fill == null || fill.isEmpty() || "none".equalsIgnoreCase(fill)) {
+                            fill = "#FF000000";
+                        }
+                        paths.append("<path android:pathData=\"")
+                                .append(data.replace("\"", ""))
+                                .append("\" android:fillColor=\"")
+                                .append(fill)
+                                .append("\"/>");
+                    }
+                }
+                eventType = parser.next();
+            }
+            if (paths.length() == 0) {
+                return null;
+            }
+            return "<vector xmlns:android=\"http://schemas.android.com/apk/res/android\""
+                    + " android:width=\"24dp\" android:height=\"24dp\""
+                    + " android:viewportWidth=\"" + viewportWidth + "\""
+                    + " android:viewportHeight=\"" + viewportHeight + "\">"
+                    + paths
+                    + "</vector>";
+        } catch (Throwable throwable) {
+            android.util.Log.d("SketchwarePro", "ProjectResourceResolver: SVG no convertible", throwable);
+            return null;
+        }
     }
 
     // ---------------------------------------------------------------------------------------------

@@ -157,7 +157,9 @@ object FlutterPackagingSupport {
         libAppSo: File?,
         mode: FlutterBuildMode,
     ): Boolean {
-        val abi = FlutterToolchainPaths.resolveSupportedAbi() ?: FlutterToolchainPaths.ABI_ARM64_V8A
+        // Fallback: la ABI real del dispositivo (nunca "arm64-v8a" por defecto: en un APK x86_64
+        // eso colocaria `libflutter.so` en el directorio equivocado).
+        val abi = FlutterToolchainPaths.resolveSupportedAbi() ?: FlutterToolchainPaths.deviceAbiName()
         val abiDir = File(nativeLibrariesDirectory, abi)
         if (!abiDir.mkdirs() && !abiDir.isDirectory) {
             Log.w(TAG, "No se pudo crear ${abiDir.absolutePath}")

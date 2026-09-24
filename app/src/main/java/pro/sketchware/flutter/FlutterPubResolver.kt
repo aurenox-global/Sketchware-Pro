@@ -31,7 +31,7 @@ import java.io.File
  * 16,4 MB) y **no** se lanza desde `bin/dart`. Ojo (Fase 8 / carril I): `bin/dart` es un ELF en
  * `filesDir` y SELinux **deniega** ejecutarlo (`execute_no_trans`) en `targetSdk >= 29`, asi que la
  * app ejecuta el snapshot con `dartaotruntime` **empaquetado en `nativeLibraryDir`**
- * (`lib/arm64-v8a/libdartaotruntime.so`):
+ * (`lib/<abi>/libdartaotruntime.so`):
  * ```
  * <nativeLibraryDir>/libdartaotruntime.so <filesDir>/…/dart-sdk/bin/snapshots/dartdev_aot.dart.snapshot pub get
  * ```
@@ -488,7 +488,7 @@ object FlutterPubResolver {
                     "No se puede ejecutar `dartaotruntime` desde ${dartAotRuntime.absolutePath}: SELinux " +
                         "solo permite ejecutar binarios de `nativeLibraryDir`, y esta instalacion " +
                         "(ABI '${FlutterToolchainPaths.deviceAbiName()}') no empaqueta los ejecutables " +
-                        "de Flutter. Instala la variante arm64-v8a del APK.",
+                        "de Flutter. Instala una variante con ejecutables (arm64-v8a o x86_64).",
                     process.exitCode,
                 )
             }

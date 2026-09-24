@@ -81,10 +81,10 @@ public class FlutterCompilerBridge {
             File projectFilesDir = new File(builder.yq.projectMyscPath, "files");
             FlutterProject project = FlutterProjectStore.load(projectFilesDir);
             // Por defecto DEBUG_JIT. RELEASE_AOT esta DESBLOQUEADO desde la Fase 8 (carril I): usa
-            // nuestro `gen_snapshot` (product + compressed pointers) empaquetado en jniLibs/arm64-v8a
-            // como libfluttergensnapshot.so. Si la variante instalada no lo lleva (ABI distinta de
-            // arm64-v8a), la compilacion falla con un mensaje claro en vez de producir un libapp.so
-            // incompatible con el engine.
+            // nuestro `gen_snapshot` (product + compressed pointers) empaquetado en jniLibs/<abi>
+            // (arm64-v8a con --arch arm64c, x86_64 con --arch x64c) como libfluttergensnapshot.so.
+            // Si la variante instalada no lo lleva (ABI sin backend), la compilacion falla con un
+            // mensaje claro en vez de producir un libapp.so incompatible con el engine.
             FlutterBuildMode mode = project != null
                     ? project.getMode()
                     : FlutterProjectDefaults.DEFAULT_MODE;

@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.10.5-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.11.0-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -160,6 +160,37 @@ Este repositorio es un fork personal. Cada mejora se añade aquí según entra, 
 - **Coste:** los dos ejecutables empaquetados suman **10,18 MB** al APK `arm64-v8a`. Las otras ABIs no tienen
   backend AOT y lo dicen, en vez de fallar en silencio. El modo por defecto sigue siendo **debug/JIT**, esto
   continua siendo experimental y todavia no hay hot reload.
+- **v7.0.11.0 (versionCode 173) — los iconos que trae el IDE, el `styles.xml` de tu proyecto y los constructores que
+  R8 borraba.** Tres piezas de la vista previa de diseños y una del toolchain de Flutter. (A) **Los iconos estaban
+  dentro del APK desde el principio.** El set Material del IDE vive en `assets/icons/icon_pack.zip` (5.335.950 B:
+  **2.191 nombres × 5 estilos = 10.955 SVG**, `svg/<nombre>/<estilo>.svg`), y el icono que eliges se convierte a vector
+  XML y se guarda en el **almacen de imagenes del proyecto** `.sketchware/resources/images/<sc_id>/`, **no** en
+  `files/resource/drawable`. La vista previa no miraba ni lo uno ni lo otro, asi que los iconos salian en **rojo**.
+  Ahora resuelve de ambos **y** del `res` generado del build. **Medido:** antes, **2 recursos no encontrados** (barra
+  roja, 33.087 px rojos); despues los 2 dibujados y **rojo=0**, con una nota ambar que dice de donde sale cada uno
+  (`icon_miscellaneous_services_round -> svg/miscellaneous_services/round.svg`). (B) **El `styles.xml` de tu proyecto
+  se lee entero.** El lector no reconocia las etiquetas **autocerradas** `<style ... />` — justo como el IDE genera
+  `AppTheme.AppBarOverlay`/`PopupOverlay` — asi que se perdia ese estilo **y se tragaba el siguiente** (se leian 3 de
+  5). Ahora lee **5 de 5**, tambien mira en `value/`, `values-v21`, `values-night` y el `res` generado del build, y un
+  estilo autocerrado sin items envuelve el contexto con la base del framework de su cadena de padres. Resultado:
+  **cero avisos** de estilo y el tema del proyecto se aplica. (C) **La release perdia constructores de vistas.** Con
+  R8, **62 clases** pierden `<init>(Context)` y varias vistas de libreria (el `SignInButton` de Google,
+  `FlexboxLayout`, `LottieAnimationView`, `SVGImageView`) pierden **los tres**, asi que se dibujaban como contenedor
+  aproximado. Arreglado con **5 reglas `-keepclassmembers` acotadas** mas **sustitucion de la reflexion por mapeo
+  explicito**; lo no mapeado va al aviso ambar. Delta: **+9.892 B**. Verificado en release: el boton real de Google se
+  dibuja y los **7/7 casos en claro y 7/7 en oscuro** mantienen sus colores (caso A `#123456` 162.773 px, `#EE2222`
+  111.016 px). **Correccion honesta:** la sospecha inicial ("la reflexion no funciona en release") era **falsa** — el
+  aplicador por reflexion nunca llegaba a dispararse, y los colores de la ronda 8 **si** funcionaban en release; lo
+  que fallaba eran los constructores de las vistas de libreria. (D) **Toolchain de Flutter para x86_64.**
+  `app/src/main/jniLibs/x86_64/` trae ya `libdartaotruntime.so` (5.873.176 B — el ELF real del `.deb` x86_64 de
+  Termux, que esta en `lib/dart-sdk/bin/`, no el envoltorio de shell de 115 B) y `libfluttergensnapshot.so`
+  (5.123.768 B, compilado) con `--arch x64c --mode product --os android` (Android x64 exige compressed pointers); el
+  bloqueo de ABI se sustituye por `abiHasAotBackend` (`arm64-v8a` | `x86_64`) y `armeabi-v7a`/`x86` siguen avisando.
+  Coste: **+4,34 MB solo en x86_64** (release 112.136.131 -> 116.476.809); arm64 identico. **Honesto:** la ejecucion
+  real en x86_64 **no** esta verificada (no hay imagen x86_64 disponible; inviable en Apple Silicon). Pagina de la
+  release: [v7.0.11.0](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.11.0). Todos los detalles:
+  [docs/preview-fix.md](docs/preview-fix.md) (ronda 10) y [docs/flutter-consent.md](docs/flutter-consent.md) (toolchain
+  x86_64).
 - **v7.0.10.5 (versionCode 172) — rojo solo si la vista no se puede dibujar, y los `@style` y el tema del proyecto
   ya pintan de verdad.** Dos piezas, ambas en la vista previa de diseños. (1) **El rojo mentia.** Un `@style/...`
   que llegaba a `resolveDimen` respondia *"referencia de medida no resoluble"*, y un `@dimen`/`@android:dimen`

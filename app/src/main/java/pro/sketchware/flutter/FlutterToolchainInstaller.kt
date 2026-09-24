@@ -32,7 +32,8 @@ import java.security.MessageDigest
  *
  * **Fase 8 / carril I (RESUELTO en el codigo):** los dos ejecutables que la app necesita en tiempo
  * de build (`dartaotruntime` y nuestro `gen_snapshot`) viajan **empaquetados** en
- * `app/src/main/jniLibs/arm64-v8a/` como `libdartaotruntime.so` y `libfluttergensnapshot.so`; el
+ * `app/src/main/jniLibs/<abi>/` como `libdartaotruntime.so` y `libfluttergensnapshot.so` (hoy,
+ * `arm64-v8a` y `x86_64`); el
  * instalador de Android los deja en `nativeLibraryDir`, que **si** es ejecutable (informe AOT §6.1:
  * `exit=0` desde la app, uid `untrusted_app`). La copia de `filesDir` se conserva como respaldo
  * (otras ABIs, diagnostico) y [FlutterToolchainManager.isReady] comprueba con una ejecucion real
@@ -167,9 +168,9 @@ object FlutterToolchainInstaller {
             if (!FlutterToolchainPaths.isDartAotRuntimePackaged(context)) {
                 progress(
                     "  El APK instalado (ABI '${FlutterToolchainPaths.deviceAbiName()}') no empaqueta " +
-                        "`lib/${FlutterToolchainPaths.ABI_ARM64_V8A}/${FlutterToolchainPaths.PACKAGED_DART_AOT_RUNTIME}`; " +
-                        "la app solo puede ejecutar binarios de nativeLibraryDir. Instala la variante " +
-                        "arm64-v8a del APK (el .deb ya esta descargado: no se vuelve a bajar)."
+                        "`lib/<abi>/${FlutterToolchainPaths.PACKAGED_DART_AOT_RUNTIME}`; " +
+                        "la app solo puede ejecutar binarios de nativeLibraryDir. Instala una variante " +
+                        "con ejecutables (arm64-v8a o x86_64; el .deb ya esta descargado: no se vuelve a bajar)."
                 )
             }
         }

@@ -52,8 +52,9 @@ object FlutterToolchainPaths {
     const val PACKAGED_DART_AOT_RUNTIME = "libdartaotruntime.so"
 
     /**
-     * Nuestro `gen_snapshot` (build `--arch arm64c --mode product`, compressed pointers), que es
-     * **el unico** que produce un `libapp.so` que el engine release oficial acepta (informe AOT §2).
+     * Nuestro `gen_snapshot`, build `--arch arm64c --mode product` en arm64-v8a y
+     * `--arch x64c --mode product` en x86_64 (compressed pointers en las dos): es **el unico**
+     * `gen_snapshot` que produce un `libapp.so` que el engine release oficial acepta (informe AOT §2).
      */
     const val PACKAGED_GEN_SNAPSHOT = "libfluttergensnapshot.so"
 
@@ -66,6 +67,33 @@ object FlutterToolchainPaths {
     const val PACKAGED_GEN_SNAPSHOT_SIZE = 4_991_592L
     const val PACKAGED_GEN_SNAPSHOT_SHA256 =
         "9921983f8765fe10e45e2010b73c6599d6a3ed13ea564f96190ba00587354233"
+
+    /* --- x86_64 (mismo trato que arm64-v8a: sus dos ejecutables van empaquetados) ----------- */
+
+    /**
+     * `lib/dart-sdk/bin/dartaotruntime` del `dart_3.13.4_x86_64.deb`: 5.873.176 B
+     * (ELF x86-64, `/system/bin/linker64`, stripped, mismo build 3.13.4 que el de arm64).
+     *
+     * OJO con la ruta: en las **dos** arquitecturas el `bin/dartaotruntime` que aparece en
+     * `usr/bin/` es un script de shell de 115 B (`exec .../lib/dart-sdk/bin/dartaotruntime "$@"`),
+     * no un ELF. El que se empaqueta es el ELF de `lib/dart-sdk/bin/`.
+     */
+    const val PACKAGED_DART_AOT_RUNTIME_X86_64_SIZE = 5_873_176L
+    const val PACKAGED_DART_AOT_RUNTIME_X86_64_SHA256 =
+        "f23e06adf40d2cd451c856cb270f7aff439ef5d3e0c007b216191b37a2eff97f"
+
+    /**
+     * `gen_snapshot_x64c_android_product`: nuestro `gen_snapshot` para Android x86_64, build
+     * `--arch x64c --mode product --os android` (compressed pointers, igual que el `arm64c`).
+     *
+     * Evidencia de que Android x64 **tambien** usa compressed pointers: el `gen_snapshot` oficial del
+     * engine para `android-x64-release/darwin-x64.zip` produce un snapshot que declara
+     * `product no-asan no-msan no-tsan no-shared_data no-code_comments no-dwarf_stack_traces x64 android compressed-pointers`
+     * (el de `android-arm64` declara lo mismo con `arm64`), y el VM lo exige al cargar.
+     */
+    const val PACKAGED_GEN_SNAPSHOT_X86_64_SIZE = 5_123_768L
+    const val PACKAGED_GEN_SNAPSHOT_X86_64_SHA256 =
+        "2f37d68799dd91b8d6458bbada3dfc53e22d9f77b35500632431bb6d2b705678"
 
     private const val TERMUX_DART_POOL =
         "https://packages.termux.dev/apt/termux-main/pool/main/d/dart/"
@@ -421,10 +449,11 @@ object FlutterToolchainPaths {
     /**
      * Ejecutable empaquetado en `nativeLibraryDir` (`lib<algo>.so` en `jniLibs/<abi>/`), o `null`.
      *
-     * Solo la ABI [ABI_ARM64_V8A] lleva los ejecutables empaquetados: los APK por ABI generados
-     * por `splits.abi` (`armeabi-v7a`, `x86`, `x86_64`) **no** los incluyen, y ahi el respaldo es la
-     * copia de `filesDir` (que en `targetSdk >= 29` no se puede ejecutar: se documenta y se
-     * detecta en [FlutterToolchainManager.isReady]).
+     * Solo las ABIs con backend ([abiHasAotBackend]: [ABI_ARM64_V8A] y [ABI_X86_64]) llevan los
+     * ejecutables empaquetados; los APK por ABI generados por `splits.abi` para `armeabi-v7a` y
+     * `x86` **no** los incluyen, y ahi el respaldo es la copia de `filesDir` (que en
+     * `targetSdk >= 29` no se puede ejecutar: se documenta y se detecta en
+     * [FlutterToolchainManager.isReady]).
      */
     @JvmStatic
     fun packagedExecutable(context: Context, name: String): File? {
@@ -454,11 +483,26 @@ object FlutterToolchainPaths {
         packagedExecutable(context, PACKAGED_GEN_SNAPSHOT) != null
 
     /**
+     * ABIs cuya variante del APK empaqueta **los dos** ejecutables del toolchain
+     * (`libdartaotruntime.so` + `libfluttergensnapshot.so`) en `jniLibs/<abi>/`.
+     *
+     * Cada una lleva su backend AOT compilado a medida, porque el snapshot tiene que declarar la
+     * misma configuracion que el VM del engine:
+     * - `arm64-v8a` -> `gen_snapshot --arch arm64c --mode product` (`arm64 android compressed-pointers`);
+     * - `x86_64`    -> `gen_snapshot --arch x64c --mode product` (`x64 android compressed-pointers`).
+     *
+     * `armeabi-v7a` y `x86` no lo llevan: no hay backend AOT on-device para ellas.
+     */
+    @JvmStatic
+    fun abiHasAotBackend(abi: String?): Boolean = abi == ABI_ARM64_V8A || abi == ABI_X86_64
+
+    /**
      * Motivo por el que el backend AOT **no** esta disponible, o `null` si lo esta.
      *
-     * Solo la variante `arm64-v8a` del APK empaqueta `libfluttergensnapshot.so`; en cualquier otra
-     * ABI el AOT on-device no se puede hacer (no existe `gen_snapshot` oficial para Android y el del
-     * `dart` de Termux produce snapshots sin compressed pointers, incompatibles con el engine).
+     * Solo las variantes del APK de las ABIs con backend ([abiHasAotBackend]: `arm64-v8a` y
+     * `x86_64`) empaquetan `libfluttergensnapshot.so`; en `armeabi-v7a`/`x86` el AOT on-device no se
+     * puede hacer (no existe `gen_snapshot` oficial *para Android* y el del `dart` de Termux produce
+     * snapshots sin compressed pointers, incompatibles con el engine).
      */
     @JvmStatic
     fun aotBackendUnavailableReason(context: Context): String? {
@@ -466,14 +510,14 @@ object FlutterToolchainPaths {
             return null
         }
         val abi = resolveSupportedAbi() ?: deviceAbiName()
-        if (abi != ABI_ARM64_V8A) {
-            return "El AOT on-device necesita el `gen_snapshot` propio empaquetado como " +
-                "`lib/$ABI_ARM64_V8A/$PACKAGED_GEN_SNAPSHOT`, y esta instalado un APK de la ABI " +
-                "'$abi' (los APK por ABI de `splits.abi` no lo incluyen). Compila/instala la " +
-                "variante arm64-v8a, o usa el modo DEBUG_JIT."
+        if (!abiHasAotBackend(abi)) {
+            return "El AOT on-device necesita un `gen_snapshot` propio empaquetado como " +
+                "`lib/<abi>/$PACKAGED_GEN_SNAPSHOT`, y solo las variantes arm64-v8a y x86_64 del APK " +
+                "lo traen (esta instalado un APK de la ABI '$abi'). Compila/instala la variante " +
+                "arm64-v8a o x86_64, o usa el modo DEBUG_JIT."
         }
         return "Falta `$PACKAGED_GEN_SNAPSHOT` en ${nativeLibraryDir(context)?.absolutePath ?: "nativeLibraryDir"} " +
-            "(no se empaqueto en `app/src/main/jniLibs/$ABI_ARM64_V8A/`). Sin ese binario no se puede " +
+            "(no se empaqueto en `app/src/main/jniLibs/$abi/`). Sin ese binario no se puede " +
             "generar un `libapp.so` compatible con el engine release: usa el modo DEBUG_JIT."
     }
 

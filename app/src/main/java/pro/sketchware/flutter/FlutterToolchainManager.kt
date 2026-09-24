@@ -229,8 +229,9 @@ object FlutterToolchainManager {
                 "(${runtime.failureReason ?: "motivo desconocido"}). SELinux solo deja ejecutar " +
                 "binarios de nativeLibraryDir con targetSdk >= 29, y este APK (ABI " +
                 "'${FlutterToolchainPaths.deviceAbiName()}') no empaqueta " +
-                "lib/${FlutterToolchainPaths.ABI_ARM64_V8A}/${FlutterToolchainPaths.PACKAGED_DART_AOT_RUNTIME}. " +
-                "Instala la variante arm64-v8a (el SDK Dart ya esta en disco: no se vuelve a descargar)."
+                "lib/<abi>/${FlutterToolchainPaths.PACKAGED_DART_AOT_RUNTIME}. " +
+                "Instala una variante con ejecutables (arm64-v8a o x86_64): el SDK Dart ya esta en " +
+                "disco, no se vuelve a descargar."
         }
         if (mode == FlutterBuildMode.RELEASE_AOT) {
             FlutterToolchainPaths.aotBackendUnavailableReason(context)?.let { return it }
@@ -238,7 +239,8 @@ object FlutterToolchainManager {
             if (genSnapshot == null || !genSnapshot.exists) {
                 return "Falta nativeLibraryDir/${FlutterToolchainPaths.PACKAGED_GEN_SNAPSHOT} (nuestro " +
                     "`gen_snapshot` product, el unico que produce un `libapp.so` que el engine release " +
-                    "acepta): usa el modo DEBUG_JIT o instala la variante arm64-v8a."
+                    "acepta): usa el modo DEBUG_JIT o instala una variante con ejecutables " +
+                    "(arm64-v8a o x86_64)."
             }
             if (!genSnapshot.runnable) {
                 return "`gen_snapshot` esta en ${genSnapshot.path} pero NO se puede ejecutar " +

@@ -19,8 +19,8 @@ object FlutterProjectDefaults {
      *
      * Es el modo con mas camino recorrido (informe E2E: engine debug + `kernel_blob.bin` compilado
      * en el movil -> la app arranca y responde a los toques). `RELEASE_AOT` esta **desbloqueado**
-     * desde la Fase 8 (carril I) para la variante arm64-v8a del APK (usa el `gen_snapshot` propio
-     * empaquetado en `jniLibs/arm64-v8a/libfluttergensnapshot.so`), pero se sigue dejando como
+     * desde la Fase 8 (carril I) para las variantes del APK que empaquetan el binario
+     * (`arm64-v8a` y `x86_64`, cada una con su `gen_snapshot`), pero se sigue dejando como
      * opcion explicita del proyecto: el AOT on-device tarda mas y solo esta probado en arm64.
      */
     @JvmField

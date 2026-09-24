@@ -123,6 +123,52 @@
     public <init>(android.content.Context);
 }
 
+# --- Ronda 10a: quinto fallo R8 de la vista previa (widgets de libreria sin constructor) ---
+# La pregunta del usuario era: "en los LinearLayout H y V no se ven los colores; a ti si". La ronda 8
+# se verifico con el APK DEBUG (minifyEnabled=false); con la RELEASE (R8) hay miembros que solo se
+# alcanzan POR REFLEXION y desaparecen.
+#
+# MEDIDO en el APK release arm64-v8a (v7.0.10.5, minifyEnabled=true):
+#   * 62 clases pierden <init>(android.content.Context) respecto al APK debug
+#     (app/build/outputs/mapping/release/usage.txt);
+#   * en varias vistas de libreria se borran los TRES constructores
+#     (<init>(Context), <init>(Context, AttributeSet) y <init>(Context, AttributeSet, int)):
+#     com.google.android.gms.common.SignInButton, com.google.android.flexbox.FlexboxLayout,
+#     com.airbnb.lottie.LottieAnimationView, com.bobur.androidsvg.SVGImageView,
+#     com.caverock.androidsvg.SVGImageView...
+#   * consecuencia EN EL DISPOSITIVO (mismo XML, mismos ajustes): en release la vista previa no puede
+#     instanciarlas (NoSuchMethodException en InvokeUtil) y dibuja su contenedor aproximado; todos sus
+#     atributos (colores incluidos) se quedan sin aplicar. Reproducido y medido con el caso F de la
+#     ronda 8 (SignInButton): en debug se aplican buttonSize="wide"/colorScheme="dark", en release
+#     pasaban al aviso ambar como "no se ha encontrado un setter equivalente en FrameLayout".
+#
+# Las reglas de v7.0.10.1 solo cubrian androidx.**, com.google.android.material.** y de.hdodenhof.**;
+# estas son las otras familias de VISTAS medidas como afectadas. Se conservan TODOS sus constructores
+# publicos (no solo el de 1 argumento) porque el contrato de InvokeUtil prueba los tres. Sigue siendo
+# acotado a "extends android.view.View" de esos paquetes: no es un -keep global ni impide el shrinking
+# de las clases que no son vistas. Delta de tamano medido del APK arm64-v8a release: ver
+# /Users/zota/.openclaw/workspace/preview-r10a-release.md (apartado de tamano).
+-keepclassmembers class com.google.android.gms.** extends android.view.View {
+    public <init>(...);
+}
+-keepclassmembers class com.google.android.flexbox.** extends android.view.View {
+    public <init>(...);
+}
+-keepclassmembers class com.airbnb.lottie.** extends android.view.View {
+    public <init>(...);
+}
+-keepclassmembers class com.bobur.androidsvg.** extends android.view.View {
+    public <init>(...);
+}
+-keepclassmembers class com.caverock.androidsvg.** extends android.view.View {
+    public <init>(...);
+}
+
+# Atributos de libreria: la vista previa ya NO los aplica por reflexion (ronda 10a). Un setter que
+# solo se alcanzaba asi podia renombrarse/borrarse y el atributo se perdia en silencio. Ahora va por
+# llamadas directas (LayoutPreviewActivity.applyLibraryAttribute) y lo que no tiene mapeo explicito se
+# anota en el aviso ambar con el motivo. No hace falta conservar nombres de setters de libreria.
+
 -dontwarn com.google.errorprone.**
 -dontwarn javax.xml.stream.**
 -dontwarn org.codehaus.stax2.**

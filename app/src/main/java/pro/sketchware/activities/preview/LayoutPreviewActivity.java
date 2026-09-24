@@ -1226,9 +1226,9 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
      *   <li>El resto pasa por un aplicador GENERICO por tipo de vista (TextView, ImageView,
      *       Progress/Seek/Rating, CompoundButton, ListView/GridView/Spinner, BottomNavigationView,
      *       TextInputLayout, CalendarView/DatePicker/TimePicker, SearchView...).</li>
-     *   <li>Lo que sigue sin aplicarse intenta un setter por REFLEXION (atributos de librerias:
-     *       {@code app:loQueSea} -> {@code setLoQueSea}), resolviendo colores/medidas/booleanos
-     *       segun el tipo del parametro.</li>
+     *   <li>Lo que sigue sin aplicarse pasa por el MAPEO EXPLICITO de atributos de libreria
+     *       ({@link #applyLibraryAttribute}: Lottie, Flexbox, SignInButton...): llamadas directas,
+     *       que R8 no puede romper (la ronda 8 usaba reflexion y en release se perdia).</li>
      *   <li>Si nada de lo anterior funciona, el atributo se ANOTA en el aviso ambar con el motivo
      *       (nada de descartes silenciosos).</li>
      * </ol>
@@ -1259,12 +1259,12 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
                 if (reason == null) {
                     continue;
                 }
-                // Segundo intento: setter generico por reflexion (atributos de librerias).
-                String reflectionReason = applyViaReflection(view, name, value);
-                if (reflectionReason == null) {
+                // Segundo intento: MAPEO EXPLICITO de los atributos de libreria (ronda 10a).
+                String libraryReason = applyLibraryAttribute(view, name, value);
+                if (libraryReason == null) {
                     continue;
                 }
-                notApplied.add(name + "=\"" + value + "\" · " + reflectionReason);
+                notApplied.add(name + "=\"" + value + "\" · " + libraryReason);
             }
         } catch (Throwable throwable) {
             // Un atributo raro no debe tumbar el resto del diseno (los hijos incluidos).
@@ -2447,108 +2447,193 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
         }
     }
 
-    // ------------------------------------------------------------------ reflexion
+    // ------------------------------------------------------------------ mapeo explicito
 
     /**
-     * Ultimo recurso: aplicar el atributo llamando a un setter del PROPIO widget.
+     * Atributos de LIBRERIA con mapeo EXPLICITO (ronda 10a).
      *
-     * <p>Con esto, un atributo de libreria ({@code app:loQueSea}) se aplica si la clase destino
-     * tiene un setter convencional, sin necesidad de conocerlo de antemano: se prueban variantes del
-     * nombre de mas especifica a mas generica ({@code civ_border_color} -> {@code setCivBorderColor},
-     * {@code setBorderColor}) y el valor se convierte segun el tipo del parametro (int de color,
-     * int de medida, boolean, float, CharSequence, ColorStateList).
+     * <p>La ronda 8 los aplicaba con un ultimo recurso por REFLEXION ({@code app:loQueSea} ->
+     * {@code setLoQueSea}, probando variantes del nombre). Funciona en debug, pero en la release
+     * minificada R8 no ve esa llamada —el nombre del setter viaja en un String—, asi que puede
+     * renombrar o eliminar el miembro: el atributo se perdia y el widget quedaba con su valor por
+     * defecto (el usuario veia "los colores no se ven" sin ningun aviso). MEDIDO en la release
+     * arm64-v8a (ronda 10a): el propio caso F se aplicaba en debug y NO en release.
+     *
+     * <p>Aqui cada atributo que el editor escribe tiene su llamada DIRECTA. Al quedar el setter
+     * referenciado en el bytecode, R8 conserva el nombre y el metodo, y la vista previa deja de
+     * depender de que sobreviva un miembro concreto. Lo que no tenga mapeo explicito NO se aplica en
+     * silencio: se anota en el aviso ambar con el motivo exacto.
      *
      * @return {@code null} si se ha aplicado; si no, el motivo para el aviso ambar.
      */
-    private String applyViaReflection(View view, String name, String value) {
-        String[] tokens = name.split("[_.]");
-        if (tokens.length == 0) {
-            return "nombre de atributo vacio";
-        }
-        java.util.List<String> candidates = new ArrayList<>();
-        for (int start = 0; start < tokens.length; start++) {
-            StringBuilder candidate = new StringBuilder();
-            for (int i = start; i < tokens.length; i++) {
-                if (tokens[i].isEmpty()) {
-                    continue;
+    private String applyLibraryAttribute(View view, String name, String value) {
+        try {
+            switch (name) {
+                // ------------------------------------------------ Google: SignInButton
+                case "buttonSize":
+                case "colorScheme": {
+                    if (view instanceof com.google.android.gms.common.SignInButton button) {
+                        if ("buttonSize".equals(name)) {
+                            switch (value.trim()) {
+                                case "wide" -> button.setSize(
+                                        com.google.android.gms.common.SignInButton.SIZE_WIDE);
+                                case "icon_only" -> button.setSize(
+                                        com.google.android.gms.common.SignInButton.SIZE_ICON_ONLY);
+                                default -> button.setSize(
+                                        com.google.android.gms.common.SignInButton.SIZE_STANDARD);
+                            }
+                        } else {
+                            switch (value.trim()) {
+                                case "light" -> button.setColorScheme(
+                                        com.google.android.gms.common.SignInButton.COLOR_LIGHT);
+                                case "auto" -> button.setColorScheme(
+                                        com.google.android.gms.common.SignInButton.COLOR_AUTO);
+                                default -> button.setColorScheme(
+                                        com.google.android.gms.common.SignInButton.COLOR_DARK);
+                            }
+                        }
+                        return null;
+                    }
+                    return name + " solo aplica a SignInButton";
                 }
-                candidate.append(Character.toUpperCase(tokens[i].charAt(0)))
-                        .append(tokens[i].substring(1));
+                // ------------------------------------------------ LottieAnimationView
+                case "lottie_fileName":
+                case "lottie_rawRes": {
+                    if (view instanceof com.airbnb.lottie.LottieAnimationView lottie) {
+                        lottie.setAnimation(value.trim());
+                        return null;
+                    }
+                    return name + " solo aplica a LottieAnimationView";
+                }
+                case "lottie_autoPlay": {
+                    if (view instanceof com.airbnb.lottie.LottieAnimationView lottie) {
+                        if (Boolean.parseBoolean(value.trim())) {
+                            lottie.playAnimation();
+                        } else {
+                            lottie.pauseAnimation();
+                        }
+                        return null;
+                    }
+                    return "lottie_autoPlay solo aplica a LottieAnimationView";
+                }
+                case "lottie_loop": {
+                    if (view instanceof com.airbnb.lottie.LottieAnimationView lottie) {
+                        // Sin reflexion no hace falta adivinar el tipo del parametro: se usa el
+                        // setter publico de repeticion (INFINITE = -1).
+                        lottie.setRepeatCount(Boolean.parseBoolean(value.trim()) ? -1 : 0);
+                        return null;
+                    }
+                    return "lottie_loop solo aplica a LottieAnimationView";
+                }
+                case "lottie_speed": {
+                    if (view instanceof com.airbnb.lottie.LottieAnimationView lottie) {
+                        lottie.setSpeed(parseFloatOr(value, 1f));
+                        return null;
+                    }
+                    return "lottie_speed solo aplica a LottieAnimationView";
+                }
+                case "lottie_imageAssetsFolder": {
+                    if (view instanceof com.airbnb.lottie.LottieAnimationView lottie) {
+                        lottie.setImageAssetsFolder(value.trim());
+                        return null;
+                    }
+                    return "lottie_imageAssetsFolder solo aplica a LottieAnimationView";
+                }
+                // ------------------------------------------------ FlexboxLayout
+                case "flexDirection": {
+                    if (view instanceof com.google.android.flexbox.FlexboxLayout flexbox) {
+                        flexbox.setFlexDirection(switch (value.trim()) {
+                            case "row_reverse" -> com.google.android.flexbox.FlexDirection.ROW_REVERSE;
+                            case "column" -> com.google.android.flexbox.FlexDirection.COLUMN;
+                            case "column_reverse" -> com.google.android.flexbox.FlexDirection.COLUMN_REVERSE;
+                            default -> com.google.android.flexbox.FlexDirection.ROW;
+                        });
+                        return null;
+                    }
+                    return "flexDirection solo aplica a FlexboxLayout";
+                }
+                case "flexWrap": {
+                    if (view instanceof com.google.android.flexbox.FlexboxLayout flexbox) {
+                        flexbox.setFlexWrap(switch (value.trim()) {
+                            case "wrap" -> com.google.android.flexbox.FlexWrap.WRAP;
+                            case "wrap_reverse" -> com.google.android.flexbox.FlexWrap.WRAP_REVERSE;
+                            default -> com.google.android.flexbox.FlexWrap.NOWRAP;
+                        });
+                        return null;
+                    }
+                    return "flexWrap solo aplica a FlexboxLayout";
+                }
+                case "justifyContent": {
+                    if (view instanceof com.google.android.flexbox.FlexboxLayout flexbox) {
+                        flexbox.setJustifyContent(switch (value.trim()) {
+                            case "flex_end" -> com.google.android.flexbox.JustifyContent.FLEX_END;
+                            case "center" -> com.google.android.flexbox.JustifyContent.CENTER;
+                            case "space_between" -> com.google.android.flexbox.JustifyContent.SPACE_BETWEEN;
+                            case "space_around" -> com.google.android.flexbox.JustifyContent.SPACE_AROUND;
+                            case "space_evenly" -> com.google.android.flexbox.JustifyContent.SPACE_EVENLY;
+                            default -> com.google.android.flexbox.JustifyContent.FLEX_START;
+                        });
+                        return null;
+                    }
+                    return "justifyContent solo aplica a FlexboxLayout";
+                }
+                case "alignItems": {
+                    if (view instanceof com.google.android.flexbox.FlexboxLayout flexbox) {
+                        flexbox.setAlignItems(switch (value.trim()) {
+                            case "flex_end" -> com.google.android.flexbox.AlignItems.FLEX_END;
+                            case "center" -> com.google.android.flexbox.AlignItems.CENTER;
+                            case "baseline" -> com.google.android.flexbox.AlignItems.BASELINE;
+                            case "stretch" -> com.google.android.flexbox.AlignItems.STRETCH;
+                            default -> com.google.android.flexbox.AlignItems.FLEX_START;
+                        });
+                        return null;
+                    }
+                    return "alignItems solo aplica a FlexboxLayout";
+                }
+                case "alignContent": {
+                    if (view instanceof com.google.android.flexbox.FlexboxLayout flexbox) {
+                        flexbox.setAlignContent(switch (value.trim()) {
+                            case "flex_end" -> com.google.android.flexbox.AlignContent.FLEX_END;
+                            case "center" -> com.google.android.flexbox.AlignContent.CENTER;
+                            case "space_between" -> com.google.android.flexbox.AlignContent.SPACE_BETWEEN;
+                            case "space_around" -> com.google.android.flexbox.AlignContent.SPACE_AROUND;
+                            case "stretch" -> com.google.android.flexbox.AlignContent.STRETCH;
+                            default -> com.google.android.flexbox.AlignContent.FLEX_START;
+                        });
+                        return null;
+                    }
+                    return "alignContent solo aplica a FlexboxLayout";
+                }
+                case "showDivider": {
+                    if (view instanceof com.google.android.flexbox.FlexboxLayout flexbox) {
+                        flexbox.setShowDivider(flexboxDividerFlags(value));
+                        return null;
+                    }
+                    return "showDivider solo aplica a FlexboxLayout";
+                }
+                default:
+                    break;
             }
-            if (candidate.length() > 0 && !candidates.contains(candidate.toString())) {
-                candidates.add(candidate.toString());
-            }
+        } catch (Throwable throwable) {
+            return "el setter del atributo ha fallado (" + conciseMessage(throwable) + ")";
         }
-        for (String candidate : candidates) {
-            for (Class<?> clazz = view.getClass(); clazz != null && clazz != Object.class;
-                 clazz = clazz.getSuperclass()) {
-                java.lang.reflect.Method method = findSingleArgSetter(clazz, "set" + candidate);
-                if (method == null) {
-                    continue;
-                }
-                Object argument = convertForSetter(method.getParameterTypes()[0], view, name, value);
-                if (argument == null) {
-                    continue;
-                }
-                try {
-                    method.invoke(view, argument);
-                    android.util.Log.i(TAG, "info: atributo " + name + " aplicado con " + clazz.getSimpleName()
-                            + "." + method.getName());
-                    return null;
-                } catch (Throwable throwable) {
-                    return "el setter " + method.getName() + " rechazo el valor (" + conciseMessage(throwable) + ")";
-                }
-            }
-        }
-        return "no se ha encontrado un setter equivalente en "
-                + shortClassName(view.getClass().getName());
+        return "atributo de libreria sin mapeo explicito en la vista previa";
     }
 
-    private static java.lang.reflect.Method findSingleArgSetter(Class<?> clazz, String methodName) {
-        for (java.lang.reflect.Method method : clazz.getMethods()) {
-            if (method.getName().equals(methodName)
-                    && method.getParameterCount() == 1
-                    && !java.lang.reflect.Modifier.isStatic(method.getModifiers())) {
-                return method;
-            }
+    /** Convierte "beginning|middle|end" en los flags de separadores de un FlexboxLayout. */
+    private static int flexboxDividerFlags(String value) {
+        String v = value == null ? "" : value.toLowerCase(java.util.Locale.US);
+        int flags = com.google.android.flexbox.FlexboxLayout.SHOW_DIVIDER_NONE;
+        if (v.contains("beginning")) {
+            flags |= com.google.android.flexbox.FlexboxLayout.SHOW_DIVIDER_BEGINNING;
         }
-        return null;
-    }
-
-    /** Convierte el valor del XML al tipo del parametro del setter; null = no sabemos convertirlo. */
-    private Object convertForSetter(Class<?> type, View view, String name, String value) {
-        String lowerName = name.toLowerCase(Locale.US);
-        boolean colorishName = lowerName.contains("color") || lowerName.contains("tint")
-                || lowerName.contains("colour");
-        boolean colorishValue = value.startsWith("#") || value.startsWith("@color/")
-                || value.startsWith("@android:color/") || value.startsWith("?");
-        if (type == int.class || type == Integer.class) {
-            if (colorishValue || colorishName) {
-                int color = resourceResolver.resolveColor(view, value, 0);
-                return isColorNotSet(color) ? null : color;
-            }
-            return sharedResolver(view).dimension(value, 0);
+        if (v.contains("middle")) {
+            flags |= com.google.android.flexbox.FlexboxLayout.SHOW_DIVIDER_MIDDLE;
         }
-        if (type == float.class || type == Float.class) {
-            if (colorishValue) {
-                return null;
-            }
-            return (float) sharedResolver(view).dimension(value, 0);
+        if (v.contains("end")) {
+            flags |= com.google.android.flexbox.FlexboxLayout.SHOW_DIVIDER_END;
         }
-        if (type == boolean.class || type == Boolean.class) {
-            return Boolean.parseBoolean(value);
-        }
-        if (type == android.content.res.ColorStateList.class) {
-            int color = resourceResolver.resolveColor(view, value, 0);
-            return isColorNotSet(color) ? null : android.content.res.ColorStateList.valueOf(color);
-        }
-        if (CharSequence.class.isAssignableFrom(type) || type == String.class) {
-            return value;
-        }
-        if (type == android.graphics.drawable.Drawable.class) {
-            return isResourceReference(value) ? resourceResolver.resolveDrawable(value) : null;
-        }
-        return null;
+        return flags;
     }
 
     // ------------------------------------------------------------------ utilidades

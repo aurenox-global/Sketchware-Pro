@@ -39,8 +39,8 @@ class FlutterDartCompileResult(
  *   `flutter_patched_sdk_product`, back-end con **nuestro** `gen_snapshot` product + compressed
  *   pointers (`libfluttergensnapshot.so`). Evidencia: informe AOT §4-§5 (libapp.so aceptado por el
  *   engine release, la app arranca sin banner DEBUG). Si esa variante del APK no lleva el binario
- *   (cualquier ABI que no sea `arm64-v8a`), se falla con un mensaje claro en vez de generar un
- *   `libapp.so` incompatible.
+ *   (ABI sin backend: `armeabi-v7a`/`x86`, o variante que no lo empaqueta), se falla con un mensaje
+ *   claro en vez de generar un `libapp.so` incompatible.
  *
  * Los dos ejecutables se lanzan desde `nativeLibraryDir` (unica ubicacion ejecutable para la app
  * con `targetSdk >= 29`), con respaldo en `filesDir` para el resto de ABIs:
@@ -70,18 +70,20 @@ object FlutterDartCompiler {
         "El `gen_snapshot` del SDK Dart de Termux (${FlutterToolchainPaths.DART_VERSION}) esta " +
             "construido SIN compressed pointers y el engine oficial de Flutter " +
             "${FlutterToolchainPaths.FLUTTER_VERSION} EXIGE el perfil 'arm64 android compressed-pointers'. " +
-            "Por eso el AOT se hace con el `gen_snapshot` propio (build `--arch arm64c --mode product`)."
+            "Por eso el AOT se hace con el `gen_snapshot` propio (build `--arch arm64c --mode product` " +
+            "en arm64, `--arch x64c --mode product` en x86_64: las dos ABIs usan compressed pointers)."
 
     /**
-     * Mensaje cuando el APK instalado no lleva el backend AOT (cualquier ABI != `arm64-v8a`).
-     * Se prefiere fallar claro antes que producir un `libapp.so` que crashea al arrancar.
+     * Mensaje cuando el APK instalado no lleva el backend AOT (ABI sin backend, o variante que no
+     * empaqueta el binario). Se prefiere fallar claro antes que producir un `libapp.so` que crashea
+     * al arrancar.
      */
     const val AOT_BACKEND_MISSING_MESSAGE =
         "RELEASE_AOT no esta disponible en esta instalacion: el `gen_snapshot` propio (product + " +
-            "compressed pointers) solo viaja en la variante arm64-v8a del APK, empaquetado como " +
-            "`lib/arm64-v8a/${FlutterToolchainPaths.PACKAGED_GEN_SNAPSHOT}` en `jniLibs` (SELinux solo " +
-            "permite ejecutar desde nativeLibraryDir). Compila e instala la variante arm64-v8a, o usa " +
-            "el modo DEBUG_JIT. Detalles: informe AOT (§2, §6, §7)."
+            "compressed pointers) solo viaja en las variantes arm64-v8a y x86_64 del APK, empaquetado " +
+            "como `lib/<abi>/${FlutterToolchainPaths.PACKAGED_GEN_SNAPSHOT}` en `jniLibs` (SELinux solo " +
+            "permite ejecutar desde nativeLibraryDir). Compila e instala la variante arm64-v8a o " +
+            "x86_64, o usa el modo DEBUG_JIT. Detalles: informe AOT (§2, §6, §7)."
 
     private const val ASSET_MANIFEST_FILE = "AssetManifest.json"
     private const val FONT_MANIFEST_FILE = "FontManifest.json"
@@ -108,8 +110,8 @@ object FlutterDartCompiler {
             )
         }
 
-        // AOT: solo se puede si el APK instalado trae nuestro `gen_snapshot` (arm64-v8a). En
-        // cualquier otra ABI se falla ANTES de tocar nada: un libapp.so sin compressed pointers es
+        // AOT: solo se puede si el APK instalado trae nuestro `gen_snapshot` (arm64-v8a o x86_64).
+        // En cualquier otra ABI se falla ANTES de tocar nada: un libapp.so sin compressed pointers es
         // un APK que se instala y crashea sin explicacion (informe AOT §5.3).
         if (mode == FlutterBuildMode.RELEASE_AOT) {
             val reason = FlutterToolchainPaths.aotBackendUnavailableReason(context)

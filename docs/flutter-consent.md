@@ -151,3 +151,26 @@ su proceso (`untrusted_app`).
 automatizar en el emulador (el disparador del build no es fiable por `adb input tap` y la fase Java del pipeline falla
 allí por un problema de entorno ajeno a Flutter); lo que **sí** está probado es que el binario empaquetado **se ejecuta**
 en el proceso de la app, que es la premisa de ese camino. Tampoco se ha re-verificado `RELEASE_AOT` ni otras ABIs.
+
+## 7. v7.0.11.0: el toolchain de Flutter para x86_64
+
+Antes de esta versión el editor solo podía compilar Flutter en la variante **arm64-v8a** del APK: en `x86_64` el AOT se
+rechazaba a propósito y faltaban los dos ejecutables. Ahora `x86_64` tiene el mismo trato que `arm64-v8a`, y su
+toolchain **ya viaja dentro del APK de esa ABI**:
+
+- `app/src/main/jniLibs/x86_64/libdartaotruntime.so` — **5.873.176 B**, sha256 `f23e06ad…`, del `.deb` de Termux
+  `dart_3.13.4_x86_64.deb` (137.243.692 B). **Trampa documentada:** el `bin/dartaotruntime` que se ve en `usr/bin/` del
+  `.deb` **no** es un ELF, es un script de shell de 115 B; el que hay que empaquetar es el ELF de `lib/dart-sdk/bin/`.
+- `app/src/main/jniLibs/x86_64/libfluttergensnapshot.so` — **5.123.768 B**, sha256 `2f37d687…`, **compilado** desde las
+  fuentes del Dart SDK 3.13.4 con `./tools/build.py --no-rbe --arch x64c --mode product --os android gen_snapshot`
+  (65,4 s). Flags con evidencia, no adivinados: Android x64 **también** usa **compressed pointers**, y el nombre de
+  arquitectura correcto es `x64c` (`IsCompressedPointerArch(arch) = "64c" in arch`); lo confirman el `gen_snapshot`
+  oficial del engine, el error del propio VM y el `strings` del binario recién compilado.
+
+El **bloqueo por ABI** se sustituye por `abiHasAotBackend(abi)` (`arm64-v8a` | `x86_64`); `armeabi-v7a`/`x86` siguen
+avisando, y si falta el binario en una ABI con backend el mensaje nombra **esa** ABI.
+
+**Coste:** **+4,34 MB solo en x86_64** (APK release 112.136.131 → 116.476.809 B); el arm64 queda **idéntico**.
+**Pendiente honesto: la ejecución real en x86_64 no está verificada** — no hay ninguna imagen x86_64 disponible y
+compilar/ejecutar en Apple Silicon (arm64) es inviable. Lo que está probado es de dónde sale cada binario (sha256
+pinneados) y con qué flags se generó el snapshot.

@@ -37,14 +37,14 @@
 
   <!-- ============================================================ hero -->
   <section class="hero" style="border-top:none">
-    <div class="tag">● v7.0.10.5 · versionCode 172 · source-available</div>
+    <div class="tag">● v7.0.11.0 · versionCode 173 · source-available</div>
     <h1>Crea apps Android reales<br><span class="accent">desde tu móvil.</span></h1>
     <p class="lead">
       Sketchware Pro es un IDE de Android que funciona sobre Android: arrastra bloques, escribe Java o Kotlin,
       compila en el propio dispositivo y obtén un APK instalable — sin necesidad de ordenador.
     </p>
     <div class="btns">
-      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.5" target="_blank" rel="noopener">⬇ Descargar APK</a>
+      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.11.0" target="_blank" rel="noopener">⬇ Descargar APK</a>
       <a class="btn ghost" href="https://github.com/aurenox-global/Sketchware-Pro" target="_blank" rel="noopener">Ver el código en GitHub</a>
     </div>
 
@@ -134,12 +134,63 @@
       <span class="k">Hitos destacados</span>
       <p>
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.0">Flutter corriendo en el dispositivo, release/AOT incluido</a> &middot;
-        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.5">la vista previa de diseños arreglada, rondas 1 a 9</a> &middot;
+        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.11.0">la vista previa de diseños arreglada, rondas 1 a 10</a> &middot;
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.1">la descarga del toolchain de Dart ahora la decides tú, y el toolchain ya no dice "no instalado"</a> &middot;
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.9">soporte de Kotlin en el IDE de la app</a>.
       </p>
     </div>
     <div class="log" id="change-log">
+      <div class="item done featured">
+        <span class="when">2026-09-24 · vista previa + Flutter</span>
+        <h3>Los iconos que trae el IDE, el <code>styles.xml</code> de tu proyecto y los constructores que R8 borraba  <span class="pill feat">destacado</span> <span class="pill ok">arreglado</span></h3>
+        <ul class="clean">
+          <li><strong>Los iconos estaban dentro del APK desde el principio.</strong> El set Material del IDE vive en
+          <code>assets/icons/icon_pack.zip</code> (<strong>5.335.950 B</strong>: <strong>2.191 nombres × 5 estilos =
+          10.955 SVG</strong>, <code>svg/&lt;nombre&gt;/&lt;estilo&gt;.svg</code>), y el icono que eliges se convierte a
+          vector XML y se guarda en el <strong>almacen de imagenes del proyecto</strong>
+          <code>.sketchware/resources/images/&lt;sc_id&gt;/</code> — <em>no</em> en
+          <code>files/resource/drawable</code>. La vista previa no miraba ni lo uno ni lo otro, asi que los iconos
+          salian en <strong>rojo</strong> (<code>2 recursos no encontrados</code>). Ahora resuelve de ambos
+          <strong>y</strong> del <code>res</code> generado del build. <strong>Medido:</strong> una barra roja con
+          <strong>2 recursos no encontrados</strong> y <strong>33.087 px rojos</strong> pasa a <strong>los 2 iconos
+          dibujados, rojo=0</strong>, con una nota <strong>ambar</strong> que dice de donde sale cada uno
+          (<code>icon_miscellaneous_services_round -&gt; svg/miscellaneous_services/round.svg</code>).</li>
+          <li><strong>El <code>styles.xml</code> de tu proyecto se lee entero.</strong> El lector no reconocia las
+          etiquetas <strong>autocerradas</strong> <code>&lt;style ... /&gt;</code> — justo como el IDE genera
+          <code>AppTheme.AppBarOverlay</code>/<code>PopupOverlay</code> — asi que se perdia ese estilo <strong>y se
+          tragaba el siguiente</strong>: se leian <strong>3 de 5</strong> estilos. Ahora lee <strong>5 de 5</strong>,
+          tambien mira en <code>value/</code>, <code>values-v21</code>, <code>values-night</code> y el <code>res</code>
+          generado del build, y un estilo autocerrado sin items envuelve el contexto con la base del framework de su
+          cadena de padres. Resultado: <strong>cero avisos</strong> de estilo y el tema del proyecto se aplica de
+          verdad.</li>
+          <li><strong>La release perdia constructores de vistas.</strong> Con R8, <strong>62 clases</strong> pierden
+          <code>&lt;init&gt;(Context)</code> y varias vistas de libreria (el <code>SignInButton</code> de Google,
+          <code>FlexboxLayout</code>, <code>LottieAnimationView</code>, <code>SVGImageView</code>) pierden <strong>los
+          tres</strong>, asi que se dibujaban como contenedor aproximado. Arreglado con <strong>5 reglas
+          <code>-keepclassmembers</code> acotadas</strong> mas <strong>sustitucion de la reflexion por mapeo
+          explicito</strong>; lo no mapeado va al aviso ambar. Delta: <strong>+9.892 B</strong>. Verificado en release:
+          el boton real de Google se dibuja y los <strong>7/7 casos en claro y 7/7 en oscuro</strong> mantienen sus
+          colores (caso A <code>#123456</code> 162.773 px, <code>#EE2222</code> 111.016 px).</li>
+          <li><strong>Correccion honesta.</strong> La sospecha inicial — <em>"la reflexion no funciona en release"</em>
+          — era <strong>falsa</strong>: el aplicador por reflexion nunca llegaba a dispararse (0 coincidencias en los
+          logs), y los colores de la ronda 8 <strong>si</strong> funcionaban en release. Lo que fallaba era la
+          construccion de las vistas de libreria. El mapeo explicito elimina igualmente ese camino fragil, pero no
+          porque la reflexion estuviera rota.</li>
+          <li><strong>Toolchain de Flutter para x86_64.</strong> <code>jniLibs/x86_64/</code> trae ya
+          <code>libdartaotruntime.so</code> (5.873.176 B, el ELF real del <code>.deb</code> x86_64 de Termux, que esta
+          en <code>lib/dart-sdk/bin/</code>) y <code>libfluttergensnapshot.so</code> (5.123.768 B, compilado) con
+          <code>--arch x64c --mode product --os android</code> (Android x64 exige compressed pointers); el bloqueo de
+          ABI se sustituye por <code>abiHasAotBackend</code> (<code>arm64-v8a</code> | <code>x86_64</code>) y
+          <code>armeabi-v7a</code>/<code>x86</code> siguen avisando. Coste: <strong>+4,34 MB solo en x86_64</strong>
+          (release 112.136.131 → 116.476.809); arm64 identico. <strong>Honesto:</strong> la ejecucion real en x86_64
+          <strong>no</strong> esta verificada (no hay imagen x86_64 disponible; inviable en Apple Silicon).</li>
+        </ul>
+        <p><img src="assets/preview-r10-icons-before.png" alt="Antes: la barra roja dice Preview PARCIAL: 2 recursos no encontrados y faltan los dos iconos" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)"> <img src="assets/preview-r10-icons-after.png" alt="Despues: los dos iconos Material se dibujan y la barra es ambar, 2 nombres heredados resueltos" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)"> <img src="assets/preview-r10-signin.png" alt="Despues: el boton real de Google (logo G + Sign in with Google) se dibuja en la release" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)"></p>
+        <p>Versión <strong>v7.0.11.0</strong> (versionCode 173). El detalle de la ronda 10 está al final de
+        <a href="preview-fix.md">docs/preview-fix.md</a> (y la nota del toolchain x86_64 en
+        <a href="flutter-consent.md">docs/flutter-consent.md</a>).</p>
+      </div>
+
       <div class="item done featured">
         <span class="when">2026-09-24 · vista previa</span>
         <h3>Rojo significa ahora "no se puede dibujar": las referencias de <code>@style</code>/tema no resolubles son ambar con motivo, y el tema del proyecto pinta de verdad  <span class="pill feat">destacado</span> <span class="pill ok">arreglado</span></h3>

@@ -25,8 +25,8 @@ import java.util.zip.ZipInputStream
  * - `RELEASE_AOT` -> `flutter_embedding_release` + jar de nativas `<abi>_release` (165 MB de
  *   `libflutter.so`) **y** la plataforma `flutter_patched_sdk_product`. Desbloqueado en la Fase 8
  *   (carril I) con el `gen_snapshot` propio (informe AOT §5): el engine release acepta el
- *   `libapp.so` generado en el dispositivo, siempre que la variante del APK sea `arm64-v8a`
- *   (es la unica que empaqueta el binario).
+ *   `libapp.so` generado en el dispositivo, siempre que la variante del APK empaquete el binario
+ *   (`arm64-v8a` o `x86_64`; son las unicas que lo llevan).
  *
  * Ademas de los artefactos del engine hace falta el **framework Dart** (`package:flutter…`):
  * ni el jar del embedding ni `flutter_patched_sdk.zip` lo incluyen. Se trae del tarball del tag

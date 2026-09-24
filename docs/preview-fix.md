@@ -988,3 +988,140 @@ Ningún caso que diera `Preview OK` ha dejado de darlo; los que ya eran parciale
 - **El proyecto del usuario y su APK no se han probado**: todo está medido con el proyecto de pruebas 601.
 - Los cambios están **sin commitear** en el árbol de trabajo; `versionCode`/`versionName` **no los ha tocado esta
   ronda** (el árbol ya trae `172` / `v7.0.10.5`).
+
+## 14. Ronda 10 (v7.0.11.0)
+
+Fecha: 2026-09-24 · Versión: **v7.0.11.0** (versionCode 173) · Repo: `Sketchware-Pro-main`
+
+Release: <https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.11.0>
+
+Tres piezas de la vista previa de diseños (iconos, estilos del proyecto y constructores que R8 borraba en release) y,
+además, el toolchain de Flutter para **x86_64** (§14.7). Ficheros tocados por los tres bloques de preview:
+`ProjectResourceResolver.java` (iconos y estilos) y `LayoutPreviewActivity.java` + `app/proguard-rules.pro`
+(constructores).
+
+### 14.1 Iconos: el set Material estaba dentro del APK (y el icono elegido, en el almacén del proyecto)
+
+- **De dónde salen.** El set Material del IDE está DENTRO del APK en `assets/icons/icon_pack.zip` (**5.335.950 B**):
+  **2.191 nombres × 5 estilos (`baseline`, `outline`, `round`, `sharp`, `twotone`) = 10.955 SVG**, en
+  `svg/<nombre>/<estilo>.svg`. El selector (`ImportIconActivity`) los llama `icon_<nombre>_<estilo>` y guarda el
+  elegido **convertido a vector XML** (`SvgUtils.convert`) en el **almacén de imágenes del proyecto**
+  `.sketchware/resources/images/<sc_id>/<nombre>.xml` — **no** en `files/resource/drawable`.
+- **Qué fallaba.** La vista previa no miraba ni ese almacén, ni el `res` generado del build, ni el zip del set del IDE
+  (no es un `res/drawable` del APK del editor: `getIdentifier()` no lo ve) → los iconos salían en **rojo**
+  (`2 recursos no encontrados`).
+- **Arreglo.** Se añaden esas dos rutas como fuente de drawables más la resolución exacta desde el set del IDE
+  (`icon_<nombre>_<estilo>` → SVG → vector en memoria, sin añadir dependencias). Cuando el icono se resuelve desde el
+  set (y no desde un fichero del proyecto) se **anota en el aviso** (grupo ámbar de «nombres heredados resueltos»):
+  nada de sustituir en silencio.
+- **Medición (proyecto 601):** antes, **2 recursos no encontrados** con **barra ROJA** (**33.087 px rojos**, muestreo 1
+  de cada 2 px) → después los **2 iconos dibujados** y **rojo=0**, con aviso **ámbar**
+  (`icon_miscellaneous_services_round -> svg/miscellaneous_services/round.svg`).
+
+| Antes (`before_icons_case2_icons`) | Después (`after_i2_pack_case2_icons`) |
+| --- | --- |
+| ![antes](assets/preview-r10-icons-before.png) | ![después](assets/preview-r10-icons-after.png) |
+
+### 14.2 Estilos del proyecto: el `<style ... />` autocerrado y las rutas que faltaban
+
+- **Ruta real.** Lo que edita el usuario es `files/resource/values/styles.xml` (y variantes `value/`, `values-v21`,
+  `values-night`); lo que **compila aapt2** es el `res` GENERADO del build
+  `.sketchware/mysc/<sc_id>/app/src/main/res/values/styles.xml`. Y, si el proyecto no tiene el fichero en disco, el IDE
+  lo **genera** (`yq.getXMLStyle()`), incluyendo en las ramas Material3/AppCompat los **autocerrados**
+  `AppTheme.AppBarOverlay` y `AppTheme.PopupOverlay` — justo los dos que el IDE inyecta en los widgets
+  (`AppCompatInjection.getDefaultActivityInjections()`) y los que se veían como «no presentes».
+- **Qué fallaba (parseo).** El patrón era `<style\s+([^>]*)>(.*?)</style>` (DOTALL): con un estilo **autocerrado** no se
+  reconocía ese estilo **y** el `(.*?)</style>` **se tragaba el cuerpo del siguiente**. Evidencia medida:
+  `styles.xml del proyecto leidos: … -> 3 estilos` → ahora `-> 5 estilos`. Arreglo: `<style\s+([^>]*?)(/>|>(.*?)</style>)`
+  (el grupo 2 distingue autocierre de cuerpo) admitiendo también `<item name="..."/>` sin valor.
+- **Qué fallaba (rutas).** Solo se miraba `files/resource/values/styles.xml` exacto: faltaban `value/`,
+  `values-v21`, `values-night` y el `res` generado del build. Ahora se recorren **todos** los `value*` de
+  `files/resource` y del `res` generado, y como último recurso se le pregunta al **generador del IDE** (misma fuente
+  que usa el compilador).
+- **Estilo autocerrado sin items.** Antes se resolvía y **no se aplicaba nada, en silencio**; ahora se envuelve el
+  contexto con la **base del framework** de su cadena de padres (`resolveBaseStyleId` + `ContextThemeWrapper`), así que
+  el tema del proyecto **sí** se aplica. Si no hay ni items ni base ni resId, sigue el **aviso ámbar con motivo**
+  (nunca rojo).
+- **Resultado (caso 1: `AppBarLayout android:theme` + `MaterialToolbar app:popupTheme`):** antes, dos avisos
+  `no aplicado [estilos y medidas]: @style/AppTheme.AppBarOverlay …` y `@style/AppTheme.PopupOverlay …`; después,
+  `info: styles.xml del proyecto leidos: … -> 5 estilos` · `info: tema del proyecto @style/AppTheme.AppBarOverlay, base
+  del framework resId=2132018148` · **cero avisos de estilo** · `Preview OK · vistas: 5`.
+
+### 14.3 Constructores perdidos en release (R8): 62 clases, y varias vistas de librería
+
+- **El síntoma (release-only, reproducido en el caso F):** `com.google.android.gms.common.SignInButton` se dibujaba
+  como **contenedor aproximado** y no recibía `buttonSize`/`colorScheme` (en debug sí).
+- **La causa exacta.** Fuente: `app/build/outputs/mapping/release/usage.txt`. R8 borra en release los **3
+  constructores** de `SignInButton` (y `setStyle`), de `FlexboxLayout`, y `<init>(Context)` de `LottieAnimationView`,
+  `bobur.androidsvg.SVGImageView` y `caverock.androidsvg.SVGImageView`; en total **62 clases** pierden
+  `<init>(android.content.Context)`. La clase sigue en el APK (no es `ClassNotFoundException`), pero R8 solo conserva
+  los miembros que alguien referencia desde el bytecode, y esas vistas las construye **solo** la reflexión de la vista
+  previa → las borra.
+- **Arreglo A (el que resuelve el fallo medido):** 5 reglas `-keepclassmembers` acotadas a
+  `extends android.view.View` para `com.google.android.gms.**`, `com.google.android.flexbox.**`,
+  `com.airbnb.lottie.**`, `com.bobur.androidsvg.**` y `com.caverock.androidsvg.**`.
+- **Arreglo B (robustez):** se **elimina la reflexión** (`app:x → setX`) y se sustituye por **mapeo explícito** con
+  llamadas directas (`SignInButton`, `Lottie`, `Flexbox`); lo no mapeado va al **aviso ámbar** con su motivo, nunca en
+  silencio.
+- **Delta de tamaño (APK release arm64-v8a):** `115.990.072` → **`115.999.964`** = **+9.892 B** (+0,0085 %).
+- **Verificado en release:** el **botón real de Google** se dibuja (antes: contenedor ámbar «≈ SignInButton»); el caso
+  F pasa de «3 vistas aproximadas · 2 atributos no aplicados» a «2 aproximadas · 0 atributos no aplicados» (las 2 que
+  quedan, `AdView` y `YouTubePlayerView`, no están en el APK del editor en ningún build); y los **7/7 casos en claro y
+  7/7 en oscuro** mantienen sus colores (caso A `#123456` **162.773 px**, `#EE2222` **111.016 px**).
+
+![Después: el botón real de Google (logo G + "Sign in with Google") se dibuja en la release](assets/preview-r10-signin.png)
+
+### 14.4 La sospecha que era falsa (corrección honesta)
+
+La ronda 8 se verificó con APK **debug**, y la sospecha al abrir la ronda 10a era que la release con **R8** eliminaba
+lo que el aplicador **por reflexión** necesitaba. **Eso no era lo que pasaba.** Medición: en **todos** los logs de r8 y
+r10a hay **0 coincidencias** de `info: atributo … aplicado con` — el aplicador genérico de atributos por reflexión
+**nunca llegó a dispararse**; los atributos van por appliers con llamadas directas. Y los colores de la **ronda 8 sí
+funcionaban en release**: los 7 casos los aplican. Lo que fallaba estaba **antes**: en la **construcción** de la vista
+(R8 borra el constructor → cae al contenedor de reserva → el atributo no tiene dónde aplicarse). El mapeo explícito del
+arreglo B elimina ese camino frágil para el futuro, pero no porque la reflexión estuviera rota.
+
+### 14.5 Pendientes honestos de la ronda 10
+
+- **Iconos:** el icono del set se dibuja con el relleno del SVG (`#FF000000`) cuando **no** hay fichero del proyecto: el
+  color que eligió el usuario vive en el fichero del proyecto (`SvgUtils.convert(..., colorHex)`), no en el zip. Si el
+  fichero existe, se usa el suyo y se respeta el color.
+- **Etiqueta del aviso:** el grupo ámbar de los iconos del set usa la etiqueta de «nombres heredados resueltos» (viene
+  de `LayoutPreviewActivity`, fuera de este carril); el detalle sí explica el origen de cada uno.
+- **Estilos:** la base del framework para un tema de proyecto es la del APK del editor, no el tema real de la app
+  compilada; y un estilo sin items y sin base se resuelve pero no se aplica (no hay nada que aplicar).
+- **Aviso de diseño no arreglado aquí:** la barra inferior solo se muestra si hay avisos **rojos** o de vista
+  (`hidePreviewWarning()` no mira `getInformativeWarnings()`), así que un problema **solo de estilos** queda visible en
+  el log/detalle pero no en la barra — vive en `LayoutPreviewActivity`.
+- **Cambio de superficie aceptado:** al quitar la reflexión, un atributo de librería **sin** mapeo explícito ya no se
+  intenta aplicar «a ciegas»: sale en el aviso ámbar. Si aparece un atributo nuevo que sí funcionaba por reflexión, hay
+  que añadirlo al mapeo (una línea).
+- **Regresión:** la de las rondas 1‑9 se reejecutó para la pieza de iconos/estilos (r10b: **32/32** capturadas, ningún
+  `Preview OK` perdido, y `caseR4_variants` **mejora** porque ahora también se mira el `res` generado del build). La
+  regresión r1‑r7 de la pieza **release** (r10a) **no** se re-ejecutó.
+- **El proyecto real del usuario y su APK no se han probado**: todo está medido con el proyecto de pruebas 601 y los
+  XML de la ronda 8; el emulador de la pieza release fue un clon propio de `RV_API34` (`emulator-5556`) porque el
+  `emulator-5554` lo conducía otro carril.
+- **Sin commitear** en el árbol de trabajo; `versionCode`/`versionName` los pone esta release a **173 / v7.0.11.0**.
+
+### 14.6 Reproducir (ronda 10)
+
+```bash
+cd /Users/zota/.openclaw/workspace/preview-evidence/r10b
+DIR=$PWD bash run_case_r10b.sh case2_icons case2_icons.xml r10b2_root after_i2_
+bash run_regression_r10b.sh
+# pieza release (R8), emulador propio emulator-5556:
+cd /Users/zota/.openclaw/workspace/preview-evidence/r10a && bash run_case_r10a.sh
+```
+
+### 14.7 Toolchain de Flutter para x86_64 (nota corta)
+
+El APK de la ABI **x86_64** ya **viaja con** su propio toolchain: `jniLibs/x86_64/libdartaotruntime.so`
+(5.873.176 B; el ELF real del `.deb` x86_64 de Termux, que vive en `lib/dart-sdk/bin/`, no el script de shell de
+115 B) y `jniLibs/x86_64/libfluttergensnapshot.so` (5.123.768 B, **compilado** desde las fuentes del Dart SDK 3.13.4
+con `--arch x64c --mode product --os android`, porque Android x64 exige **compressed pointers**; evidencia: el
+`gen_snapshot` oficial del engine, el error del VM y el `strings` del binario). El bloqueo por ABI se sustituye por
+`abiHasAotBackend` (`arm64-v8a` | `x86_64`), mientras `armeabi-v7a`/`x86` siguen avisando; **+4,34 MB solo en x86_64**
+(release 112.136.131 → 116.476.809), arm64 idéntico. **Honesto: la ejecución real en x86_64 no está verificada** — no
+hay imagen x86_64 disponible y compilar/ejecutar en Apple Silicon es inviable. Detalle completo:
+[docs/flutter-consent.md](flutter-consent.md).

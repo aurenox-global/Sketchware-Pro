@@ -37,14 +37,14 @@
 
   <!-- ============================================================ hero -->
   <section class="hero" style="border-top:none">
-    <div class="tag">● v7.0.10.5 · versionCode 172 · source-available</div>
+    <div class="tag">● v7.0.11.0 · versionCode 173 · source-available</div>
     <h1>Build real Android apps<br><span class="accent">from your phone.</span></h1>
     <p class="lead">
       Sketchware Pro is an Android IDE that runs on Android itself: drag blocks, write Java or Kotlin,
       compile on the device and get an installable APK — no computer required.
     </p>
     <div class="btns">
-      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.5" target="_blank" rel="noopener">⬇ Download APK</a>
+      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.11.0" target="_blank" rel="noopener">⬇ Download APK</a>
       <a class="btn ghost" href="https://github.com/aurenox-global/Sketchware-Pro" target="_blank" rel="noopener">View source on GitHub</a>
     </div>
 
@@ -134,12 +134,61 @@
       <span class="k">Top milestones</span>
       <p>
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.0">Flutter running on the device, release/AOT included</a> &middot;
-        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.5">the design preview fixed, rounds 1 to 9</a> &middot;
+        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.11.0">the design preview fixed, rounds 1 to 10</a> &middot;
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.1">the Dart toolchain download is now your decision, and the toolchain no longer says "not installed"</a> &middot;
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.9">Kotlin support in the in-app IDE</a>.
       </p>
     </div>
     <div class="log" id="change-log">
+      <div class="item done featured">
+        <span class="when">2026-09-24 · preview + Flutter</span>
+        <h3>The icons the IDE ships, your project's <code>styles.xml</code>, and the constructors R8 was deleting  <span class="pill feat">highlight</span> <span class="pill ok">fixed</span></h3>
+        <ul class="clean">
+          <li><strong>The icons were inside the APK all along.</strong> The IDE's Material set lives in
+          <code>assets/icons/icon_pack.zip</code> (<strong>5,335,950 B</strong>: <strong>2,191 names × 5 styles =
+          10,955 SVGs</strong>, <code>svg/&lt;name&gt;/&lt;style&gt;.svg</code>), and the icon you pick is converted to
+          a vector XML written to the <strong>project's image store</strong>
+          <code>.sketchware/resources/images/&lt;sc_id&gt;/</code> — <em>not</em> to
+          <code>files/resource/drawable</code>. The preview looked at neither, so the icons came out
+          <strong>red</strong> (<code>2 recursos no encontrados</code>). It now resolves from both <strong>and</strong>
+          from the build's generated <code>res</code>. <strong>Measured:</strong> a red bar with <strong>2 missing
+          resources</strong> and <strong>33,087 red px</strong> becomes <strong>both icons drawn, red=0</strong>, with
+          an <strong>amber</strong> note naming the origin
+          (<code>icon_miscellaneous_services_round -&gt; svg/miscellaneous_services/round.svg</code>).</li>
+          <li><strong>Your project's <code>styles.xml</code> is read in full now.</strong> The reader did not understand
+          <strong>self-closing</strong> <code>&lt;style ... /&gt;</code> — exactly how the IDE generates
+          <code>AppTheme.AppBarOverlay</code>/<code>PopupOverlay</code> — so it lost that style <strong>and swallowed
+          the next one</strong>: <strong>3 of 5</strong> styles were read. It now reads <strong>5 of 5</strong>, also
+          looks in <code>value/</code>, <code>values-v21</code>, <code>values-night</code> and the build's generated
+          <code>res</code>, and a self-closing style with no items wraps the context in the framework base of its
+          parent chain. Result: <strong>zero style warnings</strong> and the project's theme really applies.</li>
+          <li><strong>The release was losing view constructors.</strong> With R8, <strong>62 classes</strong> lose
+          <code>&lt;init&gt;(Context)</code> and several library views (Google's <code>SignInButton</code>,
+          <code>FlexboxLayout</code>, <code>LottieAnimationView</code>, <code>SVGImageView</code>) lose
+          <strong>all three</strong>, so they were drawn as an approximate container. Fixed with <strong>5 narrow
+          <code>-keepclassmembers</code> rules</strong> plus <strong>replacing reflection with an explicit
+          mapping</strong>; anything unmapped goes to the amber notice. Delta: <strong>+9,892 B</strong>. Verified in
+          release: the real Google button is drawn and <strong>7/7 cases in light and 7/7 in dark</strong> keep their
+          colours (case A <code>#123456</code> 162,773 px, <code>#EE2222</code> 111,016 px).</li>
+          <li><strong>Honest correction.</strong> The initial suspicion — <em>"reflection does not work in release"</em>
+          — was <strong>false</strong>: the reflection applier never fired (0 hits in the logs), and the round-8
+          colours <strong>did</strong> work in release. What failed was the construction of the library views. The
+          explicit mapping removes that fragile path anyway, but not because reflection was broken.</li>
+          <li><strong>Flutter toolchain for x86_64.</strong> <code>jniLibs/x86_64/</code> now ships
+          <code>libdartaotruntime.so</code> (5,873,176 B, the real ELF from the Termux x86_64 <code>.deb</code>, which
+          lives in <code>lib/dart-sdk/bin/</code>) and <code>libfluttergensnapshot.so</code> (5,123,768 B, compiled)
+          with <code>--arch x64c --mode product --os android</code> (Android x64 requires compressed pointers); the ABI
+          block becomes <code>abiHasAotBackend</code> (<code>arm64-v8a</code> | <code>x86_64</code>) while
+          <code>armeabi-v7a</code>/<code>x86</code> still warn. Cost: <strong>+4.34 MB in x86_64 only</strong> (release
+          112,136,131 → 116,476,809); arm64 unchanged. <strong>Honest:</strong> actually running it on x86_64 is
+          <strong>not</strong> verified (no x86_64 image available; not viable on Apple Silicon).</li>
+        </ul>
+        <p><img src="assets/preview-r10-icons-before.png" alt="Before: the red bar reads Preview PARCIAL: 2 recursos no encontrados and both icons are missing" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)"> <img src="assets/preview-r10-icons-after.png" alt="After: both Material icons are drawn and the bar is amber, 2 nombres heredados resueltos" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)"> <img src="assets/preview-r10-signin.png" alt="After: the real Google SignInButton (G logo + Sign in with Google) is drawn in the release build" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)"></p>
+        <p>Version <strong>v7.0.11.0</strong> (versionCode 173). The round-10 write-up is at the end of
+        <a href="preview-fix.md">docs/preview-fix.md</a> (and the x86_64 toolchain note in
+        <a href="flutter-consent.md">docs/flutter-consent.md</a>).</p>
+      </div>
+
       <div class="item done featured">
         <span class="when">2026-09-24 · preview</span>
         <h3>Red now means "it cannot be drawn": unresolvable <code>@style</code>/theme references are amber with a reason, and your project's theme paints for real  <span class="pill feat">highlight</span> <span class="pill ok">fixed</span></h3>
