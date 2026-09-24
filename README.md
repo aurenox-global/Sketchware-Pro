@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.10.4-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.10.5-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -160,6 +160,37 @@ This repository is a personal fork. Every improvement is added here as it lands,
 - **Cost:** the two packed executables add **10.18 MB** to the `arm64-v8a` APK. Other ABIs have no AOT backend and
   say so instead of failing silently. The default mode is still **debug/JIT**, this stays experimental and there is
   still no hot reload.
+- **v7.0.10.5 (versionCode 172) — red only when the view cannot be drawn at all, and your project's `@style` and
+  theme now really paint.** Two pieces, both in the design preview. (1) **The red marker was lying.** A `@style/...`
+  reaching `resolveDimen` answered *"referencia de medida no resoluble"*, and a missing `@dimen`/`@android:dimen`,
+  a theme `?attr` that cannot be resolved or a `@style` used as `android:background` were painted **red** even
+  though the view is drawn fine with its default value. Now **red is reserved for what really stops the drawing**
+  (a missing image, a class with no fallback): every style/measure/theme reference that cannot be *applied* moves
+  to the amber group *"No aplicado / ajustado · estilos y medidas (no impide dibujar)"*, always with its reason;
+  the phrase *"referencia de medida"* no longer exists (0 occurrences) and the bar only turns red (`0xB3B00020`)
+  when there are missing resources. The `@style/...` of **your project** are read now too from
+  `files/resource/values/styles.xml` (explicit `parent` + implicit inheritance by dots + chaining up to 6 levels;
+  new `resolveStyle()`/`isStyleReference()`, with fallback to the editor/app/material/appcompat/android styles),
+  so `@style/AppTheme.AppBarOverlay` and `@style/AppTheme.PopupOverlay` are no longer "unresolved" and a style that
+  does not exist is amber, **never red**. **Measured:** before, the bar read **red** `Preview PARCIAL: 1 recurso no
+  encontrado · 2 atributos no aplicados`; after, **not one red block** and an amber bar (`1 atributo no aplicado ·
+  1 estilo/medida no aplicado`). Regression rounds 1-7 (15 XML): the 11 `Preview OK` stay, and `caseR4_mixed` drops
+  from 4 to 3 red resources (one becomes amber). (2) **The theme is applied, not just resolved.** `android:theme`
+  now builds the view *inside* the theme (`ContextThemeWrapper` in `createRealView(bean, contextoDelPadre)`, the
+  children inheriting the parent's context): a style **with a resId** becomes a real theme, a **project-only** style
+  (no resId, it is not compiled into the editor's APK) uses a framework base plus its items mapped onto the view —
+  and the false amber *"un tema no se aplica"* is gone. `app:tabTextAppearance` is applied to the tab `TextView`s
+  (the three sample tabs included): `textSize`, `textColor` (colour and `ColorStateList`), `textStyle`,
+  `textAllCaps`, `fontFamily`, the framework style read from the theme with a type guard. **Measured (pixel
+  counting):** an `AppBarLayout` with `theme="@style/AppTheme.AppBarOverlay"` went from **no background** to taking
+  the theme colour `#FF112233`; tabs with a project `tabTextAppearance` render in **magenta 24sp bold** (9 applied
+  settings); `@android:style/TextAppearance.Widget.TabWidget` resolves by resId 16973901 (3 settings) — **red=0
+  amber=0** in the six screenshots. Regression rounds 5-8 (23 XML) loses no `Preview OK`. **Honest:** the project
+  styles have **no resId** (not compiled into the editor's APK), so their theme is *emulated* (framework base +
+  mapped items); the framework's `?attr/` references inside `tabTextAppearance` are left to the theme; `popupTheme`
+  and `actionBarTheme` are still not applied. Release page:
+  [v7.0.10.5](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.5). Full write-up (in Spanish):
+  [docs/preview-fix.md](docs/preview-fix.md) (round 9).
 - **v7.0.10.4 (versionCode 171) — "the colours show up in none of them", and the reason was a whitelist of 19
   names.** The preview applied the `app:*`/`android:*` attributes through a fixed `switch` of **19 names** and
   **discarded everything else in silence** — no warning, no log — while the design editor (`ViewPane`) did apply them

@@ -841,3 +841,150 @@ falso**, porque la fuente la aplica `applyTextTypeface`. Se marcaron `fontFamily
   los 7 casos + 17 de regresión no ha habido lentitud perceptible, pero no se han medido tiempos.
 - Siguen vigentes los pendientes de las rondas 1-7 (tema del IDE para los `?atributo`, Material3 del proyecto sin
   probar, `<selector>`/`<ripple>`/`<layer-list>` aproximados, todo medido en emulador y no en móvil físico).
+
+---
+
+## 13. Ronda 9 (v7.0.10.5)
+
+Release: <https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.5> · Fecha: 2026-09-24
+Dispositivo: emulador `RV_API34` (`sdk_gphone64_arm64`, arm64-v8a, API 34, `adb root`) · Build del IDE:
+**debug** (`:app:assembleDebug`, arm64-v8a) · Evidencia: `preview-evidence/r9a/` y `preview-evidence/r9b/`.
+
+La ronda 9 va en **dos piezas**: la primera (r9a) quita el rojo mal pintado y resuelve los `@style/...` del
+proyecto; la segunda (r9b) aplica de verdad `android:theme` y `app:tabTextAppearance`. Dos ficheros tocados en
+total, ninguno más (ni README/web/docs, ni `versionCode`/`versionName`):
+
+- `app/src/main/java/pro/sketchware/activities/preview/LayoutPreviewActivity.java`
+- `app/src/main/java/pro/sketchware/activities/preview/ProjectResourceResolver.java`
+
+### 13.1 Pieza A (r9a): regla nueva — rojo solo si la vista NO se puede dibujar
+
+El rojo se reserva a lo que de verdad **impide dibujar** (una imagen que no existe, una clase sin reserva).
+Cualquier referencia de estilo/medida/tema que no se pueda **aplicar** pero que **no impide dibujar** pasa al
+grupo ÁMBAR *"no aplicado / ajustado"*, siempre con su motivo.
+
+| Antes (rojo) | Ahora (ámbar, con motivo) |
+|---|---|
+| `@style/...` llegando a `resolveDimen` → *"referencia de medida no resoluble"* | *"es un estilo, no una medida...; la vista se dibuja igual"* |
+| `@dimen/x` ausente de `dimens.xml` | *"...se dibuja con su valor por defecto"* |
+| `@android:dimen/x` del framework no encontrado | *"...se dibuja con su valor por defecto"* |
+| `?attr/...` de tema no resoluble | *"atributo del tema no aplicable en la vista previa"* |
+| `@style/...` en `android:background` (pasaba a `resolveDrawable` → marcador rojo) | ámbar; ya **no** se pinta el marcador rojo de "drawable no encontrado" |
+
+**Textos del diálogo**: se eliminó por completo la alusión a *"referencia de medida"* (0 ocurrencias en el
+código, verificado con grep). El detalle tiene ahora un grupo explícito:
+
+> `No aplicado / ajustado · estilos y medidas (no impide dibujar; la vista sale con su valor por defecto)`
+
+y la barra cuenta esas referencias como *"N estilos/medidas no aplicados"* (ámbar). La barra solo se pinta roja
+(`0xB3B00020`) cuando hay **recursos no encontrados**; el resto (vistas aproximadas, atributos no aplicados,
+estilos/medidas no aplicados) es ámbar (`0xB3B26A00`).
+
+### 13.2 Pieza A: `@style/...` del proyecto resueltos de verdad
+
+`ProjectResourceResolver` ahora **lee `files/resource/values/styles.xml` del proyecto** (`ensureStylesLoaded()` +
+`parseStyles()`, tolerante a `values/styles.xml`, `value/styles.xml` y `values/style.xml`), con:
+
+- `<item name="...">valor</item>` de cada estilo;
+- `parent="..."` explícito **y** herencia implícita por puntos (`AppTheme.PopupOverlay` → padre `AppTheme`);
+- encadenado de padres hasta 6 niveles (`collectStyleItems`, con `visited` para no entrar en bucles);
+- si el estilo no está en el proyecto, se prueba el APK del editor (`app` / `com.google.android.material` /
+  `androidx.appcompat`) y, para `@android:style/...`, `android`.
+
+API nueva: `resolveStyle(reference, usage)` → `StyleResolution{requested, resolvedName, styleId, items, reason}` y
+`isStyleReference(value)`. Resultado en la vista previa:
+
+- `@style/AppTheme.AppBarOverlay` / `@style/AppTheme.PopupOverlay` → **resueltos** (ya no "no resuelto");
+- `@style/AppTheme.NoExiste` → ámbar *"no esta en files/resource/values/styles.xml ni en el editor"*;
+- lo que no es aplicable a la vista: silencio o ámbar, **nunca rojo**.
+
+Diff completo de la pieza: `preview-evidence/r9a/r9a.diff` (610 líneas; 404 inserciones / 13 borrados).
+
+### 13.3 Pieza A: medición y capturas (antes → después)
+
+| | Barra inferior |
+|---|---|
+| **Antes** (binario de `HEAD`, `16fe17e`) | **ROJA**: `⚠ Preview PARCIAL: 1 recurso no encontrado · 2 atributos no aplicados` |
+| **Después** (build de r9a) | **ÁMBAR / sin rojo**: `ℹ Preview PARCIAL: 1 atributo no aplicado` (caso 1) y `1 atributo no aplicado · 1 estilo/medida no aplicado` (caso 2) |
+
+| Antes (barra roja) | Después (sin rojos) |
+| --- | --- |
+| ![antes](assets/preview-r9-before.png) | ![después](assets/preview-r9-after.png) |
+
+Las cuatro capturas de r9a se revisaron con `view_image`: **0 bloques/píxeles rojos** en el lienzo y la barra
+inferior en ámbar (dorado) tras el arreglo.
+
+**Regresión (casos de rondas anteriores), 15 XML de r6/r7:**
+
+| Caso | r8 (antes) | r9a (ahora) |
+|---|---|---|
+| caseB1_color_attr / caseB3_fondos / caseB6b_img_variantes | Preview OK | **Preview OK** |
+| caseC_material_regresion / caseE_extra | Preview OK | **Preview OK** |
+| caseR6_fallback / caseR6_ten / caseR6_ten_compact | Preview OK | **Preview OK** |
+| caseB2_estilo | PARCIAL 1 atributo | **Preview OK** (mejora de `HEAD`, ver nota) |
+| caseR4_mixed | 4 recursos no encontrados · 1 vista aprox · 1 atributo | **3 recursos no encontrados** · 1 vista aprox · 1 estilo/medida |
+| caseR4_variants | 2 recursos no encontrados | = |
+| caseR6_absent | 1 vista aproximada | = |
+| caseR7_civ_ajustado | 1 atributo no aplicado | = |
+| caseR7_civ_center / _inside / _none / _mixed | Preview OK | **Preview OK** |
+
+**Ningún caso que diera `Preview OK` ha dejado de darlo**; en `caseR4_mixed` un recurso pasa de rojo a ámbar
+(efecto buscado). Nota honesta sobre `caseB2_estilo`: la mejora **no es de esta ronda** — el `HEAD` (`16fe17e`,
+11:56) ya añadía `handled.add("fontFamily")` y los logs de `r8/reg8` se tomaron a las 11:34 con un APK anterior.
+
+### 13.4 Pieza B (r9b): `android:theme` se aplica al construir la vista
+
+Un tema **no se puede inyectar** en una vista ya creada; hay que construirla con el tema. Ahora
+`createRealView(bean, contextoDelPadre)`:
+
+1. lee `theme` del XML y lo resuelve con `resolveStyle()`;
+2. **estilo con resId** (framework/editor): la vista se crea con `new ContextThemeWrapper(contextoDelPadre, resId)`
+   → tema aplicado de verdad, y **los hijos heredan el contexto del padre**;
+3. **estilo SOLO del proyecto** (no compilado en el APK del editor ⇒ sin resId): `ContextThemeWrapper` con base el
+   primer padre del proyecto que sí exista en el framework/Material (`resolveBaseStyleId()`:
+   `AppTheme.AppBarOverlay` → `ThemeOverlay.AppCompat.Dark.ActionBar`) y además se aplican a la vista los items del
+   proyecto que sí son atributos de vista (`colorPrimary`/`colorPrimaryDark`/`colorAccent`/`colorBackground`/
+   `windowBackground`/`background` → fondo; `textColor`/`textSize` → texto);
+4. **estilo no resoluble**: ámbar con el motivo (`resolveStyle`), **nunca rojo**; el atributo `theme` ya **no** emite
+   el viejo aviso ámbar "un tema no se aplica a una vista ya creada".
+
+`app:tabTextAppearance` se aplica a los `TextView` de las pestañas (incluidas las 3 de ejemplo `Tab 1..3`):
+`textSize`, `textColor` (color directo o `ColorStateList`), `textStyle`, `textAllCaps` y `fontFamily`; el estilo del
+framework se lee **del tema** (`ContextThemeWrapper` + `Theme.resolveAttribute`) sin resolver referencias y con
+guarda de tipo (una referencia `?attr/` se deja al tema). El estilo del proyecto manda sobre lo leído del framework.
+
+### 13.5 Pieza B: medición (recuento de píxeles)
+
+- **Caso 1** (`AppBarLayout` con `theme="@style/AppTheme.AppBarOverlay"`): **antes sin fondo** (título blanco casi
+  invisible) → **después toma el color del tema `#FF112233`**. Log: `info: tema @style/AppTheme.AppBarOverlay ->
+  fondo FF112233` · `Preview OK · vistas: 4`. Barra neutra (ya no hay aviso ámbar porque **sí se aplica**).
+- **Caso 2** (`TabLayout` con `app:tabTextAppearance="@style/TabTextAppearance"` del proyecto): "Tab 1..3" en
+  **magenta 24sp negrita**; `9 ajustes en 3 pestanas (resId=0)` · `Preview OK`.
+- **Caso 3** (`@android:style/TextAppearance.Widget.TabWidget`): resuelto **por resId 16973901** → `3 ajustes en 3
+  pestanas` (1 por pestaña: el `textSize` del framework).
+
+Las **6 capturas** (3 antes + 3 después) se revisaron con `view_image` y con **recuento de píxeles** (muestreo 1 de
+cada 2 px): **`red=0 amber=0` en las seis**; las tres después son `Preview OK`.
+
+### 13.6 Pieza B: regresión (rondas 5-8, 23 XML)
+
+Ningún caso que diera `Preview OK` ha dejado de darlo; los que ya eran parciales siguen igual (incluidos
+`caseR5_families`, `caseR5_legacy`, `caseR4_variants`, `caseE_library` y `caseF_google`). Capturas y logs en
+`preview-evidence/r9b/reg/`, script `run_regression9b.sh`, baselines en `preview-evidence/r8/after_case*.log` y
+`preview-evidence/r5/`.
+
+### 13.7 Pendientes honestos de la ronda 9
+
+- **Un estilo del proyecto no tiene resId** (sus `styles.xml` no están compilados en el APK del editor), así que no
+  se puede meter en el `Theme` del sistema: su tema se **emula** con base del framework + items mapeados. Items que
+  no corresponden a atributos de vista (p.ej. `colorControlNormal`, `windowActionBar`) se ignoran sin aviso.
+- **`?attr/` del framework en `tabTextAppearance`** (`?textColorPrimary`, …) **no se resuelven**: hacerlo filtraría
+  colores del tema del editor, así que se dejan al tema (por eso el caso 3 solo ajusta el tamaño, no el color).
+- **`popupTheme` / `actionBarTheme` / `actionBarPopupTheme` siguen sin aplicarse** (mantienen su aviso ámbar).
+- **La base del framework** para un tema de proyecto es la del APK del editor (Material/AppCompat del IDE), no el
+  tema real de la app compilada.
+- **Resolución de estilos limitada a `values/styles.xml`**: estilos definidos solo en subcarpetas de calificador
+  (`values-v21/`) o en librerías locales no se leen.
+- **El proyecto del usuario y su APK no se han probado**: todo está medido con el proyecto de pruebas 601.
+- Los cambios están **sin commitear** en el árbol de trabajo; `versionCode`/`versionName` **no los ha tocado esta
+  ronda** (el árbol ya trae `172` / `v7.0.10.5`).

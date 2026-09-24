@@ -1,5 +1,6 @@
 package pro.sketchware.activities.preview;
 
+import android.content.Context;
 import android.content.res.Resources;
 import android.os.Bundle;
 import android.view.View;
@@ -340,7 +341,11 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
             renderWarningReasons.clear();
             appearanceWarnings.clear();
             for (ViewBean bean : beans) {
-                View view = createRealView(bean);
+                // El contexto del PADRE importa: un hijo se crea con el contexto (y el tema) del
+                // contenedor donde vivira. Los beans llegan en orden de documento, asi que el padre
+                // ya esta creado cuando toca el hijo; si no, se usa el de la actividad.
+                View parentView = bean.parent == null ? null : viewsById.get(bean.parent);
+                View view = createRealView(bean, parentView == null ? null : parentView.getContext());
                 if (view != null) {
                     viewsById.put(bean.id, view);
                     viewIdNames.put(view, bean.id);
@@ -424,7 +429,9 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
      */
     private void showPreviewWarningSummary(int views, int webViews) {
         Map<ProjectResourceResolver.Kind, java.util.Set<String>> byKind = resourceResolver.getWarningsByKind();
+        Map<ProjectResourceResolver.Kind, java.util.Set<String>> informative = resourceResolver.getInformativeByKind();
         int resourceCount = resourceResolver.getWarnings().size();
+        int informativeCount = resourceResolver.getInformativeWarnings().size();
         int viewCount = renderWarnings.size();
         int appearanceCount = appearanceWarnings.size();
         List<ProjectResourceResolver.LegacyResolution> legacy = resourceResolver.getLegacyResolutions();
@@ -443,13 +450,19 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
             parts.add(appearanceCount + (appearanceCount == 1
                     ? " atributo no aplicado" : " atributos no aplicados"));
         }
+        if (informativeCount > 0) {
+            // Referencias de estilo/medida que existen o no, pero que NO impiden dibujar la vista:
+            // se cuentan como aviso AMBAR (no aplicado), nunca como fallo rojo.
+            parts.add(informativeCount + (informativeCount == 1
+                    ? " estilo/medida no aplicado" : " estilos/medidas no aplicados"));
+        }
         if (!legacy.isEmpty()) {
             parts.add(legacy.size() + (legacy.size() == 1 ? " nombre heredado resuelto" : " nombres heredados resueltos"));
         }
         // "PARCIAL" y rojo SOLO cuando algo ha fallado de verdad (recurso que no existe en ninguna
         // fuente). Una vista aproximada o un atributo no aplicable no son un fallo del diseno: se
         // avisan en ambar. Un nombre heredado mapeado es informativo.
-        boolean partial = resourceCount > 0 || viewCount > 0 || appearanceCount > 0;
+        boolean partial = resourceCount > 0 || viewCount > 0 || appearanceCount > 0 || informativeCount > 0;
         boolean error = resourceCount > 0;
         String summary = (partial ? "Preview PARCIAL: " : "Preview: ") + android.text.TextUtils.join(" · ", parts);
         binding.debugStatus.setVisibility(android.view.View.VISIBLE);
@@ -482,6 +495,11 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
         for (String warning : appearanceWarnings) {
             android.util.Log.w(TAG, "warning: [atributo no aplicado] " + warning);
         }
+        for (Map.Entry<ProjectResourceResolver.Kind, java.util.Set<String>> entry : informative.entrySet()) {
+            for (String value : entry.getValue()) {
+                android.util.Log.w(TAG, "warning: [no aplicado · " + entry.getKey().label + "] " + value);
+            }
+        }
     }
 
     /** Quita el aviso de la barra y su listener (previsualizacion correcta). */
@@ -512,6 +530,14 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
         if (!appearanceWarnings.isEmpty()) {
             groups.put("Atributos no aplicados o ajustados a un valor soportado (la vista SI se ha dibujado)",
                     new ArrayList<>(appearanceWarnings));
+        }
+        // Referencias de estilo/medida que no se han podido aplicar: grupo AMBAR "no aplicado". Nada
+        // de "referencia de medida": la vista SI se dibuja, solo se ha ignorado ese valor.
+        Map<ProjectResourceResolver.Kind, java.util.Set<String>> informative = resourceResolver.getInformativeByKind();
+        for (Map.Entry<ProjectResourceResolver.Kind, java.util.Set<String>> entry : informative.entrySet()) {
+            groups.put("No aplicado / ajustado · " + entry.getKey().label
+                            + " (no impide dibujar; la vista sale con su valor por defecto)",
+                    new ArrayList<>(entry.getValue()));
         }
         for (Map.Entry<ProjectResourceResolver.Kind, java.util.Set<String>> entry : byKind.entrySet()) {
             groups.put("Recursos no encontrados · " + entry.getKey().label, new ArrayList<>(entry.getValue()));
@@ -549,7 +575,8 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
             text.append("\nDrawables buscados en: ").append(searched);
         }
         boolean partial = !renderWarnings.isEmpty() || !appearanceWarnings.isEmpty()
-                || !resourceResolver.getWarnings().isEmpty();
+                || !resourceResolver.getWarnings().isEmpty()
+                || !resourceResolver.getInformativeWarnings().isEmpty();
         if (partial) {
             text.append("\n\nEl resto del diseno SI se ha dibujado; solo falta lo listado arriba.");
             if (!renderWarnings.isEmpty()) {
@@ -594,13 +621,22 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
         return new ViewGroup.LayoutParams(width, height);
     }
 
-    private View createRealView(ViewBean bean) {
+    private View createRealView(ViewBean bean, Context parentContext) {
         String className = bean.convert == null ? "" : bean.convert.trim();
         if (className.isEmpty()) {
             className = android.widget.LinearLayout.class.getName();
         }
+        // android:theme / app:theme: la vista (y sus hijos, que heredan su contexto) se construye
+        // DENTRO del tema. Es la unica forma de que el tema se aplique de verdad: un tema no se puede
+        // "inyectar" en una vista ya creada. Para estilos del editor/framework hay un resId y basta
+        // un ContextThemeWrapper; para estilos del PROYECTO (que no estan compilados en el APK del
+        // editor, o sea sin resId) se aplican despues los items que si son atributos de la vista
+        // (colorPrimary/colorBackground -> fondo, textColor/textSize -> texto).
+        Context baseContext = parentContext != null ? parentContext : this;
+        ResolvedTheme theme = resolveViewTheme(bean, baseContext);
+        Context viewContext = theme.context;
         pro.sketchware.utility.InvokeUtil.CreateResult result =
-                pro.sketchware.utility.InvokeUtil.createViewDetailed(this, className);
+                pro.sketchware.utility.InvokeUtil.createViewDetailed(viewContext, className);
         View view = result.view;
         if (view instanceof android.widget.ProgressBar && !(view instanceof android.widget.SeekBar)) {
             // Un ProgressBar creado por reflexion trae el estilo del tema del IDE (circulo
@@ -609,7 +645,7 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
             // ("no se ven los colores"). Cuando el XML pide la barra horizontal (lo que escribe el
             // editor: style="?android:progressBarStyleHorizontal") se construye con ESE estilo del
             // framework, que es exactamente el widget que tendra la app compilada.
-            view = createHorizontalProgressBarIfNeeded(bean, view);
+            view = createHorizontalProgressBarIfNeeded(bean, view, viewContext);
         }
         if (view == null) {
             // La clase no se puede instanciar en el editor (libreria/widat que el IDE no incluye, una
@@ -624,7 +660,10 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
             renderWarningReasons.put(className, reason);
             android.util.Log.w(TAG, "warning: no se pudo crear la vista " + className
                     + " (id=" + bean.id + ") · " + reason);
-            return createApproximateView(className, bean);
+            return createApproximateView(className, bean, viewContext);
+        }
+        if (theme.items != null && !theme.items.isEmpty()) {
+            applyThemeItemsToView(view, theme.items, theme.reference);
         }
         view.setId(android.view.View.generateViewId());
         try {
@@ -640,10 +679,175 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
     }
 
     /**
+     * Contexto con el tema de una vista, resuelto desde {@code android:theme}/{@code app:theme}.
+     *
+     * <p>{@link #context} es el contexto con el que se construye la vista (el del padre envuelto en
+     * un tema cuando el estilo se puede aplicar de verdad). {@link #items} lleva los items del estilo
+     * del PROYECTO cuando no hay resId (los {@code styles.xml} del proyecto no estan compilados en el
+     * APK del editor), que se aplican luego a la vista uno a uno. {@link #styleId} es el resId del
+     * estilo y {@link #reference} el {@code @style/...} original.
+     */
+    private static final class ResolvedTheme {
+        final Context context;
+        final int styleId;
+        final Map<String, String> items;
+        final String reference;
+
+        ResolvedTheme(Context context, int styleId, Map<String, String> items, String reference) {
+            this.context = context;
+            this.styleId = styleId;
+            this.items = items;
+            this.reference = reference;
+        }
+    }
+
+    /**
+     * Resuelve el tema de una vista declarado en XML ({@code android:theme} / {@code app:theme}).
+     *
+     * <p>Si el estilo existe en el editor/framework hay resId y se devuelve un
+     * {@link android.view.ContextThemeWrapper} alrededor del contexto del PADRE: la vista (y sus
+     * hijos, que heredan su contexto) se construyen DENTRO del tema, que es la unica forma de
+     * aplicarlo de verdad. Si el estilo solo existe en {@code files/resource/values/styles.xml} del
+     * proyecto no hay resId posible: se devuelven sus items para aplicarlos despues a la vista. Si el
+     * estilo no se puede resolver, {@code resolveStyle} ya lo anota en AMBAR con el motivo (nunca
+     * rojo: un tema que no se aplica no impide dibujar la vista) y se devuelve el contexto tal cual.
+     */
+    private ResolvedTheme resolveViewTheme(ViewBean bean, Context baseContext) {
+        String reference = "";
+        for (android.util.Pair<String, String> pair
+                : new pro.sketchware.utility.InjectAttributeHandler(bean).getAttributes()) {
+            if ("theme".equals(localAttrName(pair.first)) && pair.second != null
+                    && !pair.second.trim().isEmpty()) {
+                reference = pair.second.trim();
+            }
+        }
+        if (reference.isEmpty()
+                || !ProjectResourceResolver.isStyleReference(reference)) {
+            return new ResolvedTheme(baseContext, 0, null, reference);
+        }
+        ProjectResourceResolver.StyleResolution resolution =
+                resourceResolver.resolveStyle(reference, "theme");
+        if (resolution == null || !resolution.isUsable()) {
+            return new ResolvedTheme(baseContext, 0, null, reference);
+        }
+        if (resolution.styleId != 0) {
+            try {
+                android.util.Log.i(TAG, "info: tema aplicado a la vista"
+                        + " (ContextThemeWrapper resId=" + resolution.styleId + ") " + reference);
+                return new ResolvedTheme(
+                        new android.view.ContextThemeWrapper(baseContext, resolution.styleId),
+                        resolution.styleId, null, reference);
+            } catch (Throwable throwable) {
+                android.util.Log.w(TAG, "warning: no se pudo envolver el contexto en "
+                        + reference, throwable);
+            }
+        }
+        // Estilo SOLO del proyecto (sin resId): se envuelve el contexto en un ContextThemeWrapper con
+        // la mejor BASE real disponible (el padre del framework, p.ej. ThemeOverlay.AppCompat...) y
+        // ademas se aplican a la vista los items del proyecto.
+        int baseStyleId = resourceResolver.resolveBaseStyleId(reference);
+        Context themeContext = baseContext;
+        if (baseStyleId != 0) {
+            try {
+                themeContext = new android.view.ContextThemeWrapper(baseContext, baseStyleId);
+                android.util.Log.i(TAG, "info: tema del proyecto " + reference
+                        + ", base del framework resId=" + baseStyleId);
+            } catch (Throwable throwable) {
+                android.util.Log.w(TAG, "warning: no se pudo envolver el contexto en "
+                        + reference, throwable);
+            }
+        } else {
+            android.util.Log.i(TAG, "info: tema del proyecto " + reference
+                    + ", sin resId ni base del framework; se aplican sus items a la vista");
+        }
+        return new ResolvedTheme(themeContext, baseStyleId, resolution.items, reference);
+    }
+
+    /**
+     * Aplica a una vista los items de un tema del proyecto ({@code @style/...} sin resId) que SI son
+     * atributos de la propia vista. Es lo mas cerca de "aplicar el tema" que se puede llegar cuando
+     * el estilo no esta compilado en el APK del editor: se emula lo que el tema le hace al widget
+     * ({@code colorPrimary}/{@code colorBackground}/{@code windowBackground} -> fondo del contenedor;
+     * {@code textColor}/{@code textSize} -> texto). El resto de items se ignoran en silencio (no se
+     * avisa en ambar por cada item: el tema SI se ha resuelto y la vista se dibuja con el tema).
+     */
+    private void applyThemeItemsToView(View view, Map<String, String> items, String reference) {
+        try {
+            String background = themeItem(items, "background");
+            String primary = themeItem(items, "colorPrimary", "colorPrimaryDark",
+                    "colorPrimaryVariant", "colorAccent");
+            String window = themeItem(items, "windowBackground", "colorBackground");
+            int color = 0;
+            if (background != null) {
+                color = resourceResolver.resolveColor(view, background, 0);
+            }
+            if (isColorNotSet(color) && primary != null) {
+                color = resourceResolver.resolveColor(view, primary, 0);
+            }
+            if (isColorNotSet(color) && window != null) {
+                color = resourceResolver.resolveColor(view, window, 0);
+            }
+            if (!isColorNotSet(color) && view instanceof ViewGroup) {
+                view.setBackgroundColor(color);
+                android.util.Log.i(TAG, "info: tema " + reference + " -> fondo "
+                        + String.format("%08X", color));
+            }
+            if (view instanceof android.widget.TextView textView) {
+                String textColor = themeItem(items, "textColor");
+                if (textColor != null) {
+                    int resolved = resourceResolver.resolveColor(textView, textColor, 0);
+                    if (!isColorNotSet(resolved)) {
+                        textView.setTextColor(resolved);
+                    }
+                }
+                String textSize = themeItem(items, "textSize");
+                if (textSize != null) {
+                    float size = parseTextSizeSp(textSize);
+                    if (size > 0) {
+                        textView.setTextSize(size);
+                    }
+                }
+            }
+        } catch (Throwable throwable) {
+            android.util.Log.w(TAG, "warning: no se pudieron aplicar los items del tema "
+                    + reference, throwable);
+        }
+    }
+
+    /** Primer item presente de la lista (el nombre puede venir con prefijo {@code android:}). */
+    private static String themeItem(Map<String, String> items, String... names) {
+        if (items == null || items.isEmpty()) {
+            return null;
+        }
+        for (String name : names) {
+            for (Map.Entry<String, String> entry : items.entrySet()) {
+                if (name.equals(localAttrName(entry.getKey()))) {
+                    return entry.getValue();
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Tamano de texto en sp a partir de un valor de {@code styles.xml} ("22sp", "22", "22dp"). */
+    private static float parseTextSizeSp(String value) {
+        if (value == null) {
+            return 0f;
+        }
+        String v = value.trim().toLowerCase(Locale.US).replace("sp", "").replace("dp", "")
+                .replace("px", "").replace("pt", "").replace("in", "").replace("mm", "").trim();
+        try {
+            return Float.parseFloat(v);
+        } catch (NumberFormatException ignored) {
+            return 0f;
+        }
+    }
+
+    /**
      * Devuelve un ProgressBar HORIZONTAL cuando el bean lo pide (style del XML o progressStyle del
      * bean). Si no, devuelve el mismo que le han pasado (circulo indeterminado), sin tocarlo.
      */
-    private View createHorizontalProgressBarIfNeeded(ViewBean bean, View progressBar) {
+    private View createHorizontalProgressBarIfNeeded(ViewBean bean, View progressBar, Context context) {
         var handler = new pro.sketchware.utility.InjectAttributeHandler(bean);
         String style = handler.getAttributeValueOf("style");
         boolean horizontal = style.toLowerCase(Locale.US).contains("horizontal")
@@ -653,7 +857,7 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
             return progressBar;
         }
         try {
-            return new android.widget.ProgressBar(this, null,
+            return new android.widget.ProgressBar(context, null,
                     android.R.attr.progressBarStyleHorizontal);
         } catch (Throwable throwable) {
             android.util.Log.w(TAG, "warning: no se pudo crear el ProgressBar horizontal", throwable);
@@ -698,8 +902,8 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
      *       mudos. El motivo exacto va al detalle (y al log).</li>
      * </ul>
      */
-    private View createApproximateView(String className, ViewBean bean) {
-        android.widget.FrameLayout container = new android.widget.FrameLayout(this);
+    private View createApproximateView(String className, ViewBean bean, Context context) {
+        android.widget.FrameLayout container = new android.widget.FrameLayout(context);
         try {
             applyBeanAppearance(container, bean);
         } catch (Throwable throwable) {
@@ -1125,6 +1329,15 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
             ensureTabLayoutHasSampleTabs(tabLayout);
             pro.sketchware.utility.WidgetInjectApplier.applyTabLayout(tabLayout, handler, resolver);
             handled.addAll(TAB_LAYOUT_ATTRIBUTES);
+            // app:tabTextAppearance: es una apariencia de texto SOLO-XML (no hay setter). Se aplica a
+            // los TextView de las pestanas (incluidas las 3 de ejemplo) lo que se pueda: resId del
+            // estilo -> ContextThemeWrapper; estilo del proyecto -> sus items (textSize/textColor/
+            // textStyle/typeface). Si no se puede resolver, resolveStyle ya avisa en AMBAR.
+            String tabTextAppearance = handler.getAttributeValueOf("tabTextAppearance");
+            if (!tabTextAppearance.trim().isEmpty()) {
+                applyTabTextAppearance(tabLayout, tabTextAppearance.trim());
+                handled.add("tabTextAppearance");
+            }
         }
         if (view instanceof de.hdodenhof.circleimageview.CircleImageView circleImageView) {
             pro.sketchware.utility.WidgetInjectApplier.applyCircleImageView(circleImageView, handler, resolver);
@@ -1178,6 +1391,185 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
         for (int i = 1; i <= 3; i++) {
             tabLayout.addTab(tabLayout.newTab().setText("Tab " + i), i == 1);
         }
+    }
+
+    /**
+     * Aplica {@code app:tabTextAppearance} a los TextView de las pestanas de un TabLayout.
+     *
+     * <p>Es un atributo SOLO-XML (no hay setter publico equivalente), asi que se resuelve el estilo y
+     * se aplica a mano a cada TextView de pestana lo que se pueda:
+     * <ul>
+     *   <li>estilo con resId (framework/editor, p.ej. {@code @android:style/TextAppearance.Widget.
+     *       TabWidget}): se lee su valor del TEMA ({@link android.view.ContextThemeWrapper} +
+     *       {@code Theme.resolveAttribute}): {@code textSize}, {@code textColor}, {@code textStyle},
+     *       {@code textAllCaps} y {@code fontFamily}. No se construye un TextView para leerlo porque
+     *       un TextAppearance del framework puede no declarar todos los atributos y el constructor
+     *       falla; asi solo se aplica lo que el estilo define de verdad;</li>
+     *   <li>estilo del proyecto (sin resId): se leen sus items {@code textSize}, {@code textColor},
+     *       {@code textStyle}, {@code textAllCaps} y {@code fontFamily} y se aplican.</li>
+     * </ul>
+     * Si el estilo no se puede resolver, {@code resolveStyle} ya lo anota en AMBAR con el motivo; aqui
+     * no se toca nada y las pestanas se quedan con su apariencia por defecto (nunca rojo).
+     */
+    private void applyTabTextAppearance(com.google.android.material.tabs.TabLayout tabLayout, String reference) {
+        try {
+            ProjectResourceResolver.StyleResolution resolution =
+                    resourceResolver.resolveStyle(reference, "tabTextAppearance");
+            if (resolution == null || !resolution.isUsable()) {
+                return;
+            }
+            Float sizeSp = null;
+            Integer textColor = null;
+            android.content.res.ColorStateList textColors = null;
+            int typefaceStyle = -1;
+            Boolean allCaps = null;
+            android.graphics.Typeface typeface = null;
+            // 1) Estilo del editor/framework: sus valores se leen del TEMA (sin construir vistas).
+            //    Se lee SIN resolver referencias y con guarda de TIPO: solo se aplica lo que el estilo
+            //    declara como valor propio (una referencia ?attr/ del framework se deja al tema, que si
+            //    la aplicara resolverla aqui filtraria colores del tema del editor).
+            if (resolution.styleId != 0) {
+                try {
+                    android.content.res.Resources.Theme styleTheme =
+                            new android.view.ContextThemeWrapper(tabLayout.getContext(),
+                                    resolution.styleId).getTheme();
+                    android.util.TypedValue value = new android.util.TypedValue();
+                    if (styleTheme.resolveAttribute(android.R.attr.textSize, value, false)
+                            && value.type == android.util.TypedValue.TYPE_DIMENSION) {
+                        float px = value.getDimension(tabLayout.getResources().getDisplayMetrics());
+                        if (px > 0) {
+                            sizeSp = px / tabLayout.getResources().getDisplayMetrics().scaledDensity;
+                        }
+                    }
+                    if (styleTheme.resolveAttribute(android.R.attr.textColor, value, false)) {
+                        if (value.type >= android.util.TypedValue.TYPE_FIRST_COLOR_INT
+                                && value.type <= android.util.TypedValue.TYPE_LAST_COLOR_INT) {
+                            textColor = value.data;
+                        } else if (value.resourceId != 0) {
+                            try {
+                                textColors = tabLayout.getContext().getResources()
+                                        .getColorStateList(value.resourceId, styleTheme);
+                            } catch (Throwable ignored) {
+                                android.util.Log.d(TAG, "textAppearance: color no legible", ignored);
+                            }
+                        }
+                    }
+                    if (styleTheme.resolveAttribute(android.R.attr.textStyle, value, false)
+                            && value.type == android.util.TypedValue.TYPE_INT_DEC) {
+                        typefaceStyle = value.data;
+                    }
+                    if (styleTheme.resolveAttribute(android.R.attr.textAllCaps, value, false)
+                            && value.type == android.util.TypedValue.TYPE_INT_BOOLEAN) {
+                        allCaps = value.data != 0;
+                    }
+                    if (styleTheme.resolveAttribute(android.R.attr.fontFamily, value, false)
+                            && value.type == android.util.TypedValue.TYPE_STRING) {
+                        typeface = resolveTypeface(value.string == null ? null : value.string.toString());
+                    }
+                } catch (Throwable throwable) {
+                    android.util.Log.w(TAG, "warning: no se pudo leer el textAppearance "
+                            + reference, throwable);
+                }
+            }
+            // 2) Items del estilo del proyecto (sobre todo cuando no hay resId); el proyecto MANDA
+            // sobre lo leido del tema del framework.
+            Map<String, String> items = resolution.items == null ? Map.of() : resolution.items;
+            String sizeValue = themeItem(items, "textSize");
+            if (sizeValue != null) {
+                float parsed = parseTextSizeSp(sizeValue);
+                if (parsed > 0) {
+                    sizeSp = parsed;
+                }
+            }
+            String colorValue = themeItem(items, "textColor");
+            if (colorValue != null) {
+                int parsed = resourceResolver.resolveColor(tabLayout, colorValue, 0);
+                if (!isColorNotSet(parsed)) {
+                    textColor = parsed;
+                    textColors = null;
+                }
+            }
+            String styleValue = themeItem(items, "textStyle");
+            if (styleValue != null) {
+                typefaceStyle = parseTextStyle(styleValue);
+            }
+            Boolean itemCaps = parseBooleanOrNull(themeItem(items, "textAllCaps"));
+            if (itemCaps != null) {
+                allCaps = itemCaps;
+            }
+            String familyValue = themeItem(items, "fontFamily");
+            if (familyValue != null) {
+                typeface = resolveTypeface(familyValue);
+            }
+            int applied = 0;
+            for (int i = 0; i < tabLayout.getTabCount(); i++) {
+                com.google.android.material.tabs.TabLayout.Tab tab = tabLayout.getTabAt(i);
+                if (tab == null) {
+                    continue;
+                }
+                android.widget.TextView tabText = findTextView(tab.view);
+                if (tabText == null) {
+                    continue;
+                }
+                if (sizeSp != null) {
+                    tabText.setTextSize(sizeSp);
+                    applied++;
+                }
+                if (textColors != null) {
+                    tabText.setTextColor(textColors);
+                    applied++;
+                } else if (textColor != null) {
+                    tabText.setTextColor(textColor);
+                    applied++;
+                }
+                if (typefaceStyle >= 0) {
+                    tabText.setTypeface(null, typefaceStyle);
+                    applied++;
+                }
+                if (typeface != null) {
+                    tabText.setTypeface(typeface);
+                    applied++;
+                }
+                if (allCaps != null) {
+                    tabText.setAllCaps(allCaps);
+                    applied++;
+                }
+            }
+            android.util.Log.i(TAG, "info: tabTextAppearance " + reference + " -> " + applied
+                    + " ajustes en" + " " + tabLayout.getTabCount() + " pestanas (resId="
+                    + resolution.styleId + ")");
+        } catch (Throwable throwable) {
+            android.util.Log.w(TAG, "warning: no se pudo aplicar tabTextAppearance "
+                    + reference, throwable);
+        }
+    }
+
+    /** Booleano del valor de un item, o null si no es un booleano utilizable. */
+    private static Boolean parseBooleanOrNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String v = value.trim();
+        if ("true".equalsIgnoreCase(v) || "false".equalsIgnoreCase(v)) {
+            return Boolean.parseBoolean(v);
+        }
+        return null;
+    }
+
+    /** Primer TextView del subarbol de una vista (el texto de una pestana de TabLayout). */
+    private static android.widget.TextView findTextView(View view) {
+        if (view instanceof android.widget.TextView textView) {
+            return textView;
+        }
+        if (view instanceof ViewGroup group) {
+            for (int i = 0; i < group.getChildCount(); i++) {
+                android.widget.TextView found = findTextView(group.getChildAt(i));
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
     }
 
     private void applyProgressBarAttributes(android.widget.ProgressBar progressBar, ViewBean bean,
@@ -1437,6 +1829,12 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
             switch (name) {
                 // ------------------------------------------------ comunes a cualquier vista
                 case "background": {
+                    if (pro.sketchware.activities.preview.ProjectResourceResolver.isStyleReference(value)) {
+                        // Un @style/... no puede ser un fondo: AMBAR (la vista se dibuja con su fondo
+                        // por defecto), nunca el marcador rojo de "drawable no encontrado".
+                        resourceResolver.resolveStyle(value, "background");
+                        return null;
+                    }
                     if (value.startsWith("#") || value.startsWith("@color/")
                             || value.startsWith("@android:color/") || value.startsWith("?")) {
                         int color = resourceResolver.resolveColor(view, value, 0);
@@ -1974,6 +2372,52 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
                     }
                     return "queryHint solo aplica a SearchView";
 
+                // ------------------------------------------------ referencias de estilo del proyecto
+                // Un @style/... (theme, textAppearance, popupTheme...) NO impide dibujar la vista: si
+                // el estilo existe -en files/resource/values/styles.xml del proyecto o en el APK del
+                // editor- se resuelve (deja de ser "no resuelto"), y si no, se avisa en AMBAR con el
+                // motivo. Nunca rojo: la vista se dibuja igual, solo sin ese estilo.
+                case "theme": {
+                    // El tema ya se ha aplicado al CREAR la vista (resolveViewTheme: ContextThemeWrapper
+                    // con el contexto del padre, o items del estilo del proyecto sobre la vista). Aqui
+                    // solo queda resolverlo para acreditar que existe; si no se puede, resolveStyle ya
+                    // avisa en AMBAR con el motivo (nunca rojo).
+                    resourceResolver.resolveStyle(value, name);
+                    return null;
+                }
+                case "popupTheme":
+                case "actionBarTheme":
+                case "actionBarPopupTheme": {
+                    // Un TEMA no se puede aplicar a una vista ya creada (habria que construirla con un
+                    // ContextThemeWrapper). El estilo SI se resuelve; solo no se aplica -> ambar.
+                    pro.sketchware.activities.preview.ProjectResourceResolver.StyleResolution resolution =
+                            resourceResolver.resolveStyle(value, name);
+                    if (resolution != null && resolution.isUsable()) {
+                        return "estilo del proyecto resuelto (" + value
+                                + "); un tema no se aplica a una vista ya creada: se dibuja con el tema del editor";
+                    }
+                    return null; // no resoluble: resolveStyle ya lo ha avisado en ambar con el motivo
+                }
+                case "style":
+                case "textAppearance":
+                case "textAppearanceSmall":
+                case "textAppearanceLarge":
+                case "hintTextAppearance":
+                case "tabTextAppearance":
+                case "titleTextAppearance":
+                case "subtitleTextAppearance":
+                case "tooltipTextAppearance":
+                case "helperTextTextAppearance":
+                case "errorTextAppearance": {
+                    if (!pro.sketchware.activities.preview.ProjectResourceResolver.isStyleReference(value)) {
+                        return "solo se aplican estilos (@style/...): " + value;
+                    }
+                    // resolveStyle ya anota en ambar (con el motivo real) cuando no se puede resolver;
+                    // aqui se devuelve null para no duplicar el mismo aviso en la lista de atributos.
+                    resourceResolver.resolveStyle(value, name);
+                    return null;
+                }
+
                 // ------------------------------------------------ piezas que la vista previa no
                 // puede resolver porque se configuran por CODIGO en la app compilada
                 case "menu":
@@ -1985,6 +2429,17 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
                     return "SwipeRefreshLayout define sus colores en codigo (setColorSchemeColors)";
 
                 default:
+                    if (pro.sketchware.activities.preview.ProjectResourceResolver.isStyleReference(value)) {
+                        // Referencia de estilo en un atributo que la vista previa no sabe aplicar a
+                        // esta vista: AMBAR con el motivo (existe o no el estilo), nunca rojo.
+                        pro.sketchware.activities.preview.ProjectResourceResolver.StyleResolution resolution =
+                                resourceResolver.resolveStyle(value, name);
+                        if (resolution != null && resolution.isUsable()) {
+                            return "referencia de estilo no aplicable a esta vista (" + value
+                                    + " · el estilo del proyecto SI existe)";
+                        }
+                        return "referencia de estilo no resoluble en la vista previa (" + value + ")";
+                    }
                     return "atributo no reconocido por la lista de la vista previa";
             }
         } catch (Throwable throwable) {

@@ -24,6 +24,7 @@ import java.io.File;
 import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -56,6 +57,20 @@ public class ProjectResourceResolver {
     private static final Pattern DIMEN_ENTRY = Pattern.compile(
             "<dimen\\s+name=\"([^\"]+)\"\\s*>\\s*([^<\\s]+)\\s*</dimen>");
 
+    /** Nombre de un <style name="...">. */
+    private static final Pattern STYLE_NAME = Pattern.compile("name\\s*=\\s*\"([^\"]+)\"");
+
+    /** Padre de un <style parent="...">. */
+    private static final Pattern STYLE_PARENT = Pattern.compile("parent\\s*=\\s*\"([^\"]+)\"");
+
+    /** Entrada de un <style> del proyecto: <item name="...">valor</item>. */
+    private static final Pattern STYLE_ITEM = Pattern.compile(
+            "<item\\s+name=\"([^\"]+)\"\\s*>\\s*([^<]*?)\\s*</item>");
+
+    /** Bloque completo de un <style ...>cuerpo</style> (con DOTALL: el cuerpo lleva saltos). */
+    private static final Pattern STYLE_BLOCK = Pattern.compile(
+            "<style\\s+([^>]*)>(.*?)</style>", Pattern.DOTALL);
+
     /** Extensiones de imagen que sabemos leer, en orden de preferencia. */
     private static final String[] DRAWABLE_EXTENSIONS = {".xml", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"};
 
@@ -75,6 +90,7 @@ public class ProjectResourceResolver {
         THEME("atributos de tema"),
         DRAWABLE("drawables/imagenes"),
         FONT("fuentes"),
+        STYLE("estilos y medidas"),
         OTHER("otros");
 
         public final String label;
@@ -86,6 +102,23 @@ public class ProjectResourceResolver {
 
     /** Cosas que la vista previa no ha podido resolver, agrupadas por causa. */
     private final Map<Kind, Set<String>> warningsByKind = new java.util.EnumMap<>(Kind.class);
+
+    /**
+     * Referencias que NO se han podido aplicar pero que TAMPOCO impiden dibujar la vista (estilos y
+     * medidas: un {@code android:theme} sin equivalente, un {@code @dimen} que falta, un
+     * {@code tabTextAppearance} de plataforma sin traducir...). Se guardan aparte de
+     * {@link #warningsByKind} a proposito: la regla del proyecto es que el ROJO se reserva a lo que
+     * de verdad no se puede dibujar (una imagen que no existe, una clase sin reserva). Estas van al
+     * aviso AMBAR "no aplicado / ajustado", con su motivo.
+     */
+    private final Map<Kind, Set<String>> informativeByKind = new java.util.EnumMap<>(Kind.class);
+
+    /** Estilos del proyecto leidos de files/resource/values/styles.xml (nombre -> estilo). */
+    private final Map<String, ProjectStyle> styleCache = new LinkedHashMap<>();
+    /** Resoluciones de @style/... ya calculadas (referencia tal cual -> resolucion). */
+    private final Map<String, StyleResolution> styleResolutionCache = new LinkedHashMap<>();
+    /** Referencias de estilo ya avisadas en ambar, para no repetir el mismo aviso por vista. */
+    private final Set<String> styleNotes = new LinkedHashSet<>();
 
     /** Drawables buscados solo en librerias/otras rutas (se indexa una vez por resolver). */
     private List<File> libraryDrawableDirs;
@@ -120,6 +153,47 @@ public class ProjectResourceResolver {
 
     private boolean colorsLoaded;
     private boolean dimensLoaded;
+    private boolean stylesLoaded;
+
+    /** Un <style> del proyecto: nombre, padre (tal cual) y sus <item>. */
+    public static final class ProjectStyle {
+        public final String name;
+        public final String parent;
+        public final Map<String, String> items = new LinkedHashMap<>();
+
+        ProjectStyle(String name, String parent) {
+            this.name = name;
+            this.parent = parent;
+        }
+    }
+
+    /**
+     * Resultado de traducir una referencia {@code @style/...} a algo que la vista previa pueda
+     * aplicar de verdad.
+     */
+    public static final class StyleResolution {
+        /** Referencia tal cual venia en el XML. */
+        public final String requested;
+        /** Nombre del estilo dentro de la cadena que SI existe en tiempo de ejecucion (null si no). */
+        public final String resolvedName;
+        /** Id de recurso de estilo disponible en el APK del editor (0 = no hay equivalente). */
+        public final int styleId;
+        /** Items del estilo del proyecto fusionados con los de sus padres (vacio si no es del proyecto). */
+        public final Map<String, String> items = new LinkedHashMap<>();
+        /** Motivo cuando no se ha podido traducir (para el aviso ambar). */
+        public final String reason;
+
+        StyleResolution(String requested, String resolvedName, int styleId, String reason) {
+            this.requested = requested;
+            this.resolvedName = resolvedName;
+            this.styleId = styleId;
+            this.reason = reason;
+        }
+
+        public boolean isUsable() {
+            return styleId != 0 || !items.isEmpty();
+        }
+    }
 
     public ProjectResourceResolver(Context context, String scId) {
         this.context = context;
@@ -133,6 +207,27 @@ public class ProjectResourceResolver {
             flat.addAll(values);
         }
         return flat;
+    }
+
+    /**
+     * Referencias de estilo/medida que no se han podido aplicar y que NO impiden dibujar la vista.
+     * La vista previa las presenta en AMBAR (grupo "no aplicado / ajustado"), nunca en rojo.
+     */
+    public List<String> getInformativeWarnings() {
+        List<String> flat = new ArrayList<>();
+        for (Set<String> values : informativeByKind.values()) {
+            flat.addAll(values);
+        }
+        return flat;
+    }
+
+    /** Como {@link #getInformativeWarnings()} pero agrupado por causa. */
+    public Map<Kind, Set<String>> getInformativeByKind() {
+        Map<Kind, Set<String>> copy = new java.util.EnumMap<>(Kind.class);
+        for (Map.Entry<Kind, Set<String>> entry : informativeByKind.entrySet()) {
+            copy.put(entry.getKey(), new LinkedHashSet<>(entry.getValue()));
+        }
+        return copy;
     }
 
     /** Avisos agrupados por causa (para el resumen y el detalle en pantalla). */
@@ -156,6 +251,7 @@ public class ProjectResourceResolver {
 
     public void clearWarnings() {
         warningsByKind.clear();
+        informativeByKind.clear();
         legacyResolutions.clear();
     }
 
@@ -170,6 +266,15 @@ public class ProjectResourceResolver {
      */
     public void addExternalWarning(Kind kind, String message) {
         warning(kind, message);
+    }
+
+    /**
+     * Anota una referencia que no se ha podido APLICAR pero que no impide dibujar la vista (estilo o
+     * medida). Va al aviso ambar, no al rojo, y siempre con el motivo.
+     */
+    public void warningInformative(Kind kind, String message) {
+        informativeByKind.computeIfAbsent(kind, k -> new LinkedHashSet<>()).add(message);
+        android.util.Log.w("LayoutPreview", "warning: no aplicado [" + kind.label + "]: " + message);
     }
 
     private void ensureColorsLoaded() {
@@ -255,7 +360,10 @@ public class ProjectResourceResolver {
             if (color != 0) {
                 return color;
             }
-            warning(Kind.THEME, v + " (atributo del tema no resoluble en la vista previa)");
+            // AMBAR, no rojo: un atributo de tema que no se puede resolver NO impide dibujar la
+            // vista; se dibuja con el color que ya tuviera. (Regla del proyecto: el rojo se reserva
+            // a lo que de verdad no se puede dibujar.)
+            warningInformative(Kind.THEME, v + " (atributo del tema no aplicable en la vista previa)");
             return fallback;
         }
         return fallback;
@@ -290,7 +398,7 @@ public class ProjectResourceResolver {
             if (cached != null) {
                 return cached;
             }
-            warning(Kind.OTHER, v + " (no esta en files/resource/values/dimens.xml)");
+            warningInformative(Kind.STYLE, v + " (no esta en files/resource/values/dimens.xml; la vista se dibuja con su valor por defecto)");
             return fallback;
         }
         if (v.startsWith("@android:dimen/")) {
@@ -299,11 +407,21 @@ public class ProjectResourceResolver {
             if (id != 0) {
                 return context.getResources().getDimensionPixelSize(id);
             }
-            warning(Kind.OTHER, v + " (medida del framework no encontrada)");
+            warningInformative(Kind.STYLE, v + " (medida del framework no encontrada; la vista se dibuja con su valor por defecto)");
+            return fallback;
+        }
+        if (v.startsWith("@style/") || v.startsWith("@android:style/") || v.startsWith("@style:")) {
+            // Un estilo NO es una medida: si alguien lo manda aqui (p.ej. "@style/x" en un atributo
+            // que el editor espera numerico) no se puede convertir a px. Antes esto se avisaba como
+            // "referencia de medida no resoluble" y ademas contaba como RECURSO NO ENCONTRADO (rojo),
+            // cuando la vista se dibuja perfectamente. Ahora es un aviso AMBAR con el motivo real.
+            warningInformative(Kind.STYLE, v
+                    + " (es un estilo, no una medida: no se puede convertir a px; la vista se dibuja igual)");
             return fallback;
         }
         if (v.startsWith("@") || v.startsWith("?")) {
-            warning(Kind.OTHER, v + " (referencia de medida no resoluble en la vista previa)");
+            warningInformative(Kind.STYLE, v
+                    + " (valor no aplicable en la vista previa; la vista se dibuja con su valor por defecto)");
             return fallback;
         }
         int parsed = parseDimen(v);
@@ -361,6 +479,226 @@ public class ProjectResourceResolver {
         }
     }
 
+    // ------------------------------------------------------------------ estilos del proyecto
+
+    /**
+     * Carga (una vez) los estilos del proyecto desde files/resource/values/styles.xml.
+     *
+     * <p>Por que hacia falta (ronda 9a): un XML que referencia {@code @style/AppTheme.PopupOverlay}
+     * (estilo del PROYECTO, no del APK del editor) no tenia forma de resolverse, asi que la vista
+     * previa lo daba por no encontrado y ademas lo pintaba en ROJO. Los estilos del proyecto SI se
+     * pueden leer del disco, igual que los colores o las medidas.
+     */
+    private void ensureStylesLoaded() {
+        if (stylesLoaded) {
+            return;
+        }
+        stylesLoaded = true;
+        String[] candidates = {"values/styles.xml", "value/styles.xml", "values/style.xml"};
+        for (String candidate : candidates) {
+            File file = new File(new FilePathUtil().getPathResource(scId), candidate);
+            if (!file.isFile()) {
+                continue;
+            }
+            String content = FileUtil.readFile(file.getAbsolutePath());
+            if (content == null) {
+                continue;
+            }
+            parseStyles(content);
+        }
+    }
+
+    /**
+     * Lee los bloques {@code <style>} de un styles.xml del proyecto. Si un estilo no declara
+     * {@code parent} pero su nombre lleva puntos ({@code AppTheme.PopupOverlay}), se toma como padre
+     * la parte anterior al ultimo punto (convencion de Android), para poder encadenar herencia.
+     */
+    private void parseStyles(String content) {
+        Matcher block = STYLE_BLOCK.matcher(content);
+        while (block.find()) {
+            String attributes = block.group(1) == null ? "" : block.group(1);
+            String body = block.group(2) == null ? "" : block.group(2);
+            Matcher nameMatcher = STYLE_NAME.matcher(attributes);
+            if (!nameMatcher.find()) {
+                continue;
+            }
+            String name = nameMatcher.group(1).trim();
+            String parent = null;
+            Matcher parentMatcher = STYLE_PARENT.matcher(attributes);
+            if (parentMatcher.find()) {
+                parent = parentMatcher.group(1).trim();
+            } else {
+                int dot = name.lastIndexOf('.');
+                if (dot > 0) {
+                    parent = name.substring(0, dot);
+                }
+            }
+            ProjectStyle style = styleCache.get(name);
+            if (style == null) {
+                style = new ProjectStyle(name, parent);
+                styleCache.put(name, style);
+            }
+            Matcher item = STYLE_ITEM.matcher(body);
+            while (item.find()) {
+                style.items.putIfAbsent(item.group(1).trim(), item.group(2).trim());
+            }
+        }
+    }
+
+    /**
+     * Traduce una referencia {@code @style/...} (o {@code @android:style/...}) a algo utilizable.
+     *
+     * <p>Busca primero en los estilos del proyecto (con sus padres, hasta 6 niveles) y, si no esta,
+     * en el APK del editor (app/material/android). No lanza nunca: si no se puede, devuelve una
+     * resolucion con {@link StyleResolution#reason} para que el aviso sea AMBAR (nunca rojo: una
+     * referencia de estilo no impide dibujar la vista).
+     */
+    public StyleResolution resolveStyle(String reference, String usage) {
+        if (reference == null) {
+            return null;
+        }
+        String v = reference.trim();
+        if (!isStyleReference(v)) {
+            return null;
+        }
+        StyleResolution cached = styleResolutionCache.get(v);
+        if (cached != null) {
+            return cached;
+        }
+        ensureStylesLoaded();
+        String name = styleName(v);
+        String reason = null;
+        int styleId = 0;
+        String resolvedName = null;
+        Map<String, String> items = new LinkedHashMap<>();
+        if (v.startsWith("@android:style/")) {
+            styleId = context.getResources().getIdentifier(name, "style", "android");
+            if (styleId != 0) {
+                resolvedName = name;
+            }
+        } else if (styleCache.containsKey(name)) {
+            resolvedName = name;
+            collectStyleItems(name, items, new LinkedHashSet<>(), 0);
+        } else {
+            // No esta en el styles.xml del proyecto: puede ser un estilo del editor (Material3,
+            // AppCompat) o simplemente no existir. Se prueba el APK del editor antes de rendirse.
+            String pkg = context.getPackageName();
+            styleId = context.getResources().getIdentifier(name, "style", pkg);
+            if (styleId == 0) {
+                styleId = context.getResources().getIdentifier(name, "style", "com.google.android.material");
+            }
+            if (styleId == 0) {
+                styleId = context.getResources().getIdentifier(name, "style", "androidx.appcompat");
+            }
+            if (styleId != 0) {
+                resolvedName = name;
+            }
+        }
+        if (resolvedName == null) {
+            reason = "no esta en files/resource/values/styles.xml ni en el editor";
+        }
+        StyleResolution resolution = new StyleResolution(v, resolvedName, styleId, reason);
+        resolution.items.putAll(items);
+        styleResolutionCache.put(v, resolution);
+        if (reason != null && styleNotes.add(v)) {
+            // AMBAR (no aplicado): la vista se dibuja igual, solo no se le aplica el estilo.
+            warningInformative(Kind.STYLE, v + " (" + reason
+                    + "; la vista se dibuja sin ese estilo"
+                    + (usage == null || usage.isEmpty() ? "" : " [" + usage + "]") + ")");
+        }
+        return resolution;
+    }
+
+    /**
+     * Id de recurso de estilo del APK del editor/framework utilizable como BASE de un tema.
+     *
+     * <p>Un estilo del PROYECTO no esta compilado en el APK del editor, asi que no tiene resId. Pero
+     * sus padres suelen ser estilos del framework/Material (p.ej. {@code ThemeOverlay.AppCompat.Dark.
+     * ActionBar}); este metodo recorre el propio estilo y sus padres del proyecto y devuelve el
+     * primer resId que exista en el editor, para poder envolver el contexto en un
+     * {@code ContextThemeWrapper} con una base real. Devuelve 0 si no hay ninguno.
+     */
+    public int resolveBaseStyleId(String reference) {
+        if (reference == null) {
+            return 0;
+        }
+        String v = reference.trim();
+        if (!isStyleReference(v)) {
+            return 0;
+        }
+        ensureStylesLoaded();
+        if (v.startsWith("@android:style/")) {
+            return context.getResources().getIdentifier(styleName(v), "style", "android");
+        }
+        Set<String> visited = new LinkedHashSet<>();
+        String name = styleName(v);
+        for (int depth = 0; name != null && depth <= 6 && visited.add(name); depth++) {
+            int id = editorStyleId(name);
+            if (id != 0) {
+                return id;
+            }
+            ProjectStyle style = styleCache.get(name);
+            name = style == null || style.parent == null ? null : styleName(style.parent);
+        }
+        return 0;
+    }
+
+    /** resId de un estilo en el APK del editor (app/material/androidx) o en android. 0 si no existe. */
+    private int editorStyleId(String name) {
+        int id = context.getResources().getIdentifier(name, "style", context.getPackageName());
+        if (id == 0) {
+            id = context.getResources().getIdentifier(name, "style", "com.google.android.material");
+        }
+        if (id == 0) {
+            id = context.getResources().getIdentifier(name, "style", "androidx.appcompat");
+        }
+        if (id == 0) {
+            id = context.getResources().getIdentifier(name, "style", "android");
+        }
+        return id;
+    }
+
+    /** ¿La cadena es una referencia de estilo ({@code @style/...} o {@code @android:style/...})? */
+    public static boolean isStyleReference(String value) {
+        if (value == null) {
+            return false;
+        }
+        String v = value.trim();
+        return v.startsWith("@style/") || v.startsWith("@android:style/")
+                || v.startsWith("@style:") || v.startsWith("@android:style:");
+    }
+
+    /** Nombre del estilo dentro de una referencia ({@code @style/AppTheme.PopupOverlay} -> nombre). */
+    private static String styleName(String reference) {
+        String v = reference.trim();
+        int slash = v.indexOf('/');
+        if (slash >= 0 && slash + 1 < v.length()) {
+            return v.substring(slash + 1);
+        }
+        int colon = v.lastIndexOf(':');
+        return colon >= 0 && colon + 1 < v.length() ? v.substring(colon + 1) : v;
+    }
+
+    /**
+     * Acumula los items de un estilo del proyecto y los de sus padres. El hijo gana sobre el padre
+     * (misma idea que Android: los items del hijo sobrescriben los heredados).
+     */
+    private void collectStyleItems(String name, Map<String, String> into, Set<String> visited, int depth) {
+        if (name == null || depth > 6 || !visited.add(name)) {
+            return;
+        }
+        ProjectStyle style = styleCache.get(name);
+        if (style == null) {
+            return;
+        }
+        for (Map.Entry<String, String> entry : style.items.entrySet()) {
+            into.putIfAbsent(entry.getKey(), entry.getValue());
+        }
+        if (style.parent != null) {
+            collectStyleItems(styleName(style.parent), into, visited, depth + 1);
+        }
+    }
+
     /** Valor de un <dimen> que puede ser a su vez una referencia a una medida del framework. */
     private int resolveDimensionReference(String value) {
         String v = value == null ? "" : value.trim();
@@ -380,6 +718,12 @@ public class ProjectResourceResolver {
      */
     private int resolveThemeColor(View view, String attrExpression) {
         String expression = attrExpression.substring(1); // quitamos '?'
+        // El contexto de la VISTA (no el de la Activity): un AppBarLayout con android:theme="@style/..."
+        // se crea con un ContextThemeWrapper, y "?attr/colorPrimary" dentro de el DEBE resolverse con
+        // SU tema, no con el del IDE. Si la vista no lleva tema propio, view.getContext() es el mismo
+        // contexto de antes (sin cambio de comportamiento).
+        Context viewContext = view != null && view.getContext() != null ? view.getContext() : context;
+        Resources viewResources = viewContext.getResources();
         String pkg = context.getPackageName();
         String attrName = expression;
         if (attrName.startsWith("android:attr/")) {
@@ -394,10 +738,10 @@ public class ProjectResourceResolver {
         if (attrName.isEmpty()) {
             return 0;
         }
-        // 1) Atributo del propio tema del IDE (Material3: colorPrimary, colorSurface, ...).
-        int attrId = context.getResources().getIdentifier(attrName, "attr", pkg);
+        // 1) Atributo del propio tema de la VISTA (Material3: colorPrimary, colorSurface, ...).
+        int attrId = viewResources.getIdentifier(attrName, "attr", pkg);
         if (attrId == 0 && !"android".equals(pkg)) {
-            attrId = context.getResources().getIdentifier(attrName, "attr", "com.google.android.material");
+            attrId = viewResources.getIdentifier(attrName, "attr", "com.google.android.material");
         }
         if (attrId != 0) {
             try {
@@ -406,16 +750,16 @@ public class ProjectResourceResolver {
                 android.util.Log.d("SketchwarePro", "ProjectResourceResolver: Throwable ignored", ignored);
             }
         }
-        // 2) Resolucion directa por tema (vale tambien para atributos de framework).
+        // 2) Resolucion directa por el tema de la vista (vale tambien para atributos de framework).
         if (attrId == 0 && !"android".equals(pkg)) {
-            attrId = context.getResources().getIdentifier(attrName, "attr", "android");
+            attrId = viewResources.getIdentifier(attrName, "attr", "android");
         }
         if (attrId != 0) {
             TypedValue typedValue = new TypedValue();
-            if (context.getTheme().resolveAttribute(attrId, typedValue, true)) {
+            if (viewContext.getTheme().resolveAttribute(attrId, typedValue, true)) {
                 if (typedValue.type == TypedValue.TYPE_REFERENCE || typedValue.type == TypedValue.TYPE_STRING) {
                     try {
-                        return context.getColor(typedValue.resourceId);
+                        return viewContext.getColor(typedValue.resourceId);
                     } catch (Throwable ignored) {
                         android.util.Log.d("SketchwarePro", "ProjectResourceResolver: Throwable ignored", ignored);
                     }
@@ -446,6 +790,12 @@ public class ProjectResourceResolver {
         }
         String v = value.trim();
         if (v.isEmpty()) {
+            return null;
+        }
+        if (isStyleReference(v)) {
+            // Un estilo NO es un drawable: si llega aqui (p.ej. android:background="@style/x") la
+            // vista se dibuja igual, asi que es un aviso AMBAR (no aplicado), NUNCA un marcador rojo.
+            resolveStyle(v, "background");
             return null;
         }
         Drawable cached = drawableCache.get(v);

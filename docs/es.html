@@ -37,14 +37,14 @@
 
   <!-- ============================================================ hero -->
   <section class="hero" style="border-top:none">
-    <div class="tag">● v7.0.10.4 · versionCode 171 · source-available</div>
+    <div class="tag">● v7.0.10.5 · versionCode 172 · source-available</div>
     <h1>Crea apps Android reales<br><span class="accent">desde tu móvil.</span></h1>
     <p class="lead">
       Sketchware Pro es un IDE de Android que funciona sobre Android: arrastra bloques, escribe Java o Kotlin,
       compila en el propio dispositivo y obtén un APK instalable — sin necesidad de ordenador.
     </p>
     <div class="btns">
-      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.4" target="_blank" rel="noopener">⬇ Descargar APK</a>
+      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.5" target="_blank" rel="noopener">⬇ Descargar APK</a>
       <a class="btn ghost" href="https://github.com/aurenox-global/Sketchware-Pro" target="_blank" rel="noopener">Ver el código en GitHub</a>
     </div>
 
@@ -134,12 +134,64 @@
       <span class="k">Hitos destacados</span>
       <p>
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.0">Flutter corriendo en el dispositivo, release/AOT incluido</a> &middot;
-        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.4">la vista previa de diseños arreglada, rondas 1 a 8</a> &middot;
+        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.5">la vista previa de diseños arreglada, rondas 1 a 9</a> &middot;
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.1">la descarga del toolchain de Dart ahora la decides tú, y el toolchain ya no dice "no instalado"</a> &middot;
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.9">soporte de Kotlin en el IDE de la app</a>.
       </p>
     </div>
     <div class="log" id="change-log">
+      <div class="item done featured">
+        <span class="when">2026-09-24 · vista previa</span>
+        <h3>Rojo significa ahora "no se puede dibujar": las referencias de <code>@style</code>/tema no resolubles son ambar con motivo, y el tema del proyecto pinta de verdad  <span class="pill feat">destacado</span> <span class="pill ok">arreglado</span></h3>
+        <ul class="clean">
+          <li><strong>El rojo mentia.</strong> Referencias que no impiden dibujar se pintaban en <strong>rojo</strong>.
+          Un <code>@style/...</code> que llegaba a <code>resolveDimen</code> respondia
+          <em>"referencia de medida no resoluble"</em>, y un <code>@dimen</code>/<code>@android:dimen</code> ausente,
+          un <code>?attr</code> de tema no resoluble o un <code>@style</code> usado como
+          <code>android:background</code> salian en rojo aunque la vista se dibuja bien con su valor por defecto.
+          Ahora <strong>el rojo se reserva a lo que de verdad impide dibujar</strong> (una imagen que no existe, una
+          clase sin reserva): toda referencia de estilo/medida/tema que no se pueda <em>aplicar</em> pasa al
+          <strong>grupo ambar</strong> <em>"No aplicado / ajustado · estilos y medidas (no impide dibujar)"</em>,
+          siempre con su motivo; el texto <em>"referencia de medida"</em> ya no existe (0 ocurrencias) y la barra
+          solo se pinta roja cuando hay recursos no encontrados.</li>
+          <li><strong>Los <code>@style/...</code> de tu proyecto se resuelven de verdad.</strong> Se leen de
+          <code>files/resource/values/styles.xml</code> (<code>parent</code> explicito + herencia implicita por
+          puntos + encadenado hasta 6 niveles; API nueva
+          <code>resolveStyle()</code>/<code>isStyleReference()</code>, con respaldo en estilos de
+          app/material/appcompat/android), asi que <code>@style/AppTheme.AppBarOverlay</code> y
+          <code>@style/AppTheme.PopupOverlay</code> dejan de salir como no resueltos y un estilo inexistente sale
+          ambar, <strong>nunca rojo</strong>.</li>
+          <li><strong>El tema se aplica, no solo se resuelve.</strong> <code>android:theme</code> crea ahora la vista
+          <em>dentro</em> del tema (<code>ContextThemeWrapper</code> en
+          <code>createRealView(bean, contextoDelPadre)</code>, los hijos heredan el contexto del padre): un estilo
+          <strong>con resId</strong> es un tema real, y un estilo <strong>solo del proyecto</strong> (sin resId, no
+          esta compilado en el APK del editor) usa una base del framework mas sus items mapeados a la vista — y
+          desaparece el falso ambar <em>"un tema no se aplica"</em>.
+          <code>app:tabTextAppearance</code> se aplica a los <code>TextView</code> de las pestañas (incluidas las 3
+          de ejemplo): <code>textSize</code>, <code>textColor</code> (color y <code>ColorStateList</code>),
+          <code>textStyle</code>, <code>textAllCaps</code>, <code>fontFamily</code>, con el estilo del framework
+          leido del tema y guarda de tipo.</li>
+          <li><strong>Medido.</strong> Antes la barra decia <strong>en rojo</strong>
+          <code>Preview PARCIAL: 1 recurso no encontrado · 2 atributos no aplicados</code>; despues, <strong>ningun
+          bloque rojo</strong> y barra ambar. Un <code>AppBarLayout</code> con
+          <code>theme="@style/AppTheme.AppBarOverlay"</code> pasa de estar <strong>sin fondo</strong> a tomar el
+          color del tema <code>#FF112233</code>; las pestañas con un <code>tabTextAppearance</code> del proyecto
+          salen en <strong>magenta 24sp negrita</strong> (9 ajustes);
+          <code>@android:style/TextAppearance.Widget.TabWidget</code> se resuelve por resId 16973901 (3 ajustes) —
+          <strong>red=0 amber=0</strong> en las 6 capturas.</li>
+          <li><strong>Regresion y honestidad.</strong> Las rondas 1-7 (15 XML) mantienen los 11
+          <code>Preview OK</code> y <code>caseR4_mixed</code> baja de 4 a 3 recursos rojos (uno pasa a ambar); las
+          rondas 5-8 (23 XML) no pierden ningun <code>Preview OK</code>. <strong>Honesto:</strong> los estilos del
+          proyecto <strong>no tienen resId</strong> (no estan compilados en el APK del editor), asi que su tema se
+          <em>emula</em> (base del framework + items mapeados); las referencias <code>?attr/</code> del framework
+          en <code>tabTextAppearance</code> se dejan al tema; <code>popupTheme</code> y
+          <code>actionBarTheme</code> siguen sin aplicarse.</li>
+        </ul>
+        <p><img src="assets/preview-r9-before.png" alt="Antes: la barra roja dice Preview PARCIAL: 1 recurso no encontrado · 2 atributos no aplicados" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)"> <img src="assets/preview-r9-after.png" alt="Despues: la barra dice Preview OK y el AppBarLayout toma el color azul marino del tema #FF112233" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)"></p>
+        <p>Versión <strong>v7.0.10.5</strong> (versionCode 172). El detalle de la ronda 9 está al final de
+        <a href="preview-fix.md">docs/preview-fix.md</a>.</p>
+      </div>
+
       <div class="item done featured">
         <span class="when">2026-09-24 · vista previa</span>
         <h3>Los colores que "no se ven en ninguno": una lista blanca de 19 atributos los tiraba  <span class="pill feat">destacado</span> <span class="pill ok">arreglado</span></h3>
