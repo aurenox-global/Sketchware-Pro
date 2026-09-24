@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.12.0-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.13.0-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -133,6 +133,29 @@ Requirements:
 
 This repository is a personal fork. Every improvement is added here as it lands, and the
 [website](https://aurenox-global.github.io/Sketchware-Pro/) is updated at the same time.
+
+### 2026-09-24 — Design preview, round 12: the colours you pick were written transparent into the XML
+
+- **v7.0.13.0 (versionCode 175) — the colours you pick in the editor came out transparent, in the preview *and* in the
+  compiled app.** A bug **inherited from the original Sketchware Pro**, and **deterministic**, not a rare case:
+  **any background colour chosen from the hexadecimal palette** was written to the XML as `#00RRGGBB` — alpha **00,
+  fully transparent** — so the view was drawn with no colour and the app said nothing (*"Preview OK"*). Reproduced in
+  the **real flow** (editor → `Ox` → preview), not only by injecting XML: with `button1` = `#2196F3` and `linear1` =
+  `#4CAF50` the real preview showed **0 blue px and 0 green px**, and **the same XML injected reproduced it
+  identically**; with the alpha corrected it went to **30,524 / 593,519 px**. **Root cause, one line:**
+  `a/a/a/Ox.java` did `int color = backgroundColor & 0xffffff` **before** formatting, and `formatColor` prints 8
+  digits whenever the alpha is not `0xFF` — so `0xFF2196F3` became `0x002196F3` → `"#002196F3"`. The same mask also
+  hit `backgroundTint`, `cardBackgroundColor` and `contentScrim`, and the text paths (`textColor`, `textColorHint`).
+  **The fix** is to stop masking the alpha at those **4 places** (`Ox.java:201, 418, 824, 847`; `formatColor` itself
+  was **not** touched). **Measured in the release APK (R8)** with the real flow: blue **0 → 30,398 px**, green
+  **0 → 333,317 px**, red text **0 → 577 px**; the XML now carries `#2196F3` / `#4CAF50` / `#F44336` (6 digits), and
+  the **translucent** `#802196F3` keeps its alpha (8 digits, `0x80` intact, which the old mask would have zeroed).
+  The regression is **exact**: r8 `caseA`/`caseC` and r11 `caseE` come out **pixel-identical** (356,400 px, same
+  bounding box). And the layout the IDE compiles (`mysc/601/…/res/layout/main.xml`) now carries `#2196F3`,
+  `#4CAF50`, `#802196F3` and `#F44336` instead of `#00…`. **Honest:** the IDE's own `aapt2` link step still fails
+  later on for a **preexisting** AppCompat resource problem of that project, unrelated to these 4 lines. Release
+  page: [v7.0.13.0](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.13.0). Full write-up (in
+  Spanish): [docs/preview-fix.md](docs/preview-fix.md) (round 12).
 
 ### 2026-09-24 — Design preview, round 11: copy the whole notice, the storage permission and the colours the build's `res` defines
 

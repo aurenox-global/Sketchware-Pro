@@ -1292,3 +1292,179 @@ el uid mode), hay que usar `appops set --uid pro.sketchware MANAGE_EXTERNAL_STOR
   representativos (r5 y r8 con recuento de píxeles) más los cuatro puntos de la ronda, en debug **y** en release.
 - **Sin commitear** en el árbol de trabajo; `versionCode`/`versionName` los pone esta release a **174 / v7.0.12.0**.
 
+---
+
+## 16. Ronda 12 (v7.0.13.0)
+
+Fecha: 2026-09-24 · Versión: **v7.0.13.0** (versionCode 175) · Repo: `Sketchware-Pro-main`
+
+Release: <https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.13.0>
+
+Un bug **heredado del Sketchware Pro original**: los colores elegidos en el editor se escribían en el XML con el
+**alfa a cero** (`#00RRGGBB` = **transparente**), así que no se veían **ni en la vista previa ni en la app compilada**
+— y encima la app decía *"Preview OK"*. Fichero tocado: `app/src/main/java/a/a/a/Ox.java` (**4 inserciones / 4
+borrados**; **no** se tocó `formatColor`). Se verificó en el **APK release (R8)** con el **flujo real** (editor →
+`Ox` → vista previa) y con el **fuente que compila el IDE** (§16.6).
+
+| La vista previa REAL, **antes**: sin azul y sin verde | La vista previa REAL, **después**: botón azul, columna verde, texto rojo |
+| --- | --- |
+| ![Vista previa real antes del arreglo: el Button y el LinearLayout salen sin color](assets/preview-r12-before.png) | ![Vista previa real después del arreglo: botón azul, columna verde y texto rojo](assets/preview-r12-after.png) |
+
+### 16.1 El síntoma y por qué había que usar el flujo **real** (no la inyección)
+
+La preview **sí renderiza colores correctamente**. Lo que fallaba era la **generación del XML**: el generador
+`a.a.a.Ox` destruía el canal alfa del color de fondo y escribía `#00RRGGBB`, es decir **totalmente transparente**.
+Resultado: el `LinearLayout` y el `Button` salían **sin color** y la app **no avisaba de nada**.
+
+El camino "real" del usuario y el "inyectado" (`am start --es xml`) son **el mismo**, salvo quién calcula el XML:
+`DesignActivity.openLivePreview()` (`DesignActivity.java:829-855`) llama a `new yq(…).getFileSrc(layoutName, …)`
+(`yq.java:1230` → `Ox`, `yq.java:1277-1279`) y pasa ese XML como extra `"xml"` a `LayoutPreviewActivity`, **el mismo
+extra** que usa la inyección. Por eso, si el XML es idéntico el render debe ser idéntico, y la fuga solo puede estar
+**aguas arriba**.
+
+**Prueba decisiva** (3 medidas de píxeles, sin cambiar nada más):
+
+| # | Camino | XML de entrada | px azul `#2196F3` | px verde `#4CAF50` |
+| --- | --- | --- | --- | --- |
+| 1 | **REAL**: editor → `yq.getFileSrc` (`Ox`) → preview | generado por el editor | **0** | **0** |
+| 2 | Inyectado con **ese MISMO XML** | copia verbatim del de (1) | **0** | **0** |
+| 3 | Inyectado con el alfa arreglado (`#FF…`) | sólo `#00`→`#FF` | **30.524** | **593.519** |
+
+(1) == (2) ⇒ la vista previa es fiel; el fallo **no** está en el render. (3) ⇒ con alfa correcto los colores
+aparecen. **El fallo está en la generación.** El editor, en cambio, **sí** guardaba bien el color
+(`0xFF2196F3` / `0xFF4CAF50`) y **sí** lo pintaba en su lienzo: por eso el usuario lo veía bien en el editor y mal en
+la preview/APK.
+
+### 16.2 La causa raíz (una línea, y 4 sitios con el mismo error)
+
+`app/src/main/java/a/a/a/Ox.java`:
+
+```java
+// línea 202 (antes del arreglo) — se destruye el alfa ANTES de formatear
+int color = backgroundColor & 0xffffff;      // 0xFF2196F3 -> 0x002196F3
+// línea 244
+nx.addAttribute("android", "background", formatColor(color));
+// líneas 62-70 — formatColor imprime 8 dígitos cuando el alfa != 0xFF
+if (alpha != 0xff) { return String.format("#%08X", color); }   // -> "#002196F3"
+```
+
+Cadena del fallo:
+
+1. El editor guarda `backgroundColor = 0xFF2196F3` (alfa `FF`) — **correcto**.
+2. `Ox:202` → `color = 0x002196F3` (alfa machacado a `00`).
+3. `Ox:244` → `formatColor(0x002196F3)`.
+4. `formatColor` ve `alpha == 0x00 != 0xff` → devuelve **`#002196F3`**.
+5. El XML queda **transparente**: ni la preview ni el APK pintan nada.
+
+**Es determinista, no un caso raro:** el picker siempre guarda alfa `FF` y `& 0xffffff` lo mata *siempre* ⇒
+**cualquier color de fondo elegido desde la paleta hexadecimal sale transparente**. Afectaba igual a los otros
+`formatColor(color)` del mismo método (`backgroundTint`, `cardBackgroundColor`, `contentScrim`, todos alimentados por
+el `color` ya enmascarado) y a las rutas de **texto** (`textColor` en `Ox:824`, `sidebar_text_color` en `Ox:418`,
+`textColorHint` en `Ox:847`), que hacían el mismo `& 0xffffff`.
+
+### 16.3 El arreglo (4 líneas, `formatColor` intacto)
+
+`git diff --name-only` → **solo** `app/src/main/java/a/a/a/Ox.java`; `git diff --stat` → **4 inserciones / 4
+borrados**. Se quitó el `& 0xffffff` en los **4 sitios** (las líneas reales del árbol actual son **201, 418, 824,
+847**):
+
+```diff
+-                    int color = backgroundColor & 0xffffff;
++                    int color = backgroundColor;
+@@
+-                widgetTag.addAttribute("app", "sidebar_text_color", formatColor(textColor & 0xffffff));
++                widgetTag.addAttribute("app", "sidebar_text_color", formatColor(textColor));
+@@
+-                nx.addAttribute("android", "textColor", formatColor(viewBean.text.textColor & 0xffffff));
++                nx.addAttribute("android", "textColor", formatColor(viewBean.text.textColor));
+@@
+-                        nx.addAttribute("android", "textColorHint", formatColor(viewBean.text.hintColor & 0xffffff));
++                        nx.addAttribute("android", "textColorHint", formatColor(viewBean.text.hintColor));
+```
+
+**No se tocó `formatColor()`** (líneas 60-70). Comprobación previa: `grep -rn formatColor app/src/main/java | grep
+-v Ox.java` → **vacío**, ningún otro consumidor dependía del valor enmascarado. Invariantes de `formatColor` que se
+cumplen tras el arreglo: opaco → **6 dígitos** (`#2196F3`); translúcido (alfa ≠ `FF`) → **8 dígitos** (`#802196F3`).
+
+### 16.4 Medición: antes → después (release, flujo real)
+
+`./gradlew :app:assembleRelease` → **BUILD SUCCESSFUL in 4m 45s**; APK nuevo instalado con `adb install -r` →
+`Success`; `dumpsys package pro.sketchware` → `flags=0x0`, **no debuggable** (`versionName=v7.0.12.0`, es la base
+sobre la que se construyó la ronda). El flujo se hizo **desde el editor** (se arrastró un `TextView` dentro del
+`LinearLayout` verde → `textview1`, con `#F44336`), se guardó y se abrió la **preview en vivo**.
+
+| Medida (release) | ANTES (bug) | DESPUÉS (fix) |
+| --- | --- | --- |
+| fondo Button `#2196F3` | **0 px** | **30.398 px** |
+| fondo LinearLayout `#4CAF50` | **0 px** | **333.317 px** |
+| texto TextView `#F44336` | **0 px** | **577 px** |
+| `android:background` del Button en el XML | `#002196F3` (transparente) | `#2196F3` |
+| `android:background` del `linear1` | `#004CAF50` | `#4CAF50` |
+| `android:textColor` del TextView | *(no medido antes)* | `#F44336` |
+
+Log de la preview tras el arreglo: `xml main.xml len=1720` + `info: Preview OK · vistas: 7 · WebViews: 1`.
+Comprobación automática sobre el XML generado: contiene `#2196F3`, `#4CAF50` y `#F44336` (6 dígitos) y **ningún**
+atributo `#00RRGGBB`. Capturas comparables: **`assets/preview-r12-before.png`** (todo gris, sin verde) vs
+**`assets/preview-r12-after.png`** (botón azul, columna verde, texto rojo).
+
+### 16.5 El alfa real se conserva (`#802196F3`)
+
+El picker **sí** permite alfa: el creador de color personalizado acepta 8 dígitos hex
+(`ColorPickerDialog` → `String.format("#%8s", hex).replace(" ","F")`, y `ColorInputValidator` acepta hasta 8
+dígitos). Se eligió `#802196F3` como fondo de `textview1` y:
+
+- el swatch queda como **`#802196F3`** y el panel lo muestra igual;
+- la preview genera `android:background="#802196F3"` — **8 dígitos, alfa `0x80` intacto**;
+- el **fuente que compila el IDE** también lleva `#802196F3` (§16.6).
+
+Contraste con el bug: antes, `& 0xffffff` habría dejado `#002196F3` (alfa `0x80` → `0x00` = transparente).
+
+> Incidencia de UI honesta: el primer intento de guardar el color personalizado “no hizo nada” porque al abrirse el
+> teclado el diálogo **sube** y el tap de *Save* cayó fuera del botón. Re-localizado tras el teclado (`[761,964]
+> [937,1096]`) el guardado funcionó.
+
+### 16.6 Impacto en el APK compilado (fuente intermedio del IDE)
+
+El IDE **genera los fuentes** (`yq.java:801-808`, `new Ox(N, layout)` → `res/layout/`) antes de enlazar. Se pulsó
+**Run** en el editor y `mysc/601/…/layout/main.xml` **se regeneró**:
+
+| ANTES (build viejo, 628 B) | DESPUÉS (build con el fix, 1785 B) |
+| --- | --- |
+| Button sin `android:background` | `android:background="#2196F3"` (Button) |
+| sin LinearLayout/TextView | `android:background="#4CAF50"` (`linear1`) |
+| — | `android:background="#802196F3"` (`textview1`, **alfa conservado**) |
+| — | `android:textColor="#F44336"` |
+
+⇒ **el layout que se compila lleva los colores correctos** (`#2196F3`, `#4CAF50`, `#802196F3`, `#F44336`), no
+`#00…`. Es el mismo `Ox` que usa `Jx.java:102` (build) y `yq.getFileSrc` (preview). **Honesto:** la fase de
+*source-gen* terminó bien, pero el **enlazado de recursos `aapt2` falló después** por un problema **ajeno**:
+`resource style/ThemeOverlay.AppCompat.Dark.ActionBar … not found` → `failed linking references`. Es una limitación
+preexistente del entorno/librerías del proyecto 601 (faltan recursos AppCompat locales), **no** de este cambio de 4
+líneas.
+
+### 16.7 Regresión en release (r8/r11)
+
+Ejecutado con el APK nuevo en release por el mismo camino de inyección (`--es xml`, que comparte renderizador):
+
+| Caso | Línea base | Medido tras el fix | ¿Igual? |
+| --- | --- | --- | --- |
+| r8 **caseA** (4 vistas) | 162.773 / 2.272 / 111.016 / 308 | 162.773 / 2.272 / 111.016 / 308 | **SÍ** |
+| r8 **caseC** (5 vistas) | 18.964 / 11.924 / 90.660 / 21.453 / 18.907 | 18.964 / 11.924 / 90.660 / 21.453 / 18.907 | **SÍ** |
+| r11 **caseE** `@color/colorPrimary` | **356.400 px**, bbox `y[312,641]` | **356.400 px**, bbox `y[312,641]` | **SÍ** |
+
+Recuentos de vistas `Preview OK · vistas: 4` (caseA), `5` (caseC) y `2` (caseE), como en la base.
+
+### 16.8 Pendientes honestos de la ronda 12
+
+- **No se ha probado el móvil del usuario.** Se verificó el **mecanismo** con píxeles medidos y con el XML real
+  (0 px antes → con color después) en release y por el flujo real del editor.
+- **Impacto en el APK compilado:** probado con el **fuente intermedio** que regenera el IDE
+  (`mysc/…/layout/main.xml`), **no** con un APK final, porque el enlazado `aapt2` del IDE falla por el problema
+  AppCompat **preexistente** (§16.6).
+- **Efecto colateral de la prueba de UI** en el proyecto 601: a `textview1` se le quedó `android:singleLine="true"`
+  (probablemente un tap en el switch *Single line* al navegar el panel). No afecta a la verificación de color; se
+  documenta para que nadie lo tome por intencional. El proyecto no se revirtió.
+- **Regresión:** no se reejecutaron las 10 suites originales (sus XML/scripts ya no están en disco); sí casos
+  representativos con recuento de píxeles (r8 caseA/caseC y r11 caseE), idénticos a la base.
+- **Sin commitear** en el árbol de trabajo; `versionCode`/`versionName` los pone esta release a **175 / v7.0.13.0**.
+

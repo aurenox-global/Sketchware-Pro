@@ -198,7 +198,7 @@ public class Ox {
 
             if (backgroundColor != 0xffffff) {
                 if (backgroundColor != 0) {
-                    int color = backgroundColor & 0xffffff;
+                    int color = backgroundColor;
                     if (nx.c().equals("BottomAppBar")) {
                         if (!toNotAdd.contains("app:backgroundTint") && !injectHandler.contains("backgroundTint") && (backgroundResColor != null)) {
                             if (backgroundResColor.startsWith("?") || backgroundResColor.startsWith("@color/")) {
@@ -415,7 +415,7 @@ public class Ox {
                     widgetTag.addAttribute("app", "sidebar_text_color", "@color/" + resTextColor);
                 }
             } else if (textColor != 0 && !toNotAdd.contains("app:sidebar_text_color")) {
-                widgetTag.addAttribute("app", "sidebar_text_color", formatColor(textColor & 0xffffff));
+                widgetTag.addAttribute("app", "sidebar_text_color", formatColor(textColor));
             }
         }
         k(widgetTag, viewBean);
@@ -821,7 +821,7 @@ public class Ox {
                     nx.addAttribute("android", "textColor", "@color/" + viewBean.text.resTextColor);
                 }
             } else if (!hasAttr("textColor", viewBean) && !toNotAdd.contains("android:textColor") && !injectHandler.contains("textColor")) {
-                nx.addAttribute("android", "textColor", formatColor(viewBean.text.textColor & 0xffffff));
+                nx.addAttribute("android", "textColor", formatColor(viewBean.text.textColor));
             }
         }
         switch (viewBean.type) {
@@ -844,7 +844,7 @@ public class Ox {
                             nx.addAttribute("android", "textColorHint", "@color/" + viewBean.text.resHintColor);
                         }
                     } else if (!hasAttr("textColorHint", viewBean) && !toNotAdd.contains("android:textColorHint")) {
-                        nx.addAttribute("android", "textColorHint", formatColor(viewBean.text.hintColor & 0xffffff));
+                        nx.addAttribute("android", "textColorHint", formatColor(viewBean.text.hintColor));
                     }
                 }
                 if (viewBean.text.singleLine != 0 && !toNotAdd.contains("android:singleLine") && !injectHandler.contains("singleLine")) {

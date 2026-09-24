@@ -37,14 +37,14 @@
 
   <!-- ============================================================ hero -->
   <section class="hero" style="border-top:none">
-    <div class="tag">● v7.0.12.0 · versionCode 174 · source-available</div>
+    <div class="tag">● v7.0.13.0 · versionCode 175 · source-available</div>
     <h1>Crea apps Android reales<br><span class="accent">desde tu móvil.</span></h1>
     <p class="lead">
       Sketchware Pro es un IDE de Android que funciona sobre Android: arrastra bloques, escribe Java o Kotlin,
       compila en el propio dispositivo y obtén un APK instalable — sin necesidad de ordenador.
     </p>
     <div class="btns">
-      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.12.0" target="_blank" rel="noopener">⬇ Descargar APK</a>
+      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.13.0" target="_blank" rel="noopener">⬇ Descargar APK</a>
       <a class="btn ghost" href="https://github.com/aurenox-global/Sketchware-Pro" target="_blank" rel="noopener">Ver el código en GitHub</a>
     </div>
 
@@ -134,12 +134,47 @@
       <span class="k">Hitos destacados</span>
       <p>
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.0">Flutter corriendo en el dispositivo, release/AOT incluido</a> &middot;
-        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.12.0">la vista previa de diseños arreglada, rondas 1 a 11</a> &middot;
+        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.13.0">la vista previa de diseños arreglada, rondas 1 a 12</a> &middot;
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.1">la descarga del toolchain de Dart ahora la decides tú, y el toolchain ya no dice "no instalado"</a> &middot;
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.9">soporte de Kotlin en el IDE de la app</a>.
       </p>
     </div>
     <div class="log" id="change-log">
+      <div class="item done featured">
+        <span class="when">2026-09-24 · vista previa</span>
+        <h3>Los colores que eliges ya no se escriben transparentes en el XML  <span class="pill feat">destacado</span> <span class="pill ok">arreglado</span></h3>
+        <ul class="clean">
+          <li><strong>Los colores que eliges en el editor salian transparentes — en la vista previa <em>y</em> en la app
+          compilada.</strong> Un bug <strong>heredado del Sketchware Pro original</strong>, y <strong>determinista</strong>,
+          no un caso raro: <strong>cualquier color de fondo elegido desde la paleta hexadecimal</strong> se escribia en
+          el XML como <code>#00RRGGBB</code> — alfa <strong>00, totalmente transparente</strong> — asi que la vista se
+          dibujaba sin color y la app no avisaba de nada (<em>"Preview OK"</em>). Reproducido en el <strong>flujo
+          real</strong> (editor → <code>Ox</code> → preview), no solo inyectando XML: con <code>button1</code> =
+          <code>#2196F3</code> y <code>linear1</code> = <code>#4CAF50</code> la preview real mostraba <strong>0 px
+          azules y 0 px verdes</strong>, y <strong>ese mismo XML inyectado lo reproducia identicamente</strong>; con el
+          alfa corregido paso a <strong>30.524 / 593.519 px</strong>.</li>
+          <li><strong>Causa raiz, una linea.</strong> <code>a/a/a/Ox.java</code> hacia
+          <code>int color = backgroundColor &amp; 0xffffff</code> <strong>antes</strong> de formatear, y
+          <code>formatColor</code> imprime 8 digitos cuando el alfa no es <code>0xFF</code> — asi que
+          <code>0xFF2196F3</code> quedaba en <code>0x002196F3</code> → <code>"#002196F3"</code>. La misma mascara
+          afectaba tambien a <code>backgroundTint</code>, <code>cardBackgroundColor</code> y <code>contentScrim</code>,
+          y a las rutas de texto (<code>textColor</code>, <code>textColorHint</code>).</li>
+          <li><strong>El arreglo: dejar de enmascarar el alfa en esos 4 sitios</strong> (<code>Ox.java:201, 418, 824,
+          847</code>; no se toco <code>formatColor</code>). <strong>Medido en el APK release (R8)</strong> con el flujo
+          real: azul <strong>0 → 30.398 px</strong>, verde <strong>0 → 333.317 px</strong>, texto rojo <strong>0 →
+          577 px</strong>. El XML ya lleva <code>#2196F3</code> / <code>#4CAF50</code> / <code>#F44336</code> (6
+          digitos), y el <strong>translucido</strong> <code>#802196F3</code> conserva su alfa (8 digitos,
+          <code>0x80</code> intacto, que la mascara vieja habria puesto a cero). El layout que compila el IDE
+          (<code>mysc/601/…/res/layout/main.xml</code>) lleva ya los colores correctos. <strong>Regresion exacta:</strong>
+          r8 <code>caseA</code>/<code>caseC</code> y r11 <code>caseE</code> identicos pixel a pixel (356.400 px, mismo
+          bbox). <strong>Honesto:</strong> el enlazado <code>aapt2</code> del propio IDE sigue fallando despues por un
+          problema <strong>preexistente</strong> de recursos AppCompat de ese proyecto, ajeno a estas 4 lineas.</li>
+        </ul>
+        <p><img src="assets/preview-r12-before.png" alt="La preview real antes del arreglo: el Button y el LinearLayout se dibujan sin color" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)"> <img src="assets/preview-r12-after.png" alt="La preview real despues del arreglo: boton azul, columna verde y texto rojo" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)"></p>
+        <p>Versión <strong>v7.0.13.0</strong> (versionCode 175). El detalle de la ronda 12 está al final de
+        <a href="preview-fix.md">docs/preview-fix.md</a>.</p>
+      </div>
+
       <div class="item done featured">
         <span class="when">2026-09-24 · vista previa</span>
         <h3>Copiar el aviso completo, el permiso de almacenamiento y los colores del proyecto que define el <code>res</code> generado  <span class="pill feat">destacado</span> <span class="pill ok">arreglado</span></h3>
