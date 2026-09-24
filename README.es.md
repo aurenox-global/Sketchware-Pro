@@ -738,10 +738,18 @@ Bloqueos conocidos, con detalle:
 
 ## Contribuir
 
+Las contribuciones son bienvenidas, pero **toda contribución externa tiene que ser aprobada por el
+mantenedor antes de fusionarse**:
+
 1. Haz un fork de este repositorio.
 2. Haz tus cambios.
 3. Pruébalos.
 4. Abre un pull request.
+
+`main` es una rama protegida: no se permite empujar directamente y un pull request necesita la
+revisión del mantenedor (**1 aprobación**) antes de poder fusionarse. Abrir un pull request no da
+derecho a que se fusione — decide el mantenedor, y puede cerrarlo sin fusionarlo. Ver
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 Los mensajes de commit usan prefijo de tipo: `feat:`, `fix:`, `style:`, `refactor:`, `test:`, `docs:`,
 `chore:` — por ejemplo `fix: Fix crash during launch on certain phones`.

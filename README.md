@@ -725,10 +725,18 @@ Known blockers, in detail:
 
 ## Contributing
 
+Contributions are welcome, but **every external contribution must be approved by the maintainer
+before it is merged**:
+
 1. Fork this repository.
 2. Make your changes.
 3. Test them.
 4. Open a pull request.
+
+`main` is a protected branch: direct pushes are not allowed, and a pull request needs the
+maintainer's review (**1 approval**) before it can be merged. Opening a pull request does not grant
+any right to have it merged — the maintainer decides, and may close it without merging. See
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 Commit messages use a type prefix: `feat:`, `fix:`, `style:`, `refactor:`, `test:`, `docs:`, `chore:` —
 for example `fix: Fix crash during launch on certain phones`.
