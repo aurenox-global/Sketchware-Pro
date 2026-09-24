@@ -112,6 +112,7 @@ import pro.sketchware.utility.InjectAttributeHandler;
 import pro.sketchware.utility.InvokeUtil;
 import pro.sketchware.utility.PropertiesUtil;
 import pro.sketchware.utility.ResourceUtil;
+import pro.sketchware.utility.ScaleTypeCompat;
 import pro.sketchware.utility.SvgUtils;
 import pro.sketchware.utility.ThemeUtils;
 
@@ -547,10 +548,18 @@ public class ViewPane extends RelativeLayout {
                     ((ImageView) view).setImageResource(R.drawable.default_image);
                 }
             }
-            if (classInfo.b("CircleImageView")) {
+            if (classInfo.b("CircleImageView") || ScaleTypeCompat.isCircleImageViewName(viewBean.convert)) {
+                // Proyecto viejo: si trae un scaleType que el widget no admite (solo acepta
+                // CENTER_CROP) se normaliza en el bean al dibujarlo (idempotente).
+                // Asi el XML que se genere y el guardado posterior ya salen con un valor valido.
+                String adjusted = ScaleTypeCompat.adjustEnumForCircleImageView(viewBean.image.scaleType);
+                if (!adjusted.equals(viewBean.image.scaleType)) {
+                    viewBean.image.scaleType = adjusted;
+                }
                 updateCircleImageView((ItemCircleImageView) view, injectHandler);
             } else {
-                ((ImageView) view).setScaleType(ImageView.ScaleType.valueOf(viewBean.image.scaleType));
+                // Un valor inesperado (import de XML, dato viejo) no debe tumbar el editor de diseno.
+                ((ImageView) view).setScaleType(parseScaleType(viewBean.image.scaleType));
             }
         }
         if (classInfo.a("CompoundButton")) {
@@ -1372,6 +1381,15 @@ public class ViewPane extends RelativeLayout {
         cardView.setUseCompatPadding(Boolean.parseBoolean(TextUtils.isEmpty(compatPadding) ? "false" : compatPadding));
         cardView.setStrokeWidth(PropertiesUtil.resolveSize(strokeWidth, 0));
         cardView.setStrokeColor(PropertiesUtil.isHexColor(strokeColor) ? PropertiesUtil.parseColor(strokeColor) : Color.WHITE);
+    }
+
+    /**
+     * Traduce el scaleType guardado en el bean (nombre de enum o valor del XML) al enum de Android
+     * sin lanzar excepciones: un valor desconocido cae en FIT_CENTER en vez de tumbar el editor.
+     */
+    private static ImageView.ScaleType parseScaleType(String value) {
+        String enumName = ScaleTypeCompat.toEnumName(value);
+        return enumName == null ? ImageView.ScaleType.FIT_CENTER : ImageView.ScaleType.valueOf(enumName);
     }
 
     private void updateCircleImageView(ItemCircleImageView imageView, InjectAttributeHandler handler) {

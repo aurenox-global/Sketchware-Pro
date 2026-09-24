@@ -32,9 +32,11 @@ import a.a.a.cC;
 import a.a.a.jC;
 import a.a.a.mB;
 import a.a.a.oq;
+import mod.agus.jcoderz.beans.ViewBeans;
 import mod.hey.studios.project.ProjectSettings;
 import mod.pranav.viewbinding.ViewBindingBuilder;
 import pro.sketchware.R;
+import pro.sketchware.utility.ScaleTypeCompat;
 
 public class ViewPropertyItems extends LinearLayout implements Kw, View.OnClickListener {
     private final boolean b = false;
@@ -109,7 +111,16 @@ public class ViewPropertyItems extends LinearLayout implements Kw, View.OnClickL
             case "property_input_type" -> c(property, bean.text.inputType);
             case "property_ime_option" -> c(property, bean.text.imeOption);
             case "property_image" -> b(property, bean.image.resName, true);
-            case "property_scale_type" -> d(property, bean.image.scaleType);
+            case "property_scale_type" -> {
+                // El CircleImageView solo admite CENTER_CROP: se le ofrece solo ese
+                // valores en vez de dejarlo elegir uno que haria petar la app compilada.
+                if (ScaleTypeCompat.isCircleImageViewName(bean.convert)
+                        || bean.type == ViewBeans.VIEW_TYPE_WIDGET_CIRCLEIMAGEVIEW) {
+                    d(property, bean.image.scaleType, ScaleTypeCompat.CIRCLE_IMAGE_VIEW_ENUM_VALUES);
+                } else {
+                    d(property, bean.image.scaleType);
+                }
+            }
             case "property_background_resource" ->
                     b(property, bean.layout.backgroundResource, false);
             case "property_background_color" ->
@@ -457,6 +468,14 @@ public class ViewPropertyItems extends LinearLayout implements Kw, View.OnClickL
     }
 
     private void d(String key, String value) {
+        d(key, value, null);
+    }
+
+    /**
+     * Igual que {@link #d(String, String)} pero fijando la lista de valores a ofrecer en el dialogo
+     * ({@code null} = la lista por defecto de la propiedad).
+     */
+    private void d(String key, String value, String[] items) {
         PropertyStringSelectorItem stringSelectorItem = (PropertyStringSelectorItem) f.get(key);
         if (stringSelectorItem == null) {
             stringSelectorItem = new PropertyStringSelectorItem(getContext(), !b);
@@ -469,6 +488,7 @@ public class ViewPropertyItems extends LinearLayout implements Kw, View.OnClickL
         } else {
             stringSelectorItem.setValue(value);
         }
+        stringSelectorItem.setAllowedItems(items);
 
         addView(stringSelectorItem);
     }

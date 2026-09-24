@@ -9,7 +9,6 @@ import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 
-import com.besome.sketch.beans.ImageBean;
 import com.besome.sketch.beans.LayoutBean;
 import com.besome.sketch.beans.ProjectFileBean;
 import com.besome.sketch.beans.TextBean;
@@ -35,10 +34,13 @@ import mod.agus.jcoderz.beans.ViewBeans;
 import mod.jbk.util.LogUtil;
 import pro.sketchware.managers.inject.InjectRootLayoutManager;
 import pro.sketchware.utility.InjectAttributeHandler;
+import pro.sketchware.utility.ScaleTypeCompat;
 import pro.sketchware.xml.XmlBuilder;
 
 @SuppressLint("RtlHardcoded")
 public class Ox {
+
+    private static final String TAG = "SketchwarePro";
 
     private final jq buildConfig;
     private final InjectRootLayoutManager rootManager;
@@ -383,7 +385,12 @@ public class Ox {
         }
         if (viewBean.getClassInfo().a("ImageView")) {
             writeImgSrcAttr(widgetTag, viewBean);
-            if (!widgetTag.toCode().contains(".")) {
+            if (isCircleImageView(viewBean)) {
+                // CircleImageView solo admite centerCrop/centerInside: se escribe SIEMPRE un valor
+                // soportado (el bean trae CENTER por defecto, que el widget rechaza con
+                // IllegalArgumentException y tumbaria la app compilada del usuario).
+                writeCircleImageViewScaleType(widgetTag, viewBean);
+            } else if (!widgetTag.toCode().contains(".")) {
                 writeImageScaleType(widgetTag, viewBean);
             }
         }
@@ -432,7 +439,19 @@ public class Ox {
             }
         }
         if (!viewBean.inject.isEmpty()) {
-            widgetTag.addAttributeValue(viewBean.inject.replaceAll(" ", ""));
+            String injectText = viewBean.inject.replaceAll(" ", "");
+            if (isCircleImageView(viewBean)) {
+                // Un scaleType no admitido escrito a mano en "inject" tambien rompe el widget en la
+                // app compilada: se corrige al generar (idempotente) en vez de dejarlo pasar.
+                String sanitized = ScaleTypeCompat.sanitizeInjectScaleTypeForCircleImageView(injectText);
+                if (!sanitized.equals(injectText)) {
+                    android.util.Log.w(TAG, "warning: CircleImageView " + viewBean.id + ": inject android:scaleType\""
+                            + ScaleTypeCompat.injectScaleTypeValue(injectText) + "\" -> \""
+                            + ScaleTypeCompat.injectScaleTypeValue(sanitized) + "\" (no admitido por el widget)");
+                    injectText = sanitized;
+                }
+            }
+            widgetTag.addAttributeValue(injectText);
         }
 
         if (!viewBean.parentAttributes.isEmpty()) {
@@ -567,22 +586,48 @@ public class Ox {
         var injectHandler = new InjectAttributeHandler(viewBean);
         Set<String> toNotAdd = readAttributesToReplace(viewBean);
         if (!toNotAdd.contains("android:scaleType") && !injectHandler.contains("scaleType")) {
-            if (viewBean.image.scaleType.equals(ImageBean.SCALE_TYPE_CENTER)) {
-                nx.addAttribute("android", "scaleType", "center");
-            } else if (viewBean.image.scaleType.equals(ImageBean.SCALE_TYPE_FIT_XY)) {
-                nx.addAttribute("android", "scaleType", "fitXY");
-            } else if (viewBean.image.scaleType.equals(ImageBean.SCALE_TYPE_FIT_START)) {
-                nx.addAttribute("android", "scaleType", "fitStart");
-            } else if (viewBean.image.scaleType.equals(ImageBean.SCALE_TYPE_FIT_END)) {
-                nx.addAttribute("android", "scaleType", "fitEnd");
-            } else if (viewBean.image.scaleType.equals(ImageBean.SCALE_TYPE_FIT_CENTER)) {
-                nx.addAttribute("android", "scaleType", "fitCenter");
-            } else if (viewBean.image.scaleType.equals(ImageBean.SCALE_TYPE_CENTER_CROP)) {
-                nx.addAttribute("android", "scaleType", "centerCrop");
-            } else if (viewBean.image.scaleType.equals(ImageBean.SCALE_TYPE_CENTER_INSIDE)) {
-                nx.addAttribute("android", "scaleType", "centerInside");
+            // La traduccion enum -> XML vive en ScaleTypeCompat (acepta las dos formas del valor).
+            String xmlValue = ScaleTypeCompat.toXmlValue(viewBean.image.scaleType);
+            if (xmlValue != null) {
+                nx.addAttribute("android", "scaleType", xmlValue);
             }
         }
+    }
+
+    /**
+     * ¿El widget es el CircleImageView de la libreria ({@code de.hdodenhof.circleimageview})?
+     *
+     * <p>Se mira el nombre de clase ({@code convert}) y el tipo del bean: un proyecto viejo puede
+     * tener el tipo sin {@code convert} (o al reves).
+     */
+    private static boolean isCircleImageView(ViewBean viewBean) {
+        return ScaleTypeCompat.isCircleImageViewName(viewBean.convert)
+                || viewBean.type == ViewBeans.VIEW_TYPE_WIDGET_CIRCLEIMAGEVIEW;
+    }
+
+    /**
+     * Escribe el {@code android:scaleType} de un CircleImageView, que solo admite
+     * {@code centerCrop} y {@code centerInside}.
+     *
+     * <p>Antes este widget ni siquiera recibia el atributo (el filtro de "convert views" descarta
+     * todo nombre de clase con punto), con lo que el valor del bean quedaba fuera del XML de forma
+     * accidental; ahora se escribe siempre un valor <b>soportado</b> y explicito. Un valor elegido a
+     * mano que el widget no admite se ajusta al respaldo ({@code centerCrop}) y se anota en el log.
+     */
+    private void writeCircleImageViewScaleType(XmlBuilder nx, ViewBean viewBean) {
+        var injectHandler = new InjectAttributeHandler(viewBean);
+        Set<String> toNotAdd = readAttributesToReplace(viewBean);
+        if (toNotAdd.contains("android:scaleType") || injectHandler.contains("scaleType")) {
+            return;
+        }
+        String requested = viewBean.image.scaleType;
+        String xmlValue = ScaleTypeCompat.adjustForCircleImageView(requested);
+        if (!xmlValue.equals(ScaleTypeCompat.toXmlValue(requested))) {
+            android.util.Log.w(TAG, "warning: CircleImageView " + viewBean.id + ": scaleType "
+                    + ScaleTypeCompat.describe(requested) + " -> ajustado a "
+                    + ScaleTypeCompat.describe(xmlValue) + " (el widget solo admite CENTER_CROP)");
+        }
+        nx.addAttribute("android", "scaleType", xmlValue);
     }
 
     /**

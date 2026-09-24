@@ -35,6 +35,7 @@ import pro.sketchware.databinding.ActivityLayoutPreviewBinding;
 import pro.sketchware.tools.ViewBeanParser;
 import pro.sketchware.utility.FilePathUtil;
 import pro.sketchware.utility.FileUtil;
+import pro.sketchware.utility.ScaleTypeCompat;
 import pro.sketchware.utility.SketchwareUtil;
 import pro.sketchware.utility.UI;
 
@@ -87,7 +88,7 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
 
     /**
      * Vistas que SI se han dibujado pero con algun atributo no aplicable (p.ej. CircleImageView solo
-     * admite CENTER_CROP/CENTER_INSIDE y el XML pide FIT_CENTER). No son vistas perdidas: se anotan
+     * admite CENTER_CROP y el XML pide FIT_CENTER). No son vistas perdidas: se anotan
      * para no ensenar una preview silenciosamente distinta a la del editor.
      */
     private final java.util.List<String> appearanceWarnings = new ArrayList<>();
@@ -509,7 +510,8 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
             groups.put("Vistas aproximadas (clase no disponible en el editor; se dibujan sus hijos)", lines);
         }
         if (!appearanceWarnings.isEmpty()) {
-            groups.put("Atributos no aplicados (la vista SI se ha dibujado)", new ArrayList<>(appearanceWarnings));
+            groups.put("Atributos no aplicados o ajustados a un valor soportado (la vista SI se ha dibujado)",
+                    new ArrayList<>(appearanceWarnings));
         }
         for (Map.Entry<ProjectResourceResolver.Kind, java.util.Set<String>> entry : byKind.entrySet()) {
             groups.put("Recursos no encontrados · " + entry.getKey().label, new ArrayList<>(entry.getValue()));
@@ -1109,44 +1111,70 @@ public class LayoutPreviewActivity extends BaseAppCompatActivity {
     /**
      * Aplica scaleType sin que un widget que no lo admita tumbe la vista previa.
      *
-     * <p>{@code de.hdodenhof.circleimageview.CircleImageView} solo acepta CENTER_CROP/CENTER_INSIDE y
-     * lanza {@code IllegalArgumentException: ScaleType FIT_CENTER not supported} con cualquier otro
-     * (el bean usa FIT_CENTER por defecto). Antes esa excepcion escapaba de tryInflateRealLayout y
-     * abortaba TODA la preview nativa: una sola vista con un atributo no admitido ocultaba el resto
-     * del diseno (hijos incluidos). Ahora se anota como aviso y se sigue dibujando.
+     * <p>{@code de.hdodenhof.circleimageview.CircleImageView} solo acepta CENTER_CROP y
+     * lanza {@code IllegalArgumentException: ScaleType X not supported} con cualquier otro (el bean
+     * trae CENTER por defecto y el XML del editor no siempre llevaba atributo). Antes esa excepcion
+     * escapaba de tryInflateRealLayout y abortaba TODA la preview nativa: una sola vista con un
+     * atributo no admitido ocultaba el resto del diseno (hijos incluidos). Desde la ronda 6 se anota
+     * como aviso y se sigue dibujando; desde la ronda 7, ademas, el valor se <b>ajusta</b> a uno
+     * soportado y el aviso dice a cual ("scaleType CENTER -> ajustado a CENTER_CROP").
      */
     private void applyScaleType(android.widget.ImageView imageView, String value) {
-        android.widget.ImageView.ScaleType scaleType = parseScaleType(value);
+        boolean circleImageView = isCircleImageViewInstance(imageView);
+        // Un CircleImageView no puede recibir otro valor: se ajusta antes de tocar la vista.
+        String xmlValue = circleImageView
+                ? ScaleTypeCompat.adjustForCircleImageView(value)
+                : ScaleTypeCompat.toXmlValue(value);
+        if (circleImageView && !ScaleTypeCompat.isSupportedByCircleImageView(value)) {
+            appearanceWarnings.add(shortClassName(imageView.getClass().getName())
+                    + ": scaleType " + ScaleTypeCompat.describe(value) + " -> ajustado a "
+                    + ScaleTypeCompat.describe(xmlValue) + " (el widget solo admite CENTER_CROP)");
+            android.util.Log.w(TAG, "warning: CircleImageView: scaleType " + ScaleTypeCompat.describe(value)
+                    + " -> ajustado a " + ScaleTypeCompat.describe(xmlValue));
+        }
+        android.widget.ImageView.ScaleType scaleType = parseScaleType(xmlValue);
         try {
             imageView.setScaleType(scaleType);
         } catch (Throwable throwable) {
+            // Red de seguridad para subclases que rechacen tambien el valor ajustado.
+            String fallback = circleImageView ? ScaleTypeCompat.describe(ScaleTypeCompat.CIRCLE_IMAGE_VIEW_FALLBACK_XML)
+                    : "valor por defecto";
+            if (circleImageView) {
+                try {
+                    imageView.setScaleType(android.widget.ImageView.ScaleType.CENTER_CROP);
+                } catch (Throwable ignored) {
+                    android.util.Log.d(TAG, "LayoutPreviewActivity: respaldo CENTER_CROP ignorado", ignored);
+                }
+            }
             appearanceWarnings.add(shortClassName(imageView.getClass().getName())
-                    + ": scaleType " + value + " no admitido (" + conciseMessage(throwable) + ")");
-            android.util.Log.w(TAG, "warning: scaleType " + value + " no admitido por "
+                    + ": scaleType " + ScaleTypeCompat.describe(value) + " no admitido -> ajustado a "
+                    + fallback + " (" + conciseMessage(throwable) + ")");
+            android.util.Log.w(TAG, "warning: scaleType " + ScaleTypeCompat.describe(value) + " no admitido por "
                     + imageView.getClass().getName(), throwable);
         }
     }
 
+    /**
+     * ¿La vista es (o hereda de) {@code de.hdodenhof.circleimageview.CircleImageView}? Se compara el
+     * nombre de la clase y de sus superclases, asi tambien cuenta la variante del editor
+     * ({@code ItemCircleImageView}).
+     */
+    private static boolean isCircleImageViewInstance(android.view.View view) {
+        for (Class<?> clazz = view.getClass(); clazz != null; clazz = clazz.getSuperclass()) {
+            if (ScaleTypeCompat.isCircleImageViewName(clazz.getName())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private android.widget.ImageView.ScaleType parseScaleType(String value) {
-        if (value == null) {
+        // Acepta las dos formas del valor: CENTER_CROP (lo que guarda el editor) y centerCrop (XML).
+        String enumName = ScaleTypeCompat.toEnumName(value);
+        if (enumName == null) {
             return android.widget.ImageView.ScaleType.FIT_CENTER;
         }
-        switch (value) {
-            case "centerCrop":
-                return android.widget.ImageView.ScaleType.CENTER_CROP;
-            case "centerInside":
-                return android.widget.ImageView.ScaleType.CENTER_INSIDE;
-            case "fitXY":
-                return android.widget.ImageView.ScaleType.FIT_XY;
-            case "fitStart":
-                return android.widget.ImageView.ScaleType.FIT_START;
-            case "fitEnd":
-                return android.widget.ImageView.ScaleType.FIT_END;
-            case "center":
-                return android.widget.ImageView.ScaleType.CENTER;
-            default:
-                return android.widget.ImageView.ScaleType.FIT_CENTER;
-        }
+        return android.widget.ImageView.ScaleType.valueOf(enumName);
     }
 
     private float parseSp(String value) {

@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.10.2-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.10.3-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -160,6 +160,33 @@ This repository is a personal fork. Every improvement is added here as it lands,
 - **Cost:** the two packed executables add **10.18 MB** to the `arm64-v8a` APK. Other ABIs have no AOT backend and
   say so instead of failing silently. The default mode is still **debug/JIT**, this stays experimental and there is
   still no hot reload.
+- **v7.0.10.3 (versionCode 170) — the `CircleImageView` that broke the preview can no longer break the app you
+  compile either.** The warning was `CircleImageView: scaleType CENTER no admitido`, with
+  `java.lang.IllegalArgumentException: ScaleType FIT_CENTER not supported` and `Preview PARCIAL: 1 atributo no
+  aplicado`, and it had **three causes at once**. (1) **Case:** the bean stores `scaleType="CENTER"` (the enum name,
+  in capitals) while the XML uses `center`/`centerCrop`, and the preview's translator was **case-sensitive** —
+  `"CENTER"` matched no case and fell back to `FIT_CENTER`, which is why the exception names `FIT_CENTER` and not
+  `CENTER`. (2) **The generator:** for a `CircleImageView` the generated XML carried **no** `android:scaleType` (the
+  `Ox` filter discards the attribute on any widget whose class name contains a dot), but an old or imported bean with
+  the short class name does pass that filter and `Ox` wrote `android:scaleType="center"` — the very value that makes
+  the **compiled app** fail, not only the preview. (3) **The library is stricter than expected:**
+  `de.hdodenhof:circleimageview:3.1.0` accepts **only `CENTER_CROP`** (checked with `dexdump` on the release APK: it
+  compares against a single static field, and `CENTER_INSIDE` throws too). **What changed:** the generator always
+  writes `centerCrop` for a `CircleImageView` **and sanitises a `scaleType` written by hand in `inject`**; a new pure
+  class `ScaleTypeCompat` (60 checks on the JVM, idempotent) holds the logic; existing projects are normalised in
+  **four** places (compile/generate, read the XML, open the design editor, preview); the preview applies the supported
+  fallback and the amber notice now **names the value** (`scaleType MATRIX -> ajustado a CENTER_CROP (el widget solo
+  admite CENTER_CROP)`); and the property selector offers a `CircleImageView` **only `CENTER_CROP`** (it used to offer
+  all seven values). **Verified:** the XML generated from the real project carries `android:scaleType="centerCrop"`
+  and closes with `Preview OK · vistas: 5` and no warning, while a plain `ImageView` keeps `center`; in the RV_API34
+  emulator with the R8 release the circle is drawn with an **area fraction of 0.768** (≈ π/4) and the parent's colour
+  in the corners; rounds 1-6 come out identical (9 cases plus the four `caseR6_*`). **Intentional difference:** a
+  plain `ImageView` with `CENTER` is no longer stretched in the preview (it used to fall back to `FIT_CENTER`) — it
+  now draws what the app will draw. **Honest pending:** the app *you* compile was not tested, nor was a full on-device
+  build; the property dialog was not walked through by hand for a `CircleImageView`; and the evidence comes from the
+  test project 601. Release page:
+  [v7.0.10.3](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.3). Full write-up (in Spanish):
+  [docs/preview-fix.md](docs/preview-fix.md) (round 7).
 - **v7.0.10.2 (versionCode 169) — the ten views the editor could not instantiate work again, and a view it still
   cannot build is no longer a mute red hole.** The preview was reporting `Preview PARCIAL: 10 vistas no
   instanciables` for `CoordinatorLayout`, `AppBarLayout`, `CollapsingToolbarLayout`, `MaterialToolbar`,

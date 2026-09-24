@@ -34,6 +34,8 @@ public class PropertyStringSelectorItem extends RelativeLayout implements View.O
     private View propertyMenuItem;
     private ViewGroup radioGroupContent;
     private Kw valueChangeListener;
+    /** Lista de valores a ofrecer en el dialogo; {@code null} = la lista por defecto de la propiedad. */
+    private String[] allowedItems;
 
     public PropertyStringSelectorItem(Context context, boolean z) {
         super(context);
@@ -73,6 +75,14 @@ public class PropertyStringSelectorItem extends RelativeLayout implements View.O
 
     public String getValue() {
         return value;
+    }
+
+    /**
+     * Lista de valores a ofrecer en el dialogo (por ejemplo, los unicos scaleType que admite un
+     * CircleImageView). Con {@code null} se usa la lista por defecto del tipo de propiedad.
+     */
+    public void setAllowedItems(String[] items) {
+        allowedItems = items;
     }
 
     public void setValue(String value) {
@@ -128,7 +138,9 @@ public class PropertyStringSelectorItem extends RelativeLayout implements View.O
         String[] items = switch (key) {
             case "property_ad_size" -> sq.k;
             case "property_indeterminate" -> sq.l;
-            case "property_scale_type" -> sq.j;
+            // Un CircleImageView solo admite CENTER_CROP: no se ofrecen valores que
+            // reventarian la app compilada (los fija ViewPropertyItems segun el widget).
+            case "property_scale_type" -> allowedItems != null ? allowedItems : sq.j;
             default -> null;
         };
 

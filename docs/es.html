@@ -37,14 +37,14 @@
 
   <!-- ============================================================ hero -->
   <section class="hero" style="border-top:none">
-    <div class="tag">● v7.0.10.2 · versionCode 169 · source-available</div>
+    <div class="tag">● v7.0.10.3 · versionCode 170 · source-available</div>
     <h1>Crea apps Android reales<br><span class="accent">desde tu móvil.</span></h1>
     <p class="lead">
       Sketchware Pro es un IDE de Android que funciona sobre Android: arrastra bloques, escribe Java o Kotlin,
       compila en el propio dispositivo y obtén un APK instalable — sin necesidad de ordenador.
     </p>
     <div class="btns">
-      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.2" target="_blank" rel="noopener">⬇ Descargar APK</a>
+      <a class="btn primary" href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.3" target="_blank" rel="noopener">⬇ Descargar APK</a>
       <a class="btn ghost" href="https://github.com/aurenox-global/Sketchware-Pro" target="_blank" rel="noopener">Ver el código en GitHub</a>
     </div>
 
@@ -134,12 +134,64 @@
       <span class="k">Hitos destacados</span>
       <p>
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.8.0">Flutter corriendo en el dispositivo, release/AOT incluido</a> &middot;
-        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.2">la vista previa de diseños arreglada, rondas 1 a 6</a> &middot;
+        <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.3">la vista previa de diseños arreglada, rondas 1 a 7</a> &middot;
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.1">la descarga del toolchain de Dart ahora la decides tú, y el toolchain ya no dice "no instalado"</a> &middot;
         <a href="https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.5.9">soporte de Kotlin en el IDE de la app</a>.
       </p>
     </div>
     <div class="log" id="change-log">
+      <div class="item done featured">
+        <span class="when">2026-09-24 · vista previa</span>
+        <h3>El <code>CircleImageView</code> que mataba la vista previa ya no puede matar la app que compilas  <span class="pill feat">destacado</span> <span class="pill ok">arreglado</span></h3>
+        <ul class="clean">
+          <li><strong>El aviso.</strong> <code>CircleImageView: scaleType CENTER no admitido</code>, con
+          <code>java.lang.IllegalArgumentException: ScaleType FIT_CENTER not supported</code> y la barra diciendo
+          <code>Preview PARCIAL: 1 atributo no aplicado</code>. La ronda 6 lo capturaba para que no abortara toda la
+          vista previa; la ronda 7 lo arregla de raíz — en el generador y en los proyectos ya existentes, no solo en la
+          vista previa.</li>
+          <li><strong>Tres causas a la vez.</strong> (1) <strong>Mayúsculas:</strong> el bean guarda
+          <code>scaleType="CENTER"</code> — el nombre del enum, en mayúsculas — mientras el XML usa
+          <code>center</code>/<code>centerCrop</code>, y el traductor de la vista previa era <strong>sensible a
+          mayúsculas</strong>: <code>"CENTER"</code> no coincidía con ningún <code>case</code> y caía al valor por
+          defecto <code>FIT_CENTER</code>, por eso la excepción dice <code>FIT_CENTER</code> y no <code>CENTER</code>.
+          (2) <strong>El generador:</strong> para el <code>CircleImageView</code> el XML <strong>no llevaba
+          <code>android:scaleType</code></strong> (el filtro de <code>Ox</code> descarta el atributo en todo widget cuyo
+          nombre de clase lleve punto), pero un bean antiguo o importado con el nombre corto sí pasa ese filtro y
+          <code>Ox</code> escribía <code>android:scaleType="center"</code> — justo el valor que <strong>peta también en
+          la app compilada</strong>, no solo en la vista previa. (3) <strong>La librería es más estricta de lo
+          esperado:</strong> <code>de.hdodenhof:circleimageview:3.1.0</code> admite <strong>solo
+          <code>CENTER_CROP</code></strong> — comprobado con <code>dexdump</code> sobre el APK release, el método compara
+          contra un único campo estático y <code>CENTER_INSIDE</code> también lanza excepción — así que el arreglo
+          <strong>no</strong> conserva <code>CENTER_INSIDE</code>.</li>
+          <li><strong>Cinco cambios.</strong> (1) El generador escribe siempre <code>centerCrop</code> para un
+          <code>CircleImageView</code> <strong>y sanea un <code>scaleType</code> no soportado escrito a mano en
+          <code>inject</code></strong>, dejando igual el resto de widgets de imagen. (2) Una clase nueva y pura,
+          <code>ScaleTypeCompat</code>, concentra la lógica (XML ↔ enum, valor soportado, ajuste, saneado) y está
+          probada en JVM: <strong>60 comprobaciones, 0 fallos</strong>, idempotente. (3) Los proyectos ya existentes se
+          normalizan en <strong>cuatro</strong> puntos — compilar/generar, leer el XML, abrir el editor de diseño y
+          previsualizar — así un <code>CENTER</code>/<code>FIT_CENTER</code>/<code>CENTER_INSIDE</code> viejo acaba
+          corregido sin tocar ningún otro widget. (4) La vista previa aplica el respaldo soportado y el aviso ámbar ya
+          <strong>dice el valor</strong>:
+          <code>scaleType MATRIX -&gt; ajustado a CENTER_CROP (el widget solo admite CENTER_CROP)</code>. (5) El
+          selector de propiedades ofrece para un <code>CircleImageView</code> <strong>solo <code>CENTER_CROP</code></strong>
+          (antes ofrecía los siete valores).</li>
+          <li><strong>Verificado.</strong> El XML generado del proyecto real lleva <code>android:scaleType="centerCrop"</code>
+          y el mismo layout cierra con <code>Preview OK · vistas: 5</code> sin ningún aviso, mientras el
+          <code>ImageView</code> normal conserva <code>center</code>; en el emulador RV_API34 con el release R8 el
+          círculo se dibuja con <strong>fracción de área 0.768</strong> (≈ π/4; un cuadrado daría 1.000) y las esquinas
+          con el fondo del padre; la regresión de las rondas 1-6 sale idéntica (9 casos más los cuatro
+          <code>caseR6_*</code>).</li>
+          <li><strong>Una diferencia intencionada:</strong> las <code>ImageView</code> normales con <code>CENTER</code>
+          ya no se dibujan estiradas en la vista previa (antes caía a <code>FIT_CENTER</code>) — ahora coinciden con la
+          app. <strong>Pendientes honestos:</strong> no se ha probado la app que compila el usuario ni una compilación
+          completa on-device, no se ha recorrido a mano el diálogo del selector para un <code>CircleImageView</code>, y
+          la evidencia sale del proyecto de pruebas 601.</li>
+        </ul>
+        <p><img src="assets/preview-r7-circle.png" alt="Después: el CircleImageView se dibuja como círculo llenando su caja y la barra cierra con Preview OK · vistas: 4" style="width:100%;max-width:200px;border-radius:10px;border:1px solid rgba(120,170,220,0.35)"></p>
+        <p>Versión <strong>v7.0.10.3</strong> (versionCode 170). El detalle de la ronda 7 está al final de
+        <a href="preview-fix.md">docs/preview-fix.md</a>.</p>
+      </div>
+
       <div class="item done featured">
         <span class="when">2026-09-24 · vista previa</span>
         <h3>Las diez vistas que el editor no podía instanciar vuelven a funcionar, y una vista que aún no se pueda crear ya no es un hueco rojo mudo  <span class="pill feat">destacado</span> <span class="pill ok">arreglado</span></h3>

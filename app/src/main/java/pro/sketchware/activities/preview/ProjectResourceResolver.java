@@ -52,12 +52,17 @@ public class ProjectResourceResolver {
     private static final Pattern COLOR_ENTRY = Pattern.compile(
             "<color\\s+name=\"([^\"]+)\"\\s*>\\s*(#[0-9a-fA-F]{6,8})</color>");
 
+    /** Entrada de un fichero dimens.xml del proyecto: nombre y valor ("16dp", "@dimen/x"...). */
+    private static final Pattern DIMEN_ENTRY = Pattern.compile(
+            "<dimen\\s+name=\"([^\"]+)\"\\s*>\\s*([^<\\s]+)\\s*</dimen>");
+
     /** Extensiones de imagen que sabemos leer, en orden de preferencia. */
     private static final String[] DRAWABLE_EXTENSIONS = {".xml", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"};
 
     private final Context context;
     private final String scId;
     private final Map<String, Integer> colorCache = new HashMap<>();
+    private final Map<String, Integer> dimenCache = new HashMap<>();
     private final Map<String, Drawable> drawableCache = new HashMap<>();
 
     /**
@@ -114,6 +119,7 @@ public class ProjectResourceResolver {
     }
 
     private boolean colorsLoaded;
+    private boolean dimensLoaded;
 
     public ProjectResourceResolver(Context context, String scId) {
         this.context = context;
@@ -253,6 +259,117 @@ public class ProjectResourceResolver {
             return fallback;
         }
         return fallback;
+    }
+
+    /**
+     * Resuelve una MEDIDA escrita como en el XML de Android.
+     *
+     * <p>Acepta "8dp"/"8dip"/"8px"/"8sp" y las referencias del proyecto o del framework:
+     * "@dimen/x" (dimens.xml del proyecto) y "@android:dimen/x".
+     *
+     * <p>Por que hacia falta (ronda 8): los radios, grosores de borde, altos de indicador y
+     * elevaciones configurados con una medida del proyecto ("@dimen/mi_radio") se descartaban: el
+     * parser de la vista previa solo entendia numeros con unidad, asi que el atributo no se aplicaba
+     * y el widget se veia con su valor por defecto ("no se ven los tamanos"). El editor de diseno
+     * usa su propio resolver; la vista previa necesita este.
+     *
+     * @return la medida en px, o {@code fallback} si no se ha podido resolver.
+     */
+    public int resolveDimen(String value, int fallback) {
+        if (value == null) {
+            return fallback;
+        }
+        String v = value.trim();
+        if (v.isEmpty()) {
+            return fallback;
+        }
+        if (v.startsWith("@dimen/") || v.startsWith("@dimen:")) {
+            String name = v.substring("@dimen".length() + 1);
+            ensureDimensLoaded();
+            Integer cached = dimenCache.get(name);
+            if (cached != null) {
+                return cached;
+            }
+            warning(Kind.OTHER, v + " (no esta en files/resource/values/dimens.xml)");
+            return fallback;
+        }
+        if (v.startsWith("@android:dimen/")) {
+            int id = context.getResources().getIdentifier(
+                    v.substring("@android:dimen/".length()), "dimen", "android");
+            if (id != 0) {
+                return context.getResources().getDimensionPixelSize(id);
+            }
+            warning(Kind.OTHER, v + " (medida del framework no encontrada)");
+            return fallback;
+        }
+        if (v.startsWith("@") || v.startsWith("?")) {
+            warning(Kind.OTHER, v + " (referencia de medida no resoluble en la vista previa)");
+            return fallback;
+        }
+        int parsed = parseDimen(v);
+        return parsed == 0 && !v.startsWith("0") ? fallback : parsed;
+    }
+
+    /** Carga (una vez) las medidas del proyecto desde files/resource/values/dimens.xml. */
+    private void ensureDimensLoaded() {
+        if (dimensLoaded) {
+            return;
+        }
+        dimensLoaded = true;
+        Map<String, String> raw = new HashMap<>();
+        String[] candidates = {"values/dimens.xml", "value/dimens.xml"};
+        for (String candidate : candidates) {
+            File file = new File(new FilePathUtil().getPathResource(scId), candidate);
+            if (!file.isFile()) {
+                continue;
+            }
+            String content = FileUtil.readFile(file.getAbsolutePath());
+            if (content == null) {
+                continue;
+            }
+            Matcher matcher = DIMEN_ENTRY.matcher(content);
+            while (matcher.find()) {
+                raw.putIfAbsent(matcher.group(1), matcher.group(2));
+            }
+        }
+        // Varias pasadas: una medida puede referenciar a otra definida mas abajo en el fichero
+        // ("@dimen/otra"), y el fichero se lee de arriba a abajo.
+        for (int pass = 0; pass < 5; pass++) {
+            boolean progress = false;
+            for (Map.Entry<String, String> entry : raw.entrySet()) {
+                if (dimenCache.containsKey(entry.getKey())) {
+                    continue;
+                }
+                String value = entry.getValue().trim();
+                if (value.startsWith("@dimen/")) {
+                    Integer referenced = dimenCache.get(value.substring("@dimen/".length()));
+                    if (referenced != null) {
+                        dimenCache.put(entry.getKey(), referenced);
+                        progress = true;
+                    }
+                    continue;
+                }
+                int resolved = resolveDimensionReference(value);
+                if (resolved != 0) {
+                    dimenCache.put(entry.getKey(), resolved);
+                    progress = true;
+                }
+            }
+            if (!progress) {
+                break;
+            }
+        }
+    }
+
+    /** Valor de un <dimen> que puede ser a su vez una referencia a una medida del framework. */
+    private int resolveDimensionReference(String value) {
+        String v = value == null ? "" : value.trim();
+        if (v.startsWith("@android:dimen/")) {
+            int id = context.getResources().getIdentifier(
+                    v.substring("@android:dimen/".length()), "dimen", "android");
+            return id == 0 ? 0 : context.getResources().getDimensionPixelSize(id);
+        }
+        return v.startsWith("@") || v.startsWith("?") ? 0 : parseDimen(v);
     }
 
     /**

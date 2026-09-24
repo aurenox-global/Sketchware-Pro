@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v7.0.10.2-008dcd">
+  <img alt="version" src="https://img.shields.io/badge/version-v7.0.10.3-008dcd">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-57beee">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-57beee">
   <img alt="license" src="https://img.shields.io/badge/license-source--available-ffc107">
@@ -160,6 +160,34 @@ Este repositorio es un fork personal. Cada mejora se añade aquí según entra, 
 - **Coste:** los dos ejecutables empaquetados suman **10,18 MB** al APK `arm64-v8a`. Las otras ABIs no tienen
   backend AOT y lo dicen, en vez de fallar en silencio. El modo por defecto sigue siendo **debug/JIT**, esto
   continua siendo experimental y todavia no hay hot reload.
+- **v7.0.10.3 (versionCode 170) — el `CircleImageView` que rompia la vista previa ya no puede romper tampoco la app
+  que compilas.** El aviso era `CircleImageView: scaleType CENTER no admitido`, con
+  `java.lang.IllegalArgumentException: ScaleType FIT_CENTER not supported` y `Preview PARCIAL: 1 atributo no aplicado`,
+  y tenia **tres causas a la vez**. (1) **Mayusculas:** el bean guarda `scaleType="CENTER"` (el nombre del enum, en
+  mayusculas) mientras el XML usa `center`/`centerCrop`, y el traductor de la vista previa era **sensible a
+  mayusculas** — `"CENTER"` no coincidia con ningun `case` y caia al valor por defecto `FIT_CENTER`, por eso la
+  excepcion dice `FIT_CENTER` y no `CENTER`. (2) **El generador:** para el `CircleImageView` el XML generado **no
+  llevaba `android:scaleType`** (el filtro de `Ox` descarta el atributo en todo widget cuyo nombre de clase lleve
+  punto), pero un bean antiguo o importado con el nombre corto si pasa ese filtro y `Ox` escribia
+  `android:scaleType="center"` — justo el valor que **peta tambien en la app compilada**, no solo en la vista previa.
+  (3) **La libreria es mas estricta de lo esperado:** `de.hdodenhof:circleimageview:3.1.0` admite **solo
+  `CENTER_CROP`** (comprobado con `dexdump` sobre el APK release: compara contra un unico campo estatico, y
+  `CENTER_INSIDE` tambien lanza excepcion). **Que ha cambiado:** el generador escribe siempre `centerCrop` para un
+  `CircleImageView` **y sanea un `scaleType` no soportado escrito a mano en `inject`**; una clase nueva y pura,
+  `ScaleTypeCompat` (60 comprobaciones en JVM, idempotente), concentra la logica; los proyectos ya existentes se
+  normalizan en **cuatro** puntos (compilar/generar, leer el XML, abrir el editor de diseno y previsualizar); la vista
+  previa aplica el respaldo soportado y el aviso ambar ya **dice el valor** (`scaleType MATRIX -> ajustado a
+  CENTER_CROP (el widget solo admite CENTER_CROP)`); y el selector de propiedades ofrece para un `CircleImageView`
+  **solo `CENTER_CROP`** (antes ofrecia los siete valores). **Verificado:** el XML generado del proyecto real lleva
+  `android:scaleType="centerCrop"` y cierra con `Preview OK · vistas: 5` sin ningun aviso, mientras el `ImageView`
+  normal conserva `center`; en el emulador RV_API34 con el release R8 el circulo se dibuja con **fraccion de area
+  0.768** (≈ π/4) y las esquinas con el fondo del padre; la regresion de las rondas 1-6 sale identica (9 casos mas los
+  cuatro `caseR6_*`). **Diferencia intencionada:** las `ImageView` normales con `CENTER` ya no se dibujan estiradas en
+  la vista previa (antes caia a `FIT_CENTER`), ahora coinciden con la app. **Pendientes honestos:** no se ha probado
+  la app que compila el usuario ni una compilacion completa on-device, no se ha recorrido a mano el dialogo del
+  selector para un `CircleImageView`, y la evidencia sale del proyecto de pruebas 601. Pagina de la release:
+  [v7.0.10.3](https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.3). Todos los detalles:
+  [docs/preview-fix.md](docs/preview-fix.md) (ronda 7).
 - **v7.0.10.2 (versionCode 169) — las diez vistas que el editor no podia instanciar vuelven a funcionar, y una vista
   que aun no se pueda crear ya no es un hueco rojo mudo.** La vista previa avisaba `Preview PARCIAL: 10 vistas no
   instanciables` para `CoordinatorLayout`, `AppBarLayout`, `CollapsingToolbarLayout`, `MaterialToolbar`,

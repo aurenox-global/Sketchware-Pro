@@ -2,6 +2,7 @@ package pro.sketchware.tools;
 
 import static pro.sketchware.utility.PropertiesUtil.parseReferName;
 
+import com.besome.sketch.beans.ImageBean;
 import com.besome.sketch.beans.LayoutBean;
 import com.besome.sketch.beans.TextBean;
 import com.besome.sketch.beans.ViewBean;
@@ -13,6 +14,7 @@ import java.util.Objects;
 import mod.agus.jcoderz.beans.ViewBeans;
 import pro.sketchware.utility.AttributeConstants;
 import pro.sketchware.utility.PropertiesUtil;
+import pro.sketchware.utility.ScaleTypeCompat;
 
 public class ViewBeanFactory {
 
@@ -635,6 +637,32 @@ public class ViewBeanFactory {
             } else {
                 injectAttributes.put("android:scaleType", scaleType);
             }
+        }
+        // Un CircleImageView nunca puede quedarse con un valor no admitido (ni con el CENTER por
+        // defecto del bean): se normaliza aqui, que es por donde pasa todo XML que se lee.
+        normalizeCircleImageViewScaleType(bean);
+    }
+
+    /**
+     * Deja el scaleType de un CircleImageView en un valor que el widget admita
+     * ({@code CENTER_CROP}/{@code CENTER_INSIDE}).
+     *
+     * <p>Es idempotente y solo toca beans de CircleImageView: un proyecto viejo que tenga guardado
+     * {@code CENTER} (o {@code FIT_CENTER}) deja de romper en cuanto su XML pasa por aqui (import,
+     * editor de XML, vista previa), sin tocar el XML de ningun otro widget.
+     */
+    private void normalizeCircleImageViewScaleType(ImageBean image) {
+        if (!ScaleTypeCompat.isCircleImageViewName(bean.convert)
+                && bean.type != ViewBeans.VIEW_TYPE_WIDGET_CIRCLEIMAGEVIEW) {
+            return;
+        }
+        String adjusted = ScaleTypeCompat.adjustEnumForCircleImageView(image.scaleType);
+        if (!adjusted.equals(image.scaleType)) {
+            android.util.Log.w("SketchwarePro", "warning: CircleImageView " + bean.id + ": scaleType "
+                    + ScaleTypeCompat.describe(image.scaleType) + " -> ajustado a "
+                    + ScaleTypeCompat.describe(adjusted) + " al leer el layout (el widget solo admite "
+                    + "CENTER_CROP)");
+            image.scaleType = adjusted;
         }
     }
 

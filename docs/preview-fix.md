@@ -606,3 +606,121 @@ Tambien comprobado en **debug** con el arreglo: `debug_R6_ten` → `Preview PARC
 - Siguen vigentes los pendientes de las rondas 1-5: `?atributo` se resuelve con el tema del IDE,
   `<selector>`/`<ripple>`/`<layer-list>` se aproximan, Material3 del proyecto sin probar, y todo medido en emulador
   (no en movil fisico).
+
+---
+
+## 11. Ronda 7 (v7.0.10.3)
+
+Release: <https://github.com/aurenox-global/Sketchware-Pro/releases/tag/v7.0.10.3> · Fecha: 2026-09-24
+Dispositivo: emulador `emulator-5554` (`sdk_gphone64_arm64`, arm64-v8a, API 34) · Build del IDE: **release real**
+(`minifyEnabled = true`, R8). Evidencia: `preview-evidence/r7/` (`before_*`, `after2_*`, `reg7/`, `r7.diff`,
+`measure7.py`).
+
+### 11.1 El sintoma
+
+El usuario veia, en la vista previa de un diseno con un `CircleImageView`, este aviso (reproducido en
+`before_civ_center.log`):
+
+```
+W LayoutPreview: warning: scaleType CENTER no admitido por de.hdodenhof.circleimageview.CircleImageView
+W LayoutPreview: java.lang.IllegalArgumentException: ScaleType FIT_CENTER not supported.
+W LayoutPreview: warning: Preview PARCIAL: 1 atributo no aplicado
+W LayoutPreview: warning: [atributo no aplicado] CircleImageView: scaleType CENTER no admitido (...)
+```
+
+La ronda 6 lo habia **capturado** (ya no abortaba la vista previa entera) pero no lo habia arreglado: la ronda 7
+lo ataca de raiz, en el generador y en los proyectos ya existentes, no solo en la vista previa.
+
+### 11.2 La causa raiz (triple)
+
+1. **Mayusculas en el bean.** `ImageBean` arranca con `scaleType = "CENTER"` — el **nombre del enum**, en
+   mayusculas (`ImageBean:24-30`, `:39`) — mientras el XML usa `center`/`centerCrop` (camelCase). La vista previa
+   aplicaba el valor tal cual y su traductor era **sensible a mayusculas**: `"CENTER"` no coincidia con ningun
+   `case` y caia al valor por defecto `FIT_CENTER` → `setScaleType(FIT_CENTER)` →
+   `IllegalArgumentException`. **De ahi que el mensaje diga `FIT_CENTER` aunque el valor guardado fuese `CENTER`.**
+2. **El generador escribia un valor no admitido.** Para el `CircleImageView` el XML **no llevaba
+   `android:scaleType`**: el filtro `!widgetTag.toCode().contains(".")` de `Ox` descarta el atributo en todo widget
+   cuyo nombre de clase lleve punto, y el `convert` real es `de.hdodenhof.circleimageview.CircleImageView`. Pero con
+   un bean antiguo o importado de **nombre corto** (`CircleImageView`) o **sin `convert`**, ese filtro si pasa y el
+   generador escribia `android:scaleType="center"` → **eso peta tambien en la app compilada del usuario**, no solo en
+   la vista previa (es un `IllegalArgumentException` en el constructor del widget).
+3. **La libreria admite un solo valor.** El encargo daba por hecho que
+   `de.hdodenhof:circleimageview:3.1.0` admite `CENTER_CROP` **y** `CENTER_INSIDE`; **no es asi**. Comprobado con
+   `dexdump -d classes4.dex` sobre el APK release (§11.4): el metodo compara contra un **unico** campo estatico
+   (`CircleImageView.u = ScaleType.CENTER_CROP`) y lanza la excepcion con cualquier otro valor, `CENTER_INSIDE`
+   incluido (medido en tiempo de ejecucion: `ScaleType CENTER_INSIDE not supported.`). Por eso el arreglo **no**
+   conserva `CENTER_INSIDE`.
+
+### 11.3 Los cinco cambios
+
+1. **El generador (`a.a.a.Ox`) escribe siempre un valor soportado y sanea el `inject`.** Con un `CircleImageView`
+   (detectado por `convert` o por `type == 43`) el XML sale siempre con `centerCrop`, y si el `inject` trae un
+   `scaleType` escrito a mano no admitido, se sanea antes de volcarlo y se deja traza en el log. El resto de widgets
+   de imagen conservan el comportamiento historico.
+2. **Clase nueva `pro.sketchware.utility.ScaleTypeCompat`** (logica pura, sin Android, para poder probarla en JVM):
+   traduccion XML↔enum en los dos sentidos, deteccion del widget, valor soportado, ajuste e idempotencia
+   (`adjustEnum(adjustEnum(x)) == adjustEnum(x)`) y saneado del `inject`. **60 comprobaciones en JVM, 0 fallos.**
+3. **Normalizacion de proyectos ya existentes en cuatro puntos:** al **compilar/generar** (`Ox`), al **leer XML**
+   (`ViewBeanFactory.applyImage` → `normalizeCircleImageViewScaleType`), al **abrir el editor de diseno**
+   (`ViewPane.updateItemView`, que ademas ya no usa `valueOf` a pelo) y al **previsualizar**
+   (`LayoutPreviewActivity`). Un proyecto viejo con `CENTER`/`FIT_CENTER`/`CENTER_INSIDE` en un `CircleImageView`
+   se corrige en el bean y en el XML que se guarda, sin tocar ningun otro widget.
+4. **La vista previa aplica el respaldo soportado y el aviso dice el valor.** `applyScaleType()` detecta el
+   `CircleImageView` recorriendo superclases, ajusta a `CENTER_CROP` y el aviso ambar pasa a ser explicito:
+   `CircleImageView: scaleType MATRIX -> ajustado a CENTER_CROP (el widget solo admite CENTER_CROP)`. Si algo
+   falla igualmente, el `catch` aplica el respaldo `CENTER_CROP` y anota el motivo.
+5. **El selector de propiedades solo ofrece `CENTER_CROP`** para un `CircleImageView`
+   (`ViewPropertyItems` + `PropertyStringSelectorItem.setAllowedItems`), antes ofrecia los **7** valores y dejaba
+   elegir combinaciones que la libreria rechaza.
+
+### 11.4 Verificacion
+
+- **XML generado por el IDE** con un `CircleImageView` de la paleta en el proyecto real 601 (`TestFixR8`), tras
+  abrirlo y guardarlo desde el editor de diseno:
+
+```xml
+<ImageView
+	android:id="@+id/imageview1"
+	android:scaleType="center" />                 <!-- ImageView normal: sin cambios -->
+<de.hdodenhof.circleimageview.CircleImageView
+	android:id="@+id/circleimageview1"
+	android:scaleType="centerCrop"                <!-- ANTES: atributo ausente (o "center" en beans antiguos) -->
+	app:civ_border_width="3dp" … />
+```
+
+  y el mismo layout cierra con `I LayoutPreview: info: Preview OK · vistas: 5 · WebViews: 1`, **sin ningun aviso**.
+- **Emulador con release R8:** el `CircleImageView` se dibuja **recortado en circulo** llenando su caja — caja
+  330×330 px, anchura maxima 324 px, extremos 138 px, **fraccion de area 0.768 ≈ π/4** (medido con
+  `python3 measure7.py after2_civ_center.png`; un cuadrado inscrito daria 1.000) y las 4 esquinas con el fondo del
+  padre. El caso `civ_none` (sin atributo) y el `civ_inside` (`CENTER_INSIDE`) quedan igual de bien; con `matrix` en
+  el `inject` sale el aviso de §11.3.4 en ambar.
+- **Regresion de las rondas 1-6 identica:** los resumenes de log de los 9 casos con log previo son **identicos** a
+  los de la ronda 6, y los 4 casos `caseR6_*` siguen bien (`caseR6_fallback` → `Preview OK · vistas: 4`,
+  `caseR6_ten`/`caseR6_ten_compact` → `Preview OK · vistas: 17`).
+
+![Despues: el CircleImageView se dibuja como circulo llenando su caja y la barra cierra con Preview OK · vistas: 4](assets/preview-r7-circle.png)
+
+### 11.5 Diferencia intencionada respecto a las `ImageView` normales
+
+Las `ImageView` normales con `scaleType` por defecto (`CENTER` en el bean, `center` en el XML) **ya no se dibujan
+estiradas** en la vista previa: antes el traductor caia a `FIT_CENTER` y estiraba la imagen a toda la caja, ahora se
+aplica `CENTER` como lo hara la app (tamano intrinseco). Es un **cambio de fidelidad, no una regresion**: en
+`caseB6b_img_variantes` el diff de pixeles es del 4,96 % justo por eso. Si alguien prefiere el aspecto anterior,
+esta aislado: basta devolver `FIT_CENTER` como valor por defecto en `parseScaleType` para las no-`CircleImageView`.
+
+### 11.6 Pendientes honestos de la ronda 7
+
+- **La app compilada del usuario no se ha probado**: lo verificado es que el XML que genera el IDE lleva
+  `android:scaleType="centerCrop"` (§11.4) y que la libreria 3.1.0 rechaza cualquier otro valor, por lo que el XML
+  generado es seguro — pero **la confirmacion final es del usuario**.
+- **No se ha ejecutado una compilacion completa on-device** (aapt2/javac en el telefono) que confirme el fichero
+  `res/layout/main.xml` en disco tras un `Run`.
+- **El dialogo del selector de propiedades** para un `CircleImageView` no se ha recorrido a mano en el emulador
+  (si estan el codigo y la prueba JVM del ajuste).
+- **La persistencia del punto 3 de §11.3** (normalizacion al abrir y guardar en el editor de diseno) esta
+  implementada y probada de forma indirecta, pero no se ha comparado el fichero `view` del proyecto antes/despues
+  de abrir un layout viejo con un valor no soportado.
+- **Evidencia:** proyecto de pruebas 601 (`TestFixR8`) con un `ImageView` y un `CircleImageView` anadidos para
+  medir; **no es el proyecto del usuario**.
+- Siguen vigentes los pendientes de las rondas 1-6 (tema del IDE para los `?atributo`, `MaterialButton` con
+  `wrap_content`, Material3 del proyecto sin probar, todo medido en emulador y no en movil fisico).
